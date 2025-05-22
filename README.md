@@ -27,7 +27,7 @@
 
 ### 方式二：源码安装
 ```bash
-git clone https://github.com/your-repo/script-rule-check.git
+git clone https://github.com/atopoxo/script-rule-check.git
 cd script-rule-check
 npm install
 npm run compile
@@ -123,7 +123,7 @@ A VSCode extension for static code analysis of Lua/Python scripts using custom r
 
 ### Method 2: Source Install
 ```bash
-git clone https://github.com/your-repo/script-rule-check.git
+git clone https://github.com/atopoxo/script-rule-check.git
 cd script-rule-check
 npm install
 npm run compile

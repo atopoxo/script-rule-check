@@ -4,6 +4,10 @@
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/atopoxo/script-rule-check.git"
+  },
   "engines": {
     "vscode": "^1.100.0"
   },
