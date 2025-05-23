@@ -50,7 +50,7 @@ export class CheckResultTreeItem extends vscode.TreeItem {
         super(`报错类型:'${result.tips}', 报错行:'${result.lines.join(',')}', 报错信息:'${result.info}'`,
             vscode.TreeItemCollapsibleState.None);
         
-        const severity = result.tips.includes('Error') ? 'error' : 'warning';
+        const severity = result.tips.includes('error') ? 'error' : 'warning';
         this.iconPath = new vscode.ThemeIcon(
             severity,
             new vscode.ThemeColor(severity === 'error' ? 'list.errorForeground' : 'list.warningForeground')

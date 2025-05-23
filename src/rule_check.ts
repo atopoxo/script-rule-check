@@ -11,6 +11,14 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private rootNode?: DirectoryNode;
 
+    private get displayMode(): 'tree' | 'flat' {
+        return vscode.workspace.getConfiguration('script-rule-check').get<'tree' | 'flat'>('displayMode', 'tree');
+    }
+
+    refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+
     clear() {
         this.rootNode = undefined;
         this._onDidChangeTreeData.fire();
@@ -26,7 +34,15 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
 
     async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
         if (!element) {
-            return this.rootNode ? [new DirectoryTreeItem(this.rootNode)] : [];
+            if (this.displayMode === 'flat') {
+                const allFiles: FileTreeItem[] = [];
+                if (this.rootNode) {
+                    this.collectAllFiles(this.rootNode, allFiles);
+                }
+                return allFiles.sort((a, b) => a.fileNode.path.localeCompare(b.fileNode.path));
+            } else {
+                return this.rootNode ? [new DirectoryTreeItem(this.rootNode)] : [];
+            }
         }
 
         if (element instanceof DirectoryTreeItem) {
@@ -46,10 +62,24 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
 
         return [];
     }
+
+    private collectAllFiles(node: DirectoryNode, files: FileTreeItem[]): void {
+        for (const child of node.children.values()) {
+            if (child instanceof DirectoryNode) {
+                this.collectAllFiles(child, files);
+            } else if (child instanceof FileNode) {
+                files.push(new FileTreeItem(child));
+            }
+        }
+    }
 }
 
 export class RuleOperator {
     private resultsMap = new Map<string, CheckResult[]>();
+
+    getIssueCount(): number {
+        return this.resultsMap.size;
+    }
 
     getRuleFiles(toolDir: string, ruleDir: string) {
         const ruleFiles = (() => {
@@ -110,6 +140,8 @@ export class RuleOperator {
                         const lines = match[3].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
                         const info = match[4].trim();
                         this.addResult(tags, filePath, lines, info);
+                    } else {
+                        console.error(`无法解析日志行: ${trimmed}`);
                     }
                 });
             }
@@ -133,14 +165,15 @@ export class RuleOperator {
     }
 
     getVirtualRoot(showAll: boolean, targets: Array<{path: string; isDir: boolean;}>) {
+        const showText = showAll ? "检查结果" : "错误检查结果";
+        const virtualRoot = new DirectoryNode(showText, "");
+
         const rootNodes = targets
             .filter(t => t.isDir)
             .map(t => this.getRoot(showAll, t.path, true));
         const fileNodes = targets
             .filter(t => !t.isDir)
             .map(t => this.getRoot(showAll, t.path, false));
-        const showText = showAll ? "检查结果" : "错误检查结果";
-        const virtualRoot = new DirectoryNode(showText, "");
         rootNodes.filter(n => n !== null).forEach(n => virtualRoot.children.set(n.name, n));
         fileNodes.filter(n => n !== null).forEach(n => virtualRoot.children.set(n.name, n));
         this.sortTree(virtualRoot);

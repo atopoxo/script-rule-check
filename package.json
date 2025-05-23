@@ -4,6 +4,7 @@
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
   "version": "0.0.1",
+  "main": "./out/extension.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/atopoxo/script-rule-check.git"
@@ -14,8 +15,10 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:ruleCheckResults",
+    "onCommand:extension.checkLuaRules"
+  ],
   "contributes": {
     "configuration": {
       "title": "Script Rule Check",
@@ -23,7 +26,17 @@
         "script-rule-check.productDir": {
           "type": "string",
           "default": "z:/trunk",
-          "description": "指定产品根目录路径（需绝对路径）"
+          "description": "指定产品根目录路径(需绝对路径)"
+        },
+        "script-rule-check.displayMode": {
+          "type": "string",
+          "enum": ["tree", "flat"],
+          "enumDescriptions": [
+            "树状层级结构显示结果",
+            "扁平化列表显示结果"
+          ],
+          "default": "tree",
+          "description": "结果展示模式：树形结构(tree)或平铺列表(flat)"
         }
       }
     },
@@ -31,9 +44,32 @@
       {
         "command": "extension.checkLuaRules",
         "title": "Check Script Rules"
+      },
+      {
+        "command": "extension.chooseDisplayMode",
+        "title": "Choose Display Mode"
+      },
+      {
+        "command": "extension.setProductDir",
+        "title": "Set Product Directory"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "extension.chooseDisplayMode",
+          "when": "view == ruleCheckResults",
+          "group": "navigation",
+          "icon": "$(list-selection)"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "extension.setProductDir",
+          "when": "view == scriptRuleConfig",
+          "group": "inline"
+        }
+      ],
       "explorer/context": [
         {
           "command": "extension.checkLuaRules",
@@ -47,12 +83,28 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "script-rule-check",
+          "title": "Script Rule Check",
+          "icon": "assets/logo/logo.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "script-rule-check": [
+        {
+          "id": "scriptRuleConfig",
+          "name": "Configuration"
+        },
         {
           "id": "ruleCheckResults",
           "name": "Script Check Results"
         }
+      ],
+      "explorer": [
+        
       ]
     }
   },

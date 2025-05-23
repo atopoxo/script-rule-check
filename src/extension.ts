@@ -3,26 +3,39 @@ import * as path from 'path';
 import * as fs from 'fs';
 const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
+import {ConfigurationProvider} from './configuration';
 
 let ruleOperator: RuleOperator;
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
+let treeView: vscode.TreeView<vscode.TreeItem>;
 export function activate(context: vscode.ExtensionContext) {
 	console.log("script-rule-check actived!");
     customConfig = vscode.workspace.getConfiguration('script-rule-check');
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(() => {
-            customConfig = vscode.workspace.getConfiguration('script-rule-check');
-            vscode.window.showInformationMessage('产品目录配置已更新');
-        })
-    );
     ruleOperator = new RuleOperator();
 	ruleResultProvider = new RuleResultProvider();
-	const treeView = vscode.window.createTreeView('ruleCheckResults', {
+	treeView = vscode.window.createTreeView('ruleCheckResults', {
 		treeDataProvider: ruleResultProvider
 	});
 	context.subscriptions.push(treeView);
-
+    const updateDisplayMode = () => {
+        const displayMode = customConfig.get<string>('displayMode', 'tree');
+        vscode.commands.executeCommand('setContext', 'script-rule-check.displayMode', displayMode);
+        return displayMode;
+    };
+    let currentDisplayMode = updateDisplayMode();
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('script-rule-check')) {
+                customConfig = vscode.workspace.getConfiguration('script-rule-check');
+                currentDisplayMode = updateDisplayMode();
+                ruleResultProvider.refresh();
+            }
+        })
+    );
+    
+    const configurationProvider = new ConfigurationProvider();
+    vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.checkLuaRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             const productDir = customConfig.get<string>('productDir', 'z:/trunk');
@@ -66,8 +79,33 @@ export function activate(context: vscode.ExtensionContext) {
                 }
                 let rootNode = ruleOperator.getVirtualRoot(false, targets);
                 ruleResultProvider.update(rootNode);
+                const issueCount = ruleOperator.getIssueCount();
+                treeView.description = `${issueCount} issues`;
             });
 		}),
+        vscode.commands.registerCommand('extension.chooseDisplayMode', async () => {
+            const modeOptions = [
+                { label: '$(list-tree) 树状模式', value: 'tree' },
+                { label: '$(list-flat) 平铺模式', value: 'flat' }
+            ];
+            const selected = await vscode.window.showQuickPick(modeOptions, {
+                placeHolder: '选择显示模式'
+            });
+            if (selected) {
+                await customConfig.update('displayMode', selected.value, vscode.ConfigurationTarget.Global);
+            }
+        }),
+        vscode.commands.registerCommand('extension.setProductDir', async () => {
+            const currentDir = customConfig.get<string>('productDir', 'z:/trunk');
+            const newDir = await vscode.window.showInputBox({
+                value: currentDir,
+                prompt: 'Enter the product directory path'
+            });
+            if (newDir !== undefined) {
+                await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
+                configurationProvider.refresh();
+            }
+        }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
                 const buffer = fs.readFileSync(path);
