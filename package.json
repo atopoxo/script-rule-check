@@ -3,25 +3,22 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "./out/extension.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/atopoxo/script-rule-check.git"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.89.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:ruleCheckResults",
-    "onCommand:extension.checkLuaRules"
-  ],
+  "activationEvents": [],
   "contributes": {
     "configuration": {
-      "title": "Script Rule Check",
+      "title": "脚本规则检查",
       "properties": {
         "script-rule-check.productDir": {
           "type": "string",
@@ -43,32 +40,43 @@
     "commands": [
       {
         "command": "extension.checkLuaRules",
-        "title": "Check Script Rules"
-      },
-      {
-        "command": "extension.chooseDisplayMode",
-        "title": "Choose Display Mode"
+        "title": "▶ Run Script Rule Check"
       },
       {
         "command": "extension.setProductDir",
         "title": "Set Product Directory"
+      },
+      {
+        "command": "extension.setDisplayTreeMode",
+        "title": "切换成树形结构显示",
+        "icon": {
+          "light": "assets/icons/light/tree.svg",
+          "dark": "assets/icons/dark/tree.svg"
+        }
+      },
+      {
+        "command": "extension.setDisplayFlatMode",
+        "title": "切换成平面结构显示",
+        "icon": {
+          "light": "assets/icons/light/flat.svg",
+          "dark": "assets/icons/dark/flat.svg"
+        }
       }
     ],
     "menus": {
       "view/title": [
+         {
+          "command": "extension.setDisplayTreeMode",
+          "when": "view == ruleCheckResults && config.script-rule-check.displayMode == 'flat'",
+          "group": "navigation"
+        },
         {
-          "command": "extension.chooseDisplayMode",
-          "when": "view == ruleCheckResults",
-          "group": "navigation",
-          "icon": "$(list-selection)"
+          "command": "extension.setDisplayFlatMode",
+          "when": "view == ruleCheckResults && config.script-rule-check.displayMode == 'tree'",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
-        {
-          "command": "extension.setProductDir",
-          "when": "view == scriptRuleConfig",
-          "group": "inline"
-        }
       ],
       "explorer/context": [
         {
@@ -87,8 +95,8 @@
       "activitybar": [
         {
           "id": "script-rule-check",
-          "title": "Script Rule Check",
-          "icon": "assets/logo/logo.svg"
+          "title": "脚本规则检查",
+          "icon": "assets/icons/dark/logo.svg"
         }
       ]
     },
@@ -102,9 +110,6 @@
           "id": "ruleCheckResults",
           "name": "Script Check Results"
         }
-      ],
-      "explorer": [
-        
       ]
     }
   },

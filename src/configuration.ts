@@ -3,8 +3,9 @@ import * as vscode from 'vscode';
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-
+    private config = vscode.workspace.getConfiguration('script-rule-check');
     refresh(): void {
+        this.config = vscode.workspace.getConfiguration('script-rule-check');
         this._onDidChangeTreeData.fire();
     }
 
@@ -12,41 +13,55 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return element;
     }
 
-    async getChildren(): Promise<vscode.TreeItem[]> {
-        const config = vscode.workspace.getConfiguration('script-rule-check');
-        return [
-            this.createConfigItem('productDir', '产品库目录', config.get('productDir')),
-            this.createModeSelectorItem(config.get('displayMode'))
-        ];
-    }
-
-    private createConfigItem(key: string, label: string, value: any): vscode.TreeItem {
-        const item = new vscode.TreeItem(`${label}: ${value}`);
-        item.contextValue = 'configItem';
-        
-        if (key === 'productDir') {
-            item.command = {
-                command: 'extension.setProductDir',
-                title: '设置产品库目录'
-            };
-            item.tooltip = '设置产品库目录';
+    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+        if (!element) {
+            return [
+                this.createConfigItem(),
+                this.createModeSelectorItem()
+            ];
         }
         
+        if (element.contextValue === 'modeSelector') {
+            return [
+                this.createModeItem('tree', 'tree'),
+                this.createModeItem('flat', 'flat')
+            ];
+        }
+        
+        return [];
+    }
+
+    private createConfigItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem(`产品库目录: ${this.config.get('productDir')}`);
+        item.contextValue = 'configItem';
+        item.command = {
+            command: 'extension.setProductDir',
+            title: '设置产品库目录'
+        };
+        item.tooltip = '设置产品库目录';
         return item;
     }
 
-    private createModeSelectorItem(currentMode?: string): vscode.TreeItem {
-        currentMode = currentMode || 'tree';
+    private createModeSelectorItem(): vscode.TreeItem {
+        const currentMode = this.config.get<'tree' | 'flat'>('displayMode', 'tree');
         const item = new vscode.TreeItem(`显示模式: ${currentMode}`);
         item.contextValue = 'modeSelector';
-        item.iconPath = new vscode.ThemeIcon('list-selection');
-        
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        item.iconPath = new vscode.ThemeIcon(currentMode === 'tree' ? 'list-tree' : 'list-flat');
+        return item;
+    }
+
+    private createModeItem(mode: string, label: string): vscode.TreeItem {
+        const isCurrent = this.config.get('displayMode') === mode;
+        const item = new vscode.TreeItem(label);
         item.command = {
-            command: 'extension.chooseDisplayMode',
-            title: '选择显示模式'
+            command: 'extension.setDisplayMode',
+            title: '',
+            arguments: [mode]
         };
-        
-        item.tooltip = `当前模式：${currentMode}（点击选择显示模式）`;
+        if (isCurrent) {
+            item.iconPath = new vscode.ThemeIcon('check');
+        }
         return item;
     }
 }

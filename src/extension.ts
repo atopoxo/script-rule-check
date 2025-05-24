@@ -14,29 +14,28 @@ export function activate(context: vscode.ExtensionContext) {
     customConfig = vscode.workspace.getConfiguration('script-rule-check');
     ruleOperator = new RuleOperator();
 	ruleResultProvider = new RuleResultProvider();
-	treeView = vscode.window.createTreeView('ruleCheckResults', {
+	const configurationProvider = new ConfigurationProvider();
+    vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
+    treeView = vscode.window.createTreeView('ruleCheckResults', {
 		treeDataProvider: ruleResultProvider
 	});
-	context.subscriptions.push(treeView);
     const updateDisplayMode = () => {
         const displayMode = customConfig.get<string>('displayMode', 'tree');
         vscode.commands.executeCommand('setContext', 'script-rule-check.displayMode', displayMode);
         return displayMode;
     };
     let currentDisplayMode = updateDisplayMode();
-    context.subscriptions.push(
+    
+	context.subscriptions.push(
+        treeView,
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('script-rule-check')) {
                 customConfig = vscode.workspace.getConfiguration('script-rule-check');
                 currentDisplayMode = updateDisplayMode();
                 ruleResultProvider.refresh();
+                configurationProvider.refresh();
             }
-        })
-    );
-    
-    const configurationProvider = new ConfigurationProvider();
-    vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
-	context.subscriptions.push(
+        }),
 		vscode.commands.registerCommand('extension.checkLuaRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             const productDir = customConfig.get<string>('productDir', 'z:/trunk');
             if (!fs.existsSync(productDir)) {
@@ -83,18 +82,6 @@ export function activate(context: vscode.ExtensionContext) {
                 treeView.description = `${issueCount} issues`;
             });
 		}),
-        vscode.commands.registerCommand('extension.chooseDisplayMode', async () => {
-            const modeOptions = [
-                { label: '$(list-tree) 树状模式', value: 'tree' },
-                { label: '$(list-flat) 平铺模式', value: 'flat' }
-            ];
-            const selected = await vscode.window.showQuickPick(modeOptions, {
-                placeHolder: '选择显示模式'
-            });
-            if (selected) {
-                await customConfig.update('displayMode', selected.value, vscode.ConfigurationTarget.Global);
-            }
-        }),
         vscode.commands.registerCommand('extension.setProductDir', async () => {
             const currentDir = customConfig.get<string>('productDir', 'z:/trunk');
             const newDir = await vscode.window.showInputBox({
@@ -123,6 +110,15 @@ export function activate(context: vscode.ExtensionContext) {
             } catch (error) {
                 vscode.window.showErrorMessage(`打开文件失败: ${error}`);
             }
+        }),
+        vscode.commands.registerCommand('extension.setDisplayMode', async (mode: 'tree' | 'flat') => {
+            await customConfig.update('displayMode', mode, vscode.ConfigurationTarget.Global);
+        }),
+        vscode.commands.registerCommand('extension.setDisplayTreeMode', async (mode: 'tree' | 'flat') => {
+            await customConfig.update('displayMode', 'tree', vscode.ConfigurationTarget.Global);
+        }),
+        vscode.commands.registerCommand('extension.setDisplayFlatMode', async (mode: 'tree' | 'flat') => {
+            await customConfig.update('displayMode', 'flat', vscode.ConfigurationTarget.Global);
         })
 	);
 }
