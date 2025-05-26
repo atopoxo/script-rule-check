@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "./out/extension.js",
   "repository": {
     "type": "git",
@@ -15,7 +15,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "*"
+  ],
   "contributes": {
     "configuration": {
       "title": "脚本规则检查",
@@ -27,10 +29,11 @@
         },
         "script-rule-check.displayMode": {
           "type": "string",
-          "enum": ["tree", "flat"],
+          "enum": ["tree", "flat", "rule"],
           "enumDescriptions": [
-            "树状层级结构显示结果",
-            "扁平化列表显示结果"
+            "按目录树结构显示",
+            "按文件列表显示",
+            "按规则显示"
           ],
           "default": "tree",
           "description": "结果展示模式：树形结构(tree)或平铺列表(flat)"
@@ -39,8 +42,8 @@
     },
     "commands": [
       {
-        "command": "extension.checkLuaRules",
-        "title": "▶ Run Script Rule Check"
+        "command": "extension.checkAllRules",
+        "title": "▶ 检查所有用例规则"
       },
       {
         "command": "extension.setProductDir",
@@ -48,7 +51,7 @@
       },
       {
         "command": "extension.setDisplayTreeMode",
-        "title": "切换成树形结构显示",
+        "title": "按目录树结构显示",
         "icon": {
           "light": "assets/icons/light/tree.svg",
           "dark": "assets/icons/dark/tree.svg"
@@ -56,23 +59,57 @@
       },
       {
         "command": "extension.setDisplayFlatMode",
-        "title": "切换成平面结构显示",
+        "title": "按文件列表显示",
         "icon": {
           "light": "assets/icons/light/flat.svg",
           "dark": "assets/icons/dark/flat.svg"
         }
+      },
+      {
+        "command": "extension.setDisplayRuleMode",
+        "title": "按规则显示",
+        "icon": {
+          "light": "assets/icons/light/rule.svg",
+          "dark": "assets/icons/dark/rule.svg"
+        }
+      },
+      {"command": "extension.checkSpecificRule.rule1", "title": "Trap脚本检查"},
+      {"command": "extension.checkSpecificRule.rule2", "title": "scene模块检查"},
+      {"command": "extension.checkSpecificRule.rule3", "title": "player模块检查"},
+      {"command": "extension.checkSpecificRule.rule4", "title": "Lua脚本闭包数据修改检查"},
+      {"command": "extension.checkSpecificRule.rule5", "title": "Doodad脚本检查"},
+      {"command": "extension.checkSpecificRule.rule6", "title": "任务脚本检查"},
+      {"command": "extension.checkSpecificRule.rule7", "title": "全局检查"},
+      {"command": "extension.checkSpecificRule.rule8", "title": "技能脚本检查"},
+      {"command": "extension.checkSpecificRule.rule9", "title": "计时器脚本检查"},
+      {"command": "extension.checkSpecificRule.rule10", "title": "道具脚本检查"},
+      {"command": "extension.checkSpecificRule.rule11", "title": "场景对应脚本检查"}
+    ],
+    "submenus": [
+      {
+        "id": "functions.submenu",
+        "label": "Script Rule Check"
+      },
+      {
+        "id": "checkSpecificRules.submenu",
+        "label": "检查指定用例规则"
       }
     ],
     "menus": {
       "view/title": [
          {
           "command": "extension.setDisplayTreeMode",
-          "when": "view == ruleCheckResults && config.script-rule-check.displayMode == 'flat'",
+          "when": "view == ruleCheckResults",
           "group": "navigation"
         },
         {
           "command": "extension.setDisplayFlatMode",
-          "when": "view == ruleCheckResults && config.script-rule-check.displayMode == 'tree'",
+          "when": "view == ruleCheckResults",
+          "group": "navigation"
+        },
+        {
+          "command": "extension.setDisplayRuleMode",
+          "when": "view == ruleCheckResults",
           "group": "navigation"
         }
       ],
@@ -80,15 +117,32 @@
       ],
       "explorer/context": [
         {
-          "command": "extension.checkLuaRules",
+          "submenu": "functions.submenu",
           "group": "navigation"
         }
       ],
-      "commandPalette": [
+      "functions.submenu": [
         {
-          "command": "extension.checkLuaRules",
-          "when": "always" 
+          "command": "extension.checkAllRules",
+          "group": "navigation"
+        },
+        {
+          "submenu": "checkSpecificRules.submenu",
+          "group": "navigation"
         }
+      ],
+      "checkSpecificRules.submenu": [
+        {"command": "extension.checkSpecificRule.rule1"},
+        {"command": "extension.checkSpecificRule.rule2"},
+        {"command": "extension.checkSpecificRule.rule3"},
+        {"command": "extension.checkSpecificRule.rule4"},
+        {"command": "extension.checkSpecificRule.rule5"},
+        {"command": "extension.checkSpecificRule.rule6"},
+        {"command": "extension.checkSpecificRule.rule7"},
+        {"command": "extension.checkSpecificRule.rule8"},
+        {"command": "extension.checkSpecificRule.rule9"},
+        {"command": "extension.checkSpecificRule.rule10"},
+        {"command": "extension.checkSpecificRule.rule11"}
       ]
     },
     "viewsContainers": {

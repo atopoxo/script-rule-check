@@ -1,6 +1,15 @@
 import * as vscode from 'vscode';
 
+export class CheckRule {
+    constructor(
+        public id: string,
+        public taskName: string,
+        public taskPath: string
+    ) {}
+}
+
 export interface CheckResult {
+    rule: CheckRule;
     tips: string;
     path: string;
     lines: number[];

@@ -4,16 +4,25 @@ import * as fs from 'fs';
 const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
 import {ConfigurationProvider} from './configuration';
+import {CheckRule} from './output_format';
 
 let ruleOperator: RuleOperator;
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
 export function activate(context: vscode.ExtensionContext) {
-	console.log("script-rule-check actived!");
+    console.log("script-rule-check actived!");
     customConfig = vscode.workspace.getConfiguration('script-rule-check');
+    const productDir = customConfig.get<string>('productDir', 'z:/trunk');
+    if (!fs.existsSync(productDir)) {
+        vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
+        return;
+    }
     ruleOperator = new RuleOperator();
-	ruleResultProvider = new RuleResultProvider();
+	ruleResultProvider = new RuleResultProvider(ruleOperator);
+    const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
+    const ruleDir = path.join(toolDir, "Case");
+    const allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
 	const configurationProvider = new ConfigurationProvider();
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     treeView = vscode.window.createTreeView('ruleCheckResults', {
@@ -25,8 +34,18 @@ export function activate(context: vscode.ExtensionContext) {
         return displayMode;
     };
     let currentDisplayMode = updateDisplayMode();
-    
+
+    const watcher = fs.watch(ruleDir, (eventType, filename) => {
+        if (filename != undefined) {
+            if (filename.endsWith('.lua') || filename.endsWith('.py')) {
+                vscode.window.showInformationMessage('检测到规则文件变更，重新加载菜单...');
+                updateSubMenu(context, allCheckRules);
+            }
+        }
+    });
+
 	context.subscriptions.push(
+        // { dispose: () => watcher.close() },
         treeView,
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('script-rule-check')) {
@@ -36,51 +55,13 @@ export function activate(context: vscode.ExtensionContext) {
                 configurationProvider.refresh();
             }
         }),
-		vscode.commands.registerCommand('extension.checkLuaRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
-            const productDir = customConfig.get<string>('productDir', 'z:/trunk');
-            if (!fs.existsSync(productDir)) {
-                vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
-                return;
-            }  
+		vscode.commands.registerCommand('extension.checkAllRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, allCheckRules);
+		}),
+        vscode.commands.registerCommand('extension.checkSpecificRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], rules?: CheckRule[]) => {
             const targets = getParams(uriContext, selectedUris);
-            const luaParams = "io.stdout:setvbuf('no')"
-            const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
-            const luaExe = path.join(toolDir, "lua/5.1/lua.exe");
-            const ruleDir = path.join(toolDir, "Case");
-            const cwd = ruleDir;
-            const logDir = path.join(toolDir, "Log");
-            if (!fs.existsSync(logDir)) {
-                fs.mkdirSync(logDir, { recursive: true });
-            }
-            const ruleFiles = ruleOperator.getRuleFiles(toolDir, ruleDir);
-            
-            ruleResultProvider.clear();
-            ruleOperator.clearResults();
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: "Script Rule Check Progress",
-                cancellable: true
-            }, async (progress, token) => {
-                const totalTasks = targets.length * ruleFiles.length;
-                let completedTasks = 0;
-                for (const target of targets) {
-                    for (const ruleFile of ruleFiles) {
-                        if (token.isCancellationRequested) {
-                            vscode.window.showInformationMessage("用户取消操作");
-                            return;
-                        }
-                        progress.report({
-                            message: `目标: ${path.basename(target.path)} - 规则: ${path.basename(ruleFile)} (${++completedTasks}/${totalTasks})`,
-                            increment: (100 / totalTasks)
-                        });
-                        await ruleOperator.processRuleFile(ruleFile, logDir, luaExe, luaParams, target.path, productDir, cwd);
-                    }
-                }
-                let rootNode = ruleOperator.getVirtualRoot(false, targets);
-                ruleResultProvider.update(rootNode);
-                const issueCount = ruleOperator.getIssueCount();
-                treeView.description = `${issueCount} issues`;
-            });
+            const finalRules = rules || allCheckRules;
+            await checkRules(targets, finalRules, productDir, toolDir, ruleDir);
 		}),
         vscode.commands.registerCommand('extension.setProductDir', async () => {
             const currentDir = customConfig.get<string>('productDir', 'z:/trunk');
@@ -111,16 +92,79 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage(`打开文件失败: ${error}`);
             }
         }),
-        vscode.commands.registerCommand('extension.setDisplayMode', async (mode: 'tree' | 'flat') => {
+        vscode.commands.registerCommand('extension.setDisplayMode', async (mode) => {
             await customConfig.update('displayMode', mode, vscode.ConfigurationTarget.Global);
         }),
-        vscode.commands.registerCommand('extension.setDisplayTreeMode', async (mode: 'tree' | 'flat') => {
+        vscode.commands.registerCommand('extension.setDisplayTreeMode', async () => {
             await customConfig.update('displayMode', 'tree', vscode.ConfigurationTarget.Global);
         }),
-        vscode.commands.registerCommand('extension.setDisplayFlatMode', async (mode: 'tree' | 'flat') => {
+        vscode.commands.registerCommand('extension.setDisplayFlatMode', async () => {
             await customConfig.update('displayMode', 'flat', vscode.ConfigurationTarget.Global);
+        }),
+        vscode.commands.registerCommand('extension.setDisplayRuleMode', async () => {
+            await customConfig.update('displayMode', 'rule', vscode.ConfigurationTarget.Global);
         })
 	);
+
+    allCheckRules.forEach(rule => {
+        const commandId = `extension.checkSpecificRule.${rule.id}`;
+        context.subscriptions.push(
+            vscode.commands.registerCommand(commandId, async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+                await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, [rule]);
+            })
+        );
+    });
+
+    // updateSubMenu(context, allCheckRules);
+}
+
+async function updateSubMenu(context: vscode.ExtensionContext, rules: CheckRule[]) {
+    await vscode.commands.executeCommand('setContext', 'dynamicMenuItems',
+        rules.map(rule => ({
+            command: `extension.checkSpecificRule.${rule.id}`,
+            title: rule.taskName
+        }))
+    );
+    await vscode.commands.executeCommand('setContext', 'hasDynamicItems', true);
+    await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
+}
+
+async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 
+    const logDir = path.join(toolDir, "Log");
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+    const luaExe = path.join(toolDir, "lua/5.1/lua.exe");
+    const cwd = ruleDir;
+    const luaParams = "io.stdout:setvbuf('no')"
+
+    ruleResultProvider.clear();
+    ruleOperator.clearResults();
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Script Rule Check Progress",
+        cancellable: true
+    }, async (progress, token) => {
+        const totalTasks = targets.length * rules.length;
+        let completedTasks = 0;
+        for (const target of targets) {
+            for (const rule of rules) {
+                if (token.isCancellationRequested) {
+                    vscode.window.showInformationMessage("用户取消操作");
+                    return;
+                }
+                progress.report({
+                    message: `目标: ${path.basename(target.path)} - 规则: ${path.basename(rule.taskName)} (${++completedTasks}/${totalTasks})`,
+                    increment: (100 / totalTasks)
+                });
+                await ruleOperator.processRuleFile(rule, logDir, luaExe, luaParams, target.path, productDir, cwd);
+            }
+        }
+        let rootNode = ruleOperator.getVirtualRoot(false, targets);
+        ruleResultProvider.update(rootNode);
+        const issueCount = ruleOperator.getIssueCount();
+        treeView.description = `${issueCount} issues`;
+    });
 }
 
 function getParams(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Array<{path: string; isDir: boolean; valid: boolean}> {

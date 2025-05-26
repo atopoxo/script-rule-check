@@ -2,10 +2,10 @@ import * as vscode from 'vscode';
 
 export class ModeItem extends vscode.TreeItem {
     constructor(
-        public readonly mode: 'tree' | 'flat',
+        public readonly mode: string,
         public readonly parent?: ModeItem
     ) {
-        super(mode === 'tree' ? '树状模式' : '平铺模式', vscode.TreeItemCollapsibleState.None);
+        super(mode, vscode.TreeItemCollapsibleState.None);
         this.id = mode;
         this.iconPath = this.getIconPath();
         this.command = {
@@ -54,7 +54,8 @@ export class ModeSelectorProvider implements vscode.TreeDataProvider<ModeItem> {
     getChildren(): Thenable<ModeItem[]> {
         return Promise.resolve([
             new ModeItem('tree'),
-            new ModeItem('flat')
+            new ModeItem('flat'),
+            new ModeItem('rule'),
         ]);
     }
 

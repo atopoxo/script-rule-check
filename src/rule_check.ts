@@ -4,84 +4,18 @@ import * as fs from 'fs';
 const iconv = require('iconv-lite');
 const chardet = require('chardet');
 import { exec } from 'child_process';
-import {CheckResult, FileNode, DirectoryNode, DirectoryTreeItem, FileTreeItem, CheckResultTreeItem} from './output_format';
-
-export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<void>();
-    readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-    private rootNode?: DirectoryNode;
-
-    private get displayMode(): 'tree' | 'flat' {
-        return vscode.workspace.getConfiguration('script-rule-check').get<'tree' | 'flat'>('displayMode', 'tree');
-    }
-
-    refresh() {
-        this._onDidChangeTreeData.fire();
-    }
-
-    clear() {
-        this.rootNode = undefined;
-        this._onDidChangeTreeData.fire();
-    }
-    update(rootNode: DirectoryNode) {
-        this.rootNode = rootNode;
-        this._onDidChangeTreeData.fire();
-    }
-
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
-        if (!element) {
-            if (this.displayMode === 'flat') {
-                const allFiles: FileTreeItem[] = [];
-                if (this.rootNode) {
-                    this.collectAllFiles(this.rootNode, allFiles);
-                }
-                return allFiles.sort((a, b) => a.fileNode.path.localeCompare(b.fileNode.path));
-            } else {
-                return this.rootNode ? [new DirectoryTreeItem(this.rootNode)] : [];
-            }
-        }
-
-        if (element instanceof DirectoryTreeItem) {
-            const directoryNode = element.directoryNode;
-            return Array.from(directoryNode.children.values()).map(child => {
-                if (child instanceof DirectoryNode) {
-                    return new DirectoryTreeItem(child);
-                } else {
-                    return new FileTreeItem(child);
-                }
-            });
-        }
-
-        if (element instanceof FileTreeItem) {
-            return element.fileNode.results.map(result => new CheckResultTreeItem(result));
-        }
-
-        return [];
-    }
-
-    private collectAllFiles(node: DirectoryNode, files: FileTreeItem[]): void {
-        for (const child of node.children.values()) {
-            if (child instanceof DirectoryNode) {
-                this.collectAllFiles(child, files);
-            } else if (child instanceof FileNode) {
-                files.push(new FileTreeItem(child));
-            }
-        }
-    }
-}
+import {CheckRule, CheckResult, FileNode, DirectoryNode, DirectoryTreeItem, FileTreeItem, CheckResultTreeItem} from './output_format';
 
 export class RuleOperator {
-    private resultsMap = new Map<string, CheckResult[]>();
+    private pathToCheckList = new Map<string, CheckResult[]>();
 
     getIssueCount(): number {
-        return this.resultsMap.size;
+        return this.pathToCheckList.size;
     }
 
-    getRuleFiles(toolDir: string, ruleDir: string) {
+    getScriptCheckRules(toolDir: string, ruleDir: string) {
+        const tag = "rule";
+        let count = 0;
         const ruleFiles = (() => {
             try {
                 const caseInfoPath = path.join(toolDir, "CaseInfo.tab");
@@ -93,15 +27,18 @@ export class RuleOperator {
                     .filter(line => line.trim()) // 过滤空行
                     .map(line => {
                         const [taskName, taskPath, isChecked] = line.split('\t');
-                        return {
+                    return {
+                            id: `${tag}${++count}`,
                             taskName: taskName.trim(),
                             taskPath: path.join(ruleDir, taskPath.trim()),
                             isChecked: isChecked.trim() === '1' // 假设1表示true，0表示false
                         };
                     })
-                    .map(item => item.taskPath)
-                    .filter(filePath => {
-                        const ext = path.extname(filePath).toLowerCase();
+                    .map(item => {
+                        return new CheckRule(item.id, item.taskName, item.taskPath);
+                    })
+                    .filter(item => {
+                        const ext = path.extname(item.taskPath).toLowerCase();
                         return ext === '.lua' || ext === '.py';
                     });
             } catch (error) {
@@ -112,7 +49,8 @@ export class RuleOperator {
         return ruleFiles;
     }
 
-    async processRuleFile(ruleFile: string, logDir: string, luaExe: string, luaParams: string, checkPath: string, productDir: string, cwd: string) {
+    async processRuleFile(rule: CheckRule, logDir: string, luaExe: string, luaParams: string, checkPath: string, productDir: string, cwd: string) {
+        const ruleFile = rule.taskPath;
         const ext = path.extname(ruleFile);
         const logPath = path.join(logDir, path.basename(ruleFile, ext) + '.log');
         const command = ext === '.lua' ? 
@@ -139,7 +77,7 @@ export class RuleOperator {
                         const filePath = match[2].trim();
                         const lines = match[3].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
                         const info = match[4].trim();
-                        this.addResult(tags, filePath, lines, info);
+                        this.addResult(rule, tags, filePath, lines, info);
                     } else {
                         console.error(`无法解析日志行: ${trimmed}`);
                     }
@@ -151,17 +89,17 @@ export class RuleOperator {
         }
     }
 
-    addResult(tips: string[], path: string, lines: number[], info: string) {
-        const result: CheckResult = { tips: this.getTips(tips), path: path, lines, info };
-        let resultsMap = this.resultsMap;
-        if (!resultsMap.has(path)) {
-            resultsMap.set(path, []);
+    addResult(rule: CheckRule, tips: string[], path: string, lines: number[], info: string) {
+        const result: CheckResult = { rule: rule, tips: this.getTips(tips), path: path, lines, info };
+        let pathToCheckList = this.pathToCheckList;
+        if (!pathToCheckList.has(path)) {
+            pathToCheckList.set(path, []);
         }
-        resultsMap.get(path)!.push(result);
+        pathToCheckList.get(path)!.push(result);
     }
 
     clearResults() {
-        this.resultsMap.clear();
+        this.pathToCheckList.clear();
     }
 
     getVirtualRoot(showAll: boolean, targets: Array<{path: string; isDir: boolean;}>) {
@@ -181,11 +119,11 @@ export class RuleOperator {
     }
 
     getRoot(showAll: boolean, path: string, isDir: boolean) {
-        let resultsMap = this.resultsMap;
+        let pathToCheckList = this.pathToCheckList;
         if (isDir) {
-            const allFiles = showAll ? this.getAllLuaFiles(path) : Array.from(resultsMap.keys());
+            const allFiles = showAll ? this.getAllLuaFiles(path) : Array.from(pathToCheckList.keys());
             let rootNode = null;
-            let node = this.buildFileSystemTree(path, allFiles, resultsMap);
+            let node = this.buildFileSystemTree(path, allFiles, pathToCheckList);
             if (node.children.size === 0) {
                 rootNode = null;
             } else {
@@ -194,8 +132,8 @@ export class RuleOperator {
             return rootNode;
         } else {
             let rootNode = null;
-            if (showAll || resultsMap.has(path)) {
-                this.buildFileNode(path, resultsMap);
+            if (showAll || pathToCheckList.has(path)) {
+                this.buildFileNode(path, pathToCheckList);
             }
             return rootNode;
         }
@@ -215,7 +153,7 @@ export class RuleOperator {
         return files;
     }
 
-    buildFileSystemTree(dir: string, filePaths: string[], resultsMap: Map<string, CheckResult[]>): DirectoryNode {
+    buildFileSystemTree(dir: string, filePaths: string[], pathToCheckList: Map<string, CheckResult[]>): DirectoryNode {
         const root = new DirectoryNode(path.basename(dir), dir);
         filePaths.forEach(filePath => {
             const relativePath = path.relative(dir, filePath);
@@ -228,7 +166,7 @@ export class RuleOperator {
                 const part = parts[i];
                 if (i === parts.length - 1) {
                     const fileNode = new FileNode(part, filePath);
-                    fileNode.results = resultsMap.get(filePath) || [];
+                    fileNode.results = pathToCheckList.get(filePath) || [];
                     currentNode.children.set(part, fileNode);
                 } else {
                     let child = currentNode.children.get(part);
@@ -243,9 +181,9 @@ export class RuleOperator {
         return root;
     }
 
-    buildFileNode(filePath: string, resultsMap: Map<string, CheckResult[]>) {
+    buildFileNode(filePath: string, pathToCheckList: Map<string, CheckResult[]>) {
         const fileNode = new FileNode(path.basename(filePath), filePath);
-        fileNode.results = resultsMap.get(filePath) || [];
+        fileNode.results = pathToCheckList.get(filePath) || [];
         return fileNode;
     }
 
@@ -292,5 +230,145 @@ export class RuleOperator {
             return "warning";
         }
         return "error";
+    }
+}
+
+export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<void>();
+    readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+    private rootNode?: DirectoryNode;
+
+    constructor(public readonly ruleOperator: RuleOperator) {}
+
+    private get displayMode(): string {
+        return vscode.workspace.getConfiguration('script-rule-check').get('displayMode', 'tree');
+    }
+
+    refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+
+    clear() {
+        this.rootNode = undefined;
+        this._onDidChangeTreeData.fire();
+    }
+    update(rootNode: DirectoryNode) {
+        this.rootNode = rootNode;
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+        if (!element) {
+            if (this.displayMode === 'flat') {
+                const allFiles: FileTreeItem[] = [];
+                if (this.rootNode) {
+                    this.collectAllFiles(this.rootNode, allFiles);
+                }
+                return allFiles.sort((a, b) => a.fileNode.path.localeCompare(b.fileNode.path));
+            } else if (this.displayMode === 'tree') {
+                const results: vscode.TreeItem[] = [];
+                if (this.rootNode) {
+                    for (const [name, child] of this.rootNode.children) {
+                        if (child instanceof DirectoryNode) {
+                            const treeItem = new DirectoryTreeItem(child);
+                            results.push(treeItem);
+                        } else {
+                            const treeItem = new FileTreeItem(child);
+                            results.push(treeItem);
+                        }
+                    }
+                }
+                return results;
+            } else {
+                let ruleToCheckList = new Map<string, CheckResult[]>();
+                let trees: DirectoryNode[] = [];
+                if (this.rootNode) {
+                    const ruleMap = new Map<string, CheckRule>();
+                    this.collectAllRuleNodes(this.rootNode, ruleToCheckList, ruleMap);
+                    trees = this.generateRuleTrees(ruleToCheckList, ruleMap);
+                }
+                const results: DirectoryTreeItem[] = [];
+                trees.forEach(tree => {
+                    const treeItem = new DirectoryTreeItem(tree);
+                    results.push(treeItem);
+                });
+                return results;
+            }
+        }
+
+        if (element instanceof DirectoryTreeItem) {
+            const directoryNode = element.directoryNode;
+            return Array.from(directoryNode.children.values()).map(child => {
+                if (child instanceof DirectoryNode) {
+                    return new DirectoryTreeItem(child);
+                } else {
+                    return new FileTreeItem(child);
+                }
+            });
+        }
+
+        if (element instanceof FileTreeItem) {
+            return element.fileNode.results.map(result => new CheckResultTreeItem(result));
+        }
+
+        return [];
+    }
+
+    private collectAllFiles(node: DirectoryNode, files: FileTreeItem[]): void {
+        for (const child of node.children.values()) {
+            if (child instanceof DirectoryNode) {
+                this.collectAllFiles(child, files);
+            } else if (child instanceof FileNode) {
+                files.push(new FileTreeItem(child));
+            }
+        }
+    }
+
+    private collectAllRuleNodes(node: DirectoryNode, ruleToFiles: Map<string, CheckResult[]>, ruleMap: Map<string, CheckRule>): void {
+        for (const child of node.children.values()) {
+            if (child instanceof DirectoryNode) {
+                this.collectAllRuleNodes(child, ruleToFiles, ruleMap);
+            } else if (child instanceof FileNode) {
+                for (const result of child.results) {
+                    const taskName = result.rule.taskName;
+                    if (!ruleToFiles.has(taskName)) {
+                        ruleToFiles.set(taskName, []);
+                    }
+                    ruleToFiles.get(taskName)?.push(result);
+                    if (!ruleMap.has(taskName)) {
+                        ruleMap.set(taskName, result.rule);
+                    }
+                }
+            }
+        }
+    }
+
+    private generateRuleTrees(ruleToCheckList: Map<string, CheckResult[]>, ruleMap: Map<string, CheckRule>): DirectoryNode[] {
+        const ruleTrees: DirectoryNode[] = [];
+        for (const [ruleName, checkList] of ruleToCheckList) {
+            const rule = ruleMap.get(ruleName);
+            if (rule) {
+                const ruleTree = this.generateRuleTree(rule, checkList)
+                ruleTrees.push(ruleTree);
+            }
+        }
+        return ruleTrees;
+    }
+
+    private generateRuleTree(rule: CheckRule, checkList: CheckResult[]): DirectoryNode {
+        const sortedCheckList = [...checkList].sort((a, b) => 
+            a.path.localeCompare(b.path, undefined, { sensitivity: 'base' })
+        );
+        let directoryNode = new DirectoryNode(rule.taskName, rule.taskPath);
+        for (const checkResult of sortedCheckList) {
+            const fileNode = new FileNode(path.basename(checkResult.path), checkResult.path);
+            fileNode.results = [checkResult];
+            directoryNode.children.set(checkResult.path, fileNode)
+        }
+        return directoryNode;
     }
 }

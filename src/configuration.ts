@@ -24,7 +24,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (element.contextValue === 'modeSelector') {
             return [
                 this.createModeItem('tree', 'tree'),
-                this.createModeItem('flat', 'flat')
+                this.createModeItem('flat', 'flat'),
+                this.createModeItem('rule', 'rule')
             ];
         }
         
@@ -43,7 +44,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private createModeSelectorItem(): vscode.TreeItem {
-        const currentMode = this.config.get<'tree' | 'flat'>('displayMode', 'tree');
+        const currentMode = this.config.get('displayMode', 'tree');
         const item = new vscode.TreeItem(`显示模式: ${currentMode}`);
         item.contextValue = 'modeSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
