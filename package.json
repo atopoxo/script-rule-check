@@ -10,7 +10,7 @@
     "url": "https://github.com/atopoxo/script-rule-check.git"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "Other"
@@ -124,7 +124,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.17.50",
-    "@types/vscode": "^1.100.0",
+    "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
     "@vscode/test-cli": "^0.0.10",
