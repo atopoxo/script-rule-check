@@ -27,6 +27,14 @@
           "default": "z:/trunk",
           "description": "指定产品根目录路径(需绝对路径)"
         },
+        "script-rule-check.customCheckRules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "自定义配置表检查规则"
+        },
         "script-rule-check.displayMode": {
           "type": "string",
           "enum": ["tree", "flat", "rule"],
@@ -44,6 +52,10 @@
       {
         "command": "extension.checkAllRules",
         "title": "▶ 检查所有用例规则"
+      },
+      {
+        "command": "extension.checkCustomRules",
+        "title": "▶ 检查自定义用例规则"
       },
       {
         "command": "extension.setProductDir",
@@ -73,17 +85,17 @@
           "dark": "assets/icons/dark/rule.svg"
         }
       },
-      {"command": "extension.checkSpecificRule.rule1", "title": "Trap脚本检查"},
-      {"command": "extension.checkSpecificRule.rule2", "title": "scene模块检查"},
-      {"command": "extension.checkSpecificRule.rule3", "title": "player模块检查"},
-      {"command": "extension.checkSpecificRule.rule4", "title": "Lua脚本闭包数据修改检查"},
-      {"command": "extension.checkSpecificRule.rule5", "title": "Doodad脚本检查"},
-      {"command": "extension.checkSpecificRule.rule6", "title": "任务脚本检查"},
-      {"command": "extension.checkSpecificRule.rule7", "title": "全局检查"},
-      {"command": "extension.checkSpecificRule.rule8", "title": "技能脚本检查"},
-      {"command": "extension.checkSpecificRule.rule9", "title": "计时器脚本检查"},
-      {"command": "extension.checkSpecificRule.rule10", "title": "道具脚本检查"},
-      {"command": "extension.checkSpecificRule.rule11", "title": "场景对应脚本检查"}
+      {"command": "extension.checkSpecificRule.rule1", "title": "▶ Trap脚本检查"},
+      {"command": "extension.checkSpecificRule.rule2", "title": "▶ scene模块检查"},
+      {"command": "extension.checkSpecificRule.rule3", "title": "▶ player模块检查"},
+      {"command": "extension.checkSpecificRule.rule4", "title": "▶ Lua脚本闭包数据修改检查"},
+      {"command": "extension.checkSpecificRule.rule5", "title": "▶ Doodad脚本检查"},
+      {"command": "extension.checkSpecificRule.rule6", "title": "▶ 任务脚本检查"},
+      {"command": "extension.checkSpecificRule.rule7", "title": "▶ 全局检查"},
+      {"command": "extension.checkSpecificRule.rule8", "title": "▶ 技能脚本检查"},
+      {"command": "extension.checkSpecificRule.rule9", "title": "▶ 计时器脚本检查"},
+      {"command": "extension.checkSpecificRule.rule10", "title": "▶ 道具脚本检查"},
+      {"command": "extension.checkSpecificRule.rule11", "title": "▶ 场景对应脚本检查"}
     ],
     "submenus": [
       {
@@ -124,11 +136,15 @@
       "functions.submenu": [
         {
           "command": "extension.checkAllRules",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "submenu": "checkSpecificRules.submenu",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "extension.checkCustomRules",
+          "group": "navigation@3"
         }
       ],
       "checkSpecificRules.submenu": [

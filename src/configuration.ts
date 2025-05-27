@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
+import {CheckRule} from './output_format'
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private config = vscode.workspace.getConfiguration('script-rule-check');
+
+    constructor(private readonly allCheckRules: CheckRule[]) {
+    }
     refresh(): void {
         this.config = vscode.workspace.getConfiguration('script-rule-check');
         this._onDidChangeTreeData.fire();
@@ -17,16 +21,14 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (!element) {
             return [
                 this.createConfigItem(),
-                this.createModeSelectorItem()
+                this.createCustomCheckRuleSelectorItem(),
+                this.createModeSelectorItem(),
             ];
         }
-        
-        if (element.contextValue === 'modeSelector') {
-            return [
-                this.createModeItem('tree', 'tree'),
-                this.createModeItem('flat', 'flat'),
-                this.createModeItem('rule', 'rule')
-            ];
+        if (element.contextValue === 'customCheckRuleSelector') {
+            return this.createCustomCheckRuleItems();
+        } else if (element.contextValue === 'modeSelector') {
+            return this.createModeItems();
         }
         
         return [];
@@ -43,6 +45,13 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return item;
     }
 
+    private createCustomCheckRuleSelectorItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem('自定义检查规则');
+        item.contextValue = 'customCheckRuleSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
     private createModeSelectorItem(): vscode.TreeItem {
         const currentMode = this.config.get('displayMode', 'tree');
         const item = new vscode.TreeItem(`显示模式: ${currentMode}`);
@@ -52,6 +61,13 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return item;
     }
 
+    private createModeItems(): vscode.TreeItem[] {
+        return [
+            this.createModeItem('tree', 'tree'),
+            this.createModeItem('flat', 'flat'),
+            this.createModeItem('rule', 'rule')
+        ];
+    }
     private createModeItem(mode: string, label: string): vscode.TreeItem {
         const isCurrent = this.config.get('displayMode') === mode;
         const item = new vscode.TreeItem(label);
@@ -63,6 +79,23 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (isCurrent) {
             item.iconPath = new vscode.ThemeIcon('check');
         }
+        return item;
+    }
+
+    private createCustomCheckRuleItems(): vscode.TreeItem[] {
+        return this.allCheckRules.map(rule => this.createCustomCheckRuleItem(rule));
+    }
+    private createCustomCheckRuleItem(rule: CheckRule): vscode.TreeItem {
+        const isSelected = this.config.get<string[]>('customCheckRules', []).includes(rule.id);
+        const item = new vscode.TreeItem(rule.taskName);
+        item.id = rule.id;
+        item.contextValue = 'customCheckRule';
+        item.command = {
+            command: 'extension.toggleCustomCheckRules',
+            title: rule.taskName,
+            arguments: [rule.id]
+        };
+        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
         return item;
     }
 }

@@ -71,13 +71,36 @@ export class RuleOperator {
                     if (!trimmed) {
                         return;
                     }
-                    const match = trimmed.match(/^((?:\[[^\]]+\]\s*)+)\s+(.*?)\s+文件中，第\s+(\d+(?:,\d+)*), ?\s+行,(.*)$/);
-                    if (match) {
-                        const tags = Array.from(match[1].matchAll(/\[([^\]]+)\]/g)).map(m => m[1]);
-                        const filePath = match[2].trim();
-                        const lines = match[3].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                        const info = match[4].trim();
-                        this.addResult(rule, tags, filePath, lines, info);
+                    const startCharPos = trimmed.indexOf('[') + 1;
+                    const endCharPos = trimmed.indexOf(']');
+                    if (startCharPos === -1 || endCharPos === -1) {
+                        return;
+                    }
+                    
+                    const tag = trimmed.slice(startCharPos, endCharPos).trim();
+                    let jsonPart = trimmed.slice(endCharPos + 1).trim()
+                    // const match = trimmed.match(/^((?:\[[^\]]+\]\s*)+)\s+(.*?)\s+文件中，第\s+(\d+(?:,\d+)*), ?\s+行,(.*)$/);
+                    if (jsonPart) {
+                        const tags = [tag];
+                        let jsonObj = null;
+                        try {
+                            jsonPart = jsonPart.replace(/\\/g, '/');
+                            jsonPart = jsonPart.replace(/\t/g, ''); 
+                            jsonObj = JSON.parse(jsonPart);
+                        } catch (error) {
+                            console.error(`无法解析日志行: ${trimmed}`);
+                            return;
+                        }
+                        if (typeof jsonObj["lines"] !== "string") {
+                            console.error(`无法解析日志行: ${trimmed}`);
+                            return;
+                        }
+                        const filePath = jsonObj["path"];
+                        const lines = jsonObj["lines"].split(',').map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n));
+                        const info = jsonObj["detail"].trim();
+                        if (filePath && filePath != '') {
+                            this.addResult(rule, tags, filePath, lines, info);
+                        }
                     } else {
                         console.error(`无法解析日志行: ${trimmed}`);
                     }

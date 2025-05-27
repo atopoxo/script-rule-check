@@ -23,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
     const ruleDir = path.join(toolDir, "Case");
     const allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
-	const configurationProvider = new ConfigurationProvider();
+	const configurationProvider = new ConfigurationProvider(allCheckRules);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     treeView = vscode.window.createTreeView('ruleCheckResults', {
 		treeDataProvider: ruleResultProvider
@@ -34,15 +34,14 @@ export function activate(context: vscode.ExtensionContext) {
         return displayMode;
     };
     let currentDisplayMode = updateDisplayMode();
-
-    const watcher = fs.watch(ruleDir, (eventType, filename) => {
-        if (filename != undefined) {
-            if (filename.endsWith('.lua') || filename.endsWith('.py')) {
-                vscode.window.showInformationMessage('检测到规则文件变更，重新加载菜单...');
-                updateSubMenu(context, allCheckRules);
-            }
-        }
-    });
+    // const watcher = fs.watch(ruleDir, (eventType, filename) => {
+    //     if (filename != undefined) {
+    //         if (filename.endsWith('.lua') || filename.endsWith('.py')) {
+    //             vscode.window.showInformationMessage('检测到规则文件变更，重新加载菜单...');
+    //             updateSubMenu(context, allCheckRules);
+    //         }
+    //     }
+    // });
 
 	context.subscriptions.push(
         // { dispose: () => watcher.close() },
@@ -73,6 +72,21 @@ export function activate(context: vscode.ExtensionContext) {
                 await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
                 configurationProvider.refresh();
             }
+        }),
+        vscode.commands.registerCommand('extension.toggleCustomCheckRules', async (ruleId: string) => {
+            let selectedRules: string[] = customConfig.get('customCheckRules', []);
+            selectedRules = selectedRules.includes(ruleId) ? selectedRules.filter(id => id !== ruleId) : [...selectedRules, ruleId];
+            await customConfig.update('customCheckRules', selectedRules, vscode.ConfigurationTarget.Global);
+            configurationProvider.refresh();
+        }),
+        vscode.commands.registerCommand('extension.checkCustomRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            const selectedRules = customConfig.get<string[]>('customCheckRules', []);
+            if (selectedRules.length === 0) {
+                vscode.window.showWarningMessage('未选择任何自定义检查规则，请在配置中选择。');
+                return;
+            }
+            const rulesToCheck = allCheckRules.filter(rule => selectedRules.includes(rule.id));
+            await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, rulesToCheck);
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
@@ -114,20 +128,18 @@ export function activate(context: vscode.ExtensionContext) {
             })
         );
     });
-
-    // updateSubMenu(context, allCheckRules);
 }
 
-async function updateSubMenu(context: vscode.ExtensionContext, rules: CheckRule[]) {
-    await vscode.commands.executeCommand('setContext', 'dynamicMenuItems',
-        rules.map(rule => ({
-            command: `extension.checkSpecificRule.${rule.id}`,
-            title: rule.taskName
-        }))
-    );
-    await vscode.commands.executeCommand('setContext', 'hasDynamicItems', true);
-    await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
-}
+// async function updateSubMenu(context: vscode.ExtensionContext, rules: CheckRule[]) {
+//     await vscode.commands.executeCommand('setContext', 'dynamicMenuItems',
+//         rules.map(rule => ({
+//             command: `extension.checkSpecificRule.${rule.id}`,
+//             title: rule.taskName
+//         }))
+//     );
+//     await vscode.commands.executeCommand('setContext', 'hasDynamicItems', true);
+//     await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
+// }
 
 async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 
     const logDir = path.join(toolDir, "Log");
