@@ -16,7 +16,8 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onStartupFinished",
+    "onCommand:extension.forceUpdateAndRestart"
   ],
   "icon": "assets/icons/logo.png",
   "contributes": {
@@ -38,7 +39,11 @@
         },
         "script-rule-check.displayMode": {
           "type": "string",
-          "enum": ["tree", "flat", "rule"],
+          "enum": [
+            "tree",
+            "flat",
+            "rule"
+          ],
           "enumDescriptions": [
             "按目录树结构显示",
             "按文件列表显示",
@@ -51,6 +56,11 @@
     },
     "commands": [
       {
+        "command": "extension.forceUpdateAndRestart",
+        "title": "🔄 强制更新并重启",
+        "category": "Script Rule Check"
+      },
+      {
         "command": "extension.checkAllRules",
         "title": "▶ 检查所有用例规则"
       },
@@ -61,6 +71,22 @@
       {
         "command": "extension.setProductDir",
         "title": "Set Product Directory"
+      },
+      {
+        "command": "extension.expandAllNodes",
+        "title": "展开所有节点",
+        "icon": {
+          "light": "assets/icons/light/expand.svg",
+          "dark": "assets/icons/dark/expand.svg"
+        }
+      },
+      {
+        "command": "extension.collapseAllNodes",
+        "title": "折叠所有节点",
+        "icon": {
+          "light": "assets/icons/light/Collapse.svg",
+          "dark": "assets/icons/dark/Collapse.svg"
+        }
       },
       {
         "command": "extension.setDisplayTreeMode",
@@ -86,17 +112,50 @@
           "dark": "assets/icons/dark/rule.svg"
         }
       },
-      {"command": "extension.checkSpecificRule.rule1", "title": "▶ Trap脚本检查"},
-      {"command": "extension.checkSpecificRule.rule2", "title": "▶ scene模块检查"},
-      {"command": "extension.checkSpecificRule.rule3", "title": "▶ player模块检查"},
-      {"command": "extension.checkSpecificRule.rule4", "title": "▶ Lua脚本闭包数据修改检查"},
-      {"command": "extension.checkSpecificRule.rule5", "title": "▶ Doodad脚本检查"},
-      {"command": "extension.checkSpecificRule.rule6", "title": "▶ 任务脚本检查"},
-      {"command": "extension.checkSpecificRule.rule7", "title": "▶ 全局检查"},
-      {"command": "extension.checkSpecificRule.rule8", "title": "▶ 技能脚本检查"},
-      {"command": "extension.checkSpecificRule.rule9", "title": "▶ 计时器脚本检查"},
-      {"command": "extension.checkSpecificRule.rule10", "title": "▶ 道具脚本检查"},
-      {"command": "extension.checkSpecificRule.rule11", "title": "▶ 场景对应脚本检查"}
+      {
+        "command": "extension.checkSpecificRule.rule1",
+        "title": "▶ Trap脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule2",
+        "title": "▶ scene模块检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule3",
+        "title": "▶ player模块检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule4",
+        "title": "▶ Lua脚本闭包数据修改检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule5",
+        "title": "▶ Doodad脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule6",
+        "title": "▶ 任务脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule7",
+        "title": "▶ 全局检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule8",
+        "title": "▶ 技能脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule9",
+        "title": "▶ 计时器脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule10",
+        "title": "▶ 道具脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule11",
+        "title": "▶ 场景对应脚本检查"
+      }
     ],
     "submenus": [
       {
@@ -110,28 +169,44 @@
     ],
     "menus": {
       "view/title": [
-         {
-          "command": "extension.setDisplayTreeMode",
+        {
+          "command": "extension.expandAllNodes",
           "when": "view == ruleCheckResults",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
-          "command": "extension.setDisplayFlatMode",
+          "command": "extension.collapseAllNodes",
           "when": "view == ruleCheckResults",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "extension.setDisplayRuleMode",
           "when": "view == ruleCheckResults",
-          "group": "navigation"
+          "group": "navigation@3"
+        },
+        {
+          "command": "extension.setDisplayTreeMode",
+          "when": "view == ruleCheckResults",
+          "group": "navigation@4"
+        },
+        {
+          "command": "extension.setDisplayFlatMode",
+          "when": "view == ruleCheckResults",
+          "group": "navigation@5"
         }
       ],
-      "view/item/context": [
-      ],
+      "view/item/context": [],
       "explorer/context": [
         {
           "submenu": "functions.submenu",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "functions.submenu",
+          "group": "navigation",
+          "when": "editorLangId == lua || editorLangId == python"
         }
       ],
       "functions.submenu": [
@@ -149,17 +224,39 @@
         }
       ],
       "checkSpecificRules.submenu": [
-        {"command": "extension.checkSpecificRule.rule1"},
-        {"command": "extension.checkSpecificRule.rule2"},
-        {"command": "extension.checkSpecificRule.rule3"},
-        {"command": "extension.checkSpecificRule.rule4"},
-        {"command": "extension.checkSpecificRule.rule5"},
-        {"command": "extension.checkSpecificRule.rule6"},
-        {"command": "extension.checkSpecificRule.rule7"},
-        {"command": "extension.checkSpecificRule.rule8"},
-        {"command": "extension.checkSpecificRule.rule9"},
-        {"command": "extension.checkSpecificRule.rule10"},
-        {"command": "extension.checkSpecificRule.rule11"}
+        {
+          "command": "extension.checkSpecificRule.rule1"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule2"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule3"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule4"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule5"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule6"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule7"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule8"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule9"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule10"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule11"
+        }
       ]
     },
     "viewsContainers": {
@@ -182,7 +279,15 @@
           "name": "Script Check Results"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "extension.forceRestart",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorTextFocus"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -204,7 +309,11 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "axios": "^1.9.0",
     "chardet": "^2.1.0",
-    "iconv-lite": "^0.6.3"
+    "cheerio": "^1.0.0",
+    "iconv-lite": "^0.6.3",
+    "jsdom": "^26.1.0",
+    "tough-cookie": "^5.1.2"
   }
 }

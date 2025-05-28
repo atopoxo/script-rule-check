@@ -53,13 +53,13 @@ export class RuleOperator {
         return ruleFiles;
     }
 
-    async processRuleFile(rule: CheckRule, logDir: string, luaExe: string, luaParams: string, checkPath: string, productDir: string, cwd: string) {
+    async processRuleFile(rule: CheckRule, logDir: string, luaExe: string, pythonExe: string, luaParams: string, checkPath: string, productDir: string, cwd: string) {
         const ruleFile = rule.taskPath;
         const ext = path.extname(ruleFile);
         const logPath = path.join(logDir, path.basename(ruleFile, ext) + '.log');
         const command = ext === '.lua' ? 
             `${luaExe} -e "${luaParams}" "${ruleFile}" "${logPath}" "${checkPath}" "${productDir}"` : 
-            `python "${ruleFile}" "${logPath}" "${checkPath}" "${productDir}"`;
+            `${pythonExe} "${ruleFile}" "${logPath}" "${checkPath}" "${productDir}"`;
         try {
             fs.existsSync(logPath) && fs.unlinkSync(logPath);
             await new Promise<void>((resolve, reject) => {
@@ -283,7 +283,6 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     }
 
     clear() {
-        this.rootNode = undefined;
         this._onDidChangeTreeData.fire();
     }
     update(rootNode: DirectoryNode) {
@@ -295,12 +294,25 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         return element;
     }
 
+    getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
+        return (element as any).parent;
+    }
+    async getAllItems(parent?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+        const items = await this.getChildren(parent);
+        let allItems = [...items];
+        for (const item of items) {
+            const children = await this.getAllItems(item);
+            allItems = [...allItems, ...children];
+        }
+        return allItems;
+    }
+
     async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
         if (!element) {
             if (this.displayMode === 'flat') {
                 const allFiles: FileTreeItem[] = [];
                 if (this.rootNode) {
-                    this.collectAllFiles(this.rootNode, allFiles);
+                    this.collectAllFiles(this.rootNode, allFiles, 'flat');
                 }
                 return allFiles.sort((a, b) => a.fileNode.path.localeCompare(b.fileNode.path));
             } else if (this.displayMode === 'tree') {
@@ -308,10 +320,10 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
                 if (this.rootNode) {
                     for (const [name, child] of this.rootNode.children) {
                         if (child instanceof DirectoryNode) {
-                            const treeItem = new DirectoryTreeItem(child);
+                            const treeItem = new DirectoryTreeItem(child, 'tree');
                             results.push(treeItem);
                         } else {
-                            const treeItem = new FileTreeItem(child);
+                            const treeItem = new FileTreeItem(child, 'tree');
                             results.push(treeItem);
                         }
                     }
@@ -327,7 +339,7 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
                 }
                 const results: DirectoryTreeItem[] = [];
                 trees.forEach(tree => {
-                    const treeItem = new DirectoryTreeItem(tree);
+                    const treeItem = new DirectoryTreeItem(tree, tree.name);
                     results.push(treeItem);
                 });
                 return results;
@@ -338,9 +350,9 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
             const directoryNode = element.directoryNode;
             return Array.from(directoryNode.children.values()).map(child => {
                 if (child instanceof DirectoryNode) {
-                    return new DirectoryTreeItem(child);
+                    return new DirectoryTreeItem(child, element.tag);
                 } else {
-                    return new FileTreeItem(child);
+                    return new FileTreeItem(child, element.tag);
                 }
             });
         }
@@ -352,12 +364,35 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         return [];
     }
 
-    private collectAllFiles(node: DirectoryNode, files: FileTreeItem[]): void {
+    async setFoldState(treeView: vscode.TreeView<vscode.TreeItem>, state: boolean) {
+        if (!treeView || !state) {
+            return;
+        }
+        const foldCallback = async (parent: vscode.TreeItem) => {
+            try {
+                await treeView.reveal(parent, { expand: state });
+                const children = await this.getChildren(parent);
+                for (const child of children) {
+                    if (child instanceof vscode.TreeItem && child.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+                        await foldCallback(child);
+                    }
+                }
+            } catch (error) {
+                console.error('展开节点时出错:', error);
+            }
+        };
+        const items = await this.getChildren();
+        for (const item of items) {
+            await foldCallback(item);
+        }
+    }
+
+    private collectAllFiles(node: DirectoryNode, files: FileTreeItem[], tag: string): void {
         for (const child of node.children.values()) {
             if (child instanceof DirectoryNode) {
-                this.collectAllFiles(child, files);
+                this.collectAllFiles(child, files, tag);
             } else if (child instanceof FileNode) {
-                files.push(new FileTreeItem(child));
+                files.push(new FileTreeItem(child, tag));
             }
         }
     }

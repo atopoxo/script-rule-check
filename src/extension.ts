@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import axios from 'axios';
+const { CookieJar } = require('tough-cookie');
+const { JSDOM } = require('jsdom');
 const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
 import {ConfigurationProvider} from './configuration';
@@ -13,23 +16,36 @@ let treeView: vscode.TreeView<vscode.TreeItem>;
 let allCheckRules: CheckRule[] = [];
 let registered = false;
 const extensionName = 'script-rule-check';
+const publisher = 'shaoyi';
+const EXTENSION_ID = `${publisher}.${extensionName}`;
+const VERSION_CHECK_URL = `https://marketplace.visualstudio.com/manage/publishers/${publisher}`;
+
+interface Version {
+    version: string;
+    flags: string;
+    lastUpdated: string;
+    files: Array<{
+        assetType: string;
+        source: string;
+    }>;
+    assetUri: string;
+    fallbackAssetUri: string;
+}
 export function activate(context: vscode.ExtensionContext) {
     console.log(`${extensionName} actived!`);
     customConfig = vscode.workspace.getConfiguration(extensionName);
     const configurationProvider = new ConfigurationProvider(customConfig);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     const productDir = customConfig.get<string>('productDir', '');
-    const updateDisplayMode = () => {
-        const displayMode = customConfig.get<string>('displayMode', 'tree');
-        vscode.commands.executeCommand('setContext', `${extensionName}.displayMode`, displayMode);
-        return displayMode;
-    };
-    let currentDisplayMode = updateDisplayMode();
+    
     context.subscriptions.push(
+        vscode.commands.registerCommand('extension.forceRestart', async () => {
+            await checkAndForceUpdate(context);
+        }),
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(extensionName)) {
                 customConfig = vscode.workspace.getConfiguration(extensionName);
-                currentDisplayMode = updateDisplayMode();
+                updateDisplayMode(customConfig);
                 const newDir = customConfig.get<string>('productDir', '');
                 if (fs.existsSync(newDir)) {
                     if (!registered) {
@@ -70,18 +86,95 @@ export function activate(context: vscode.ExtensionContext) {
         registerCommands(context, configurationProvider, productDir);
         registered = true;
     }
+
+    updateDisplayMode(customConfig);
+    // checkAndForceUpdate(context);
 }
 
-// async function updateSubMenu(context: vscode.ExtensionContext, rules: CheckRule[]) {
-//     await vscode.commands.executeCommand('setContext', 'dynamicMenuItems',
-//         rules.map(rule => ({
-//             command: `extension.checkSpecificRule.${rule.id}`,
-//             title: rule.taskName
-//         }))
-//     );
-//     await vscode.commands.executeCommand('setContext', 'hasDynamicItems', true);
-//     await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
-// }
+async function checkAndForceUpdate(context: vscode.ExtensionContext) {
+    const currentVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
+    const latestVersion = await getLastVersion(currentVersion);
+    if (latestVersion && currentVersion !== latestVersion) {
+        const choice = await vscode.window.showWarningMessage(
+            `必须更新插件到 v${latestVersion} 才能继续使用 (当前版本: v${currentVersion})`,
+            { modal: true },
+            '立即更新'
+        );
+        if (choice === '立即更新') {
+            await saveWorkspaceState();
+            vscode.commands.executeCommand('workbench.extensions.installExtension', EXTENSION_ID);
+            vscode.commands.executeCommand('workbench.action.reloadWindow');
+        } else {
+            context.subscriptions.forEach(d => d.dispose());
+            vscode.window.showErrorMessage('插件已禁用，请更新后重启VSCode');
+        }
+    }
+}
+
+async function getLastVersion(currentVersion: string) {
+    let version = undefined;
+    try{
+        const cookieJar = new CookieJar();
+        const instance = axios.create({
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
+            },
+            timeout: 20000,
+            validateStatus: () => true
+        });
+        instance.interceptors.response.use((response) => {
+            const cookies = response.headers['set-cookie'];
+            if (cookies) {
+                cookies.forEach(cookie => {
+                    cookieJar.setCookieSync(cookie, response.config.url);
+                });
+            }
+            return response;
+        });
+        const { data } = await instance.get(VERSION_CHECK_URL);
+        const dom = new JSDOM(data);
+        const doc = dom.window.document;
+        const publisherDataScript = doc.querySelector('script.publisher-data');
+        if (publisherDataScript) {
+            const jsonData = JSON.parse(publisherDataScript.textContent);
+            const targetVersions = jsonData?.publisherTenants?.[0]?.publishers?.[0]?.extensions?.[0]?.versions;
+            if (targetVersions) {
+                const result = {
+                    versions: targetVersions.map((version: Version) => ({
+                        version: version.version,
+                        flags: version.flags,
+                        lastUpdated: version.lastUpdated,
+                        files: version.files.map(file => ({
+                            assetType: file.assetType,
+                            source: file.source
+                        })),
+                        assetUri: version.assetUri,
+                        fallbackAssetUri: version.fallbackAssetUri
+                    }))
+                };
+                
+                console.log(JSON.stringify(result, null, 2));
+            } 
+        }
+    } catch (error) {
+        console.error('Error fetching extension version:', error);
+    } finally {
+        return version;
+    }
+    
+}
+
+async function saveWorkspaceState() {
+    const unsavedDocs = vscode.workspace.textDocuments.filter(doc => doc.isDirty);
+    await Promise.all(unsavedDocs.map(doc => doc.save()));
+}
+
+function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
+    const displayMode = customConfig.get<string>('displayMode', 'tree');
+    vscode.commands.executeCommand('setContext', `${extensionName}.displayMode`, displayMode);
+    return displayMode;
+}
 
 function registerCommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider, productDir: string) {
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
@@ -90,19 +183,10 @@ function registerCommands(context: vscode.ExtensionContext, configurationProvide
 	ruleResultProvider = new RuleResultProvider(ruleOperator, productDir, extensionName);
     allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
 	configurationProvider.setCheckRules(allCheckRules);
-    // const watcher = fs.watch(ruleDir, (eventType, filename) => {
-    //     if (filename != undefined) {
-    //         if (filename.endsWith('.lua') || filename.endsWith('.py')) {
-    //             vscode.window.showInformationMessage('检测到规则文件变更，重新加载菜单...');
-    //             updateSubMenu(context, allCheckRules);
-    //         }
-    //     }
-    // });
     treeView = vscode.window.createTreeView('ruleCheckResults', {
 		treeDataProvider: ruleResultProvider
 	});
     context.subscriptions.push(
-        // { dispose: () => watcher.close() },
         treeView,
 		vscode.commands.registerCommand('extension.checkAllRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, allCheckRules);
@@ -156,6 +240,12 @@ function registerCommands(context: vscode.ExtensionContext, configurationProvide
         }),
         vscode.commands.registerCommand('extension.setDisplayRuleMode', async () => {
             await customConfig.update('displayMode', 'rule', vscode.ConfigurationTarget.Global);
+        }),
+        vscode.commands.registerCommand('extension.expandAllNodes', async () => {
+            await ruleResultProvider.setFoldState(treeView, true);
+        }),
+        vscode.commands.registerCommand('extension.collapseAllNodes', async () => {
+            vscode.commands.executeCommand('workbench.actions.treeView.ruleCheckResults.collapseAll');
         })
 	);
 
@@ -174,6 +264,7 @@ async function checkRules(targets: Array<{path: string; isDir: boolean; valid: b
         fs.mkdirSync(logDir, { recursive: true });
     }
     const luaExe = path.join(toolDir, "lua/5.1/lua.exe");
+    const pythonExe = path.join(toolDir, "Python310/python.exe");
     const cwd = ruleDir;
     const luaParams = "io.stdout:setvbuf('no')"
 
@@ -196,7 +287,7 @@ async function checkRules(targets: Array<{path: string; isDir: boolean; valid: b
                     message: `目标: ${path.basename(target.path)} - 规则: ${path.basename(rule.taskName)} (${++completedTasks}/${totalTasks})`,
                     increment: (100 / totalTasks)
                 });
-                await ruleOperator.processRuleFile(rule, logDir, luaExe, luaParams, target.path, productDir, cwd);
+                await ruleOperator.processRuleFile(rule, logDir, luaExe, pythonExe, luaParams, target.path, productDir, cwd);
             }
         }
         let rootNode = ruleOperator.getVirtualRoot(false, targets);

@@ -33,17 +33,18 @@ export class DirectoryNode {
 }
 
 export class DirectoryTreeItem extends vscode.TreeItem {
-    constructor(public readonly directoryNode: DirectoryNode) {
+    constructor(public readonly directoryNode: DirectoryNode, public readonly tag: string) {
         super(directoryNode.name, vscode.TreeItemCollapsibleState.Collapsed);
         // this.resourceUri = vscode.Uri.file(directoryNode.path);
         // this.contextValue = 'directory';
         this.tooltip = directoryNode.path;
         this.iconPath = vscode.ThemeIcon.Folder;
+        this.id = `${this.tag}_${directoryNode.path.replace(/[\/\\]/g, '_')}`;
     }
 }
 
 export class FileTreeItem extends vscode.TreeItem {
-    constructor(public readonly fileNode: FileNode) {
+    constructor(public readonly fileNode: FileNode, public readonly tag: string) {
         super(fileNode.name, fileNode.results.length > 0 
             ? vscode.TreeItemCollapsibleState.Collapsed 
             : vscode.TreeItemCollapsibleState.None);
@@ -51,6 +52,7 @@ export class FileTreeItem extends vscode.TreeItem {
         // this.contextValue = 'file';
         this.tooltip = fileNode.path;
         this.iconPath = vscode.ThemeIcon.File;
+        this.id = `${this.tag}_${fileNode.path.replace(/[\/\\]/g, '_')}`;
     }
 }
 
