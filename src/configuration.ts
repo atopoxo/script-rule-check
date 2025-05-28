@@ -5,11 +5,17 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private config = vscode.workspace.getConfiguration('script-rule-check');
+    private allCheckRules: CheckRule[] = [];
 
-    constructor(private readonly allCheckRules: CheckRule[]) {
+    constructor() {
     }
     refresh(): void {
         this.config = vscode.workspace.getConfiguration('script-rule-check');
+        this._onDidChangeTreeData.fire();
+    }
+
+    setCheckRules(checkRules: CheckRule[]) {
+        this.allCheckRules = checkRules;
         this._onDidChangeTreeData.fire();
     }
 

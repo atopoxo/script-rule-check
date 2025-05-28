@@ -10,24 +10,61 @@ let ruleOperator: RuleOperator;
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
+let registered = false;
 export function activate(context: vscode.ExtensionContext) {
     console.log("script-rule-check actived!");
+    const configurationProvider = new ConfigurationProvider();
+    vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     customConfig = vscode.workspace.getConfiguration('script-rule-check');
-    const productDir = customConfig.get<string>('productDir', 'z:/trunk');
+    const productDir = customConfig.get<string>('productDir', '');
+    context.subscriptions.push(
+        vscode.commands.registerCommand('extension.setProductDir', async () => {
+            const currentDir = customConfig.get<string>('productDir', '');
+            const newDir = await vscode.window.showInputBox({
+                value: currentDir,
+                prompt: '输入产品库目录'
+            });
+            if (newDir !== undefined) {
+                if (fs.existsSync(newDir)) {
+                    if (!registered) {
+                        registerCommands(context, configurationProvider, newDir);
+                        registered = true;
+                    }
+                    await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
+                } else {
+                    vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
+                }
+            }
+        })
+    );
     if (!fs.existsSync(productDir)) {
         vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
         return;
     }
-    ruleOperator = new RuleOperator();
-	ruleResultProvider = new RuleResultProvider(ruleOperator);
+    if (!registered) {
+        registerCommands(context, configurationProvider, productDir);
+        registered = true;
+    }
+}
+
+// async function updateSubMenu(context: vscode.ExtensionContext, rules: CheckRule[]) {
+//     await vscode.commands.executeCommand('setContext', 'dynamicMenuItems',
+//         rules.map(rule => ({
+//             command: `extension.checkSpecificRule.${rule.id}`,
+//             title: rule.taskName
+//         }))
+//     );
+//     await vscode.commands.executeCommand('setContext', 'hasDynamicItems', true);
+//     await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
+// }
+
+function registerCommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider, productDir: string) {
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
     const ruleDir = path.join(toolDir, "Case");
+    ruleOperator = new RuleOperator(productDir);
+	ruleResultProvider = new RuleResultProvider(ruleOperator, productDir);
     const allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
-	const configurationProvider = new ConfigurationProvider(allCheckRules);
-    vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
-    treeView = vscode.window.createTreeView('ruleCheckResults', {
-		treeDataProvider: ruleResultProvider
-	});
+	configurationProvider.setCheckRules(allCheckRules);
     const updateDisplayMode = () => {
         const displayMode = customConfig.get<string>('displayMode', 'tree');
         vscode.commands.executeCommand('setContext', 'script-rule-check.displayMode', displayMode);
@@ -42,8 +79,10 @@ export function activate(context: vscode.ExtensionContext) {
     //         }
     //     }
     // });
-
-	context.subscriptions.push(
+    treeView = vscode.window.createTreeView('ruleCheckResults', {
+		treeDataProvider: ruleResultProvider
+	});
+    context.subscriptions.push(
         // { dispose: () => watcher.close() },
         treeView,
         vscode.workspace.onDidChangeConfiguration(e => {
@@ -62,17 +101,6 @@ export function activate(context: vscode.ExtensionContext) {
             const finalRules = rules || allCheckRules;
             await checkRules(targets, finalRules, productDir, toolDir, ruleDir);
 		}),
-        vscode.commands.registerCommand('extension.setProductDir', async () => {
-            const currentDir = customConfig.get<string>('productDir', 'z:/trunk');
-            const newDir = await vscode.window.showInputBox({
-                value: currentDir,
-                prompt: 'Enter the product directory path'
-            });
-            if (newDir !== undefined) {
-                await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
-                configurationProvider.refresh();
-            }
-        }),
         vscode.commands.registerCommand('extension.toggleCustomCheckRules', async (ruleId: string) => {
             let selectedRules: string[] = customConfig.get('customCheckRules', []);
             selectedRules = selectedRules.includes(ruleId) ? selectedRules.filter(id => id !== ruleId) : [...selectedRules, ruleId];
@@ -129,18 +157,6 @@ export function activate(context: vscode.ExtensionContext) {
         );
     });
 }
-
-// async function updateSubMenu(context: vscode.ExtensionContext, rules: CheckRule[]) {
-//     await vscode.commands.executeCommand('setContext', 'dynamicMenuItems',
-//         rules.map(rule => ({
-//             command: `extension.checkSpecificRule.${rule.id}`,
-//             title: rule.taskName
-//         }))
-//     );
-//     await vscode.commands.executeCommand('setContext', 'hasDynamicItems', true);
-//     await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
-// }
-
 async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 
     const logDir = path.join(toolDir, "Log");
     if (!fs.existsSync(logDir)) {

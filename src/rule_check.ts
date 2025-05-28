@@ -8,7 +8,11 @@ import {CheckRule, CheckResult, FileNode, DirectoryNode, DirectoryTreeItem, File
 
 export class RuleOperator {
     private pathToCheckList = new Map<string, CheckResult[]>();
+    private clientPath: string;
 
+    constructor(rootPath: string) {
+        this.clientPath = path.join(rootPath, 'client').replace(/\\/g, '/');
+    }
     getIssueCount(): number {
         return this.pathToCheckList.size;
     }
@@ -155,8 +159,9 @@ export class RuleOperator {
             return rootNode;
         } else {
             let rootNode = null;
-            if (showAll || pathToCheckList.has(path)) {
-                this.buildFileNode(path, pathToCheckList);
+            const finalPath = path.replace(/\\/g, '/');
+            if (showAll || pathToCheckList.has(finalPath)) {
+                rootNode = this.buildFileNode(finalPath, pathToCheckList);
             }
             return rootNode;
         }
@@ -170,7 +175,8 @@ export class RuleOperator {
             if (entry.isDirectory()) {
                 files.push(...this.getAllLuaFiles(fullPath));
             } else if (entry.isFile() && path.extname(entry.name) === '.lua') {
-                files.push(fullPath);
+                const finalPath = fullPath.replace(/\\/g, '/');
+                files.push(finalPath);
             }
         }
         return files;
@@ -188,13 +194,14 @@ export class RuleOperator {
             for (let i = 0; i < parts.length; i++) {
                 const part = parts[i];
                 if (i === parts.length - 1) {
-                    const fileNode = new FileNode(part, filePath);
-                    fileNode.results = pathToCheckList.get(filePath) || [];
+                    const fileNode = this.buildFileNode(filePath, pathToCheckList);
                     currentNode.children.set(part, fileNode);
                 } else {
                     let child = currentNode.children.get(part);
                     if (!child || !(child instanceof DirectoryNode)) {
-                        child = new DirectoryNode(part, path.join(currentNode.path, part));
+                        let currentPath = path.join(currentNode.path, part);
+                        currentPath = currentPath.replace(/\\/g, '/');
+                        child = new DirectoryNode(part, currentPath);
                         currentNode.children.set(part, child);
                     }
                     currentNode = child as DirectoryNode;
@@ -204,8 +211,10 @@ export class RuleOperator {
         return root;
     }
 
-    buildFileNode(filePath: string, pathToCheckList: Map<string, CheckResult[]>) {
-        const fileNode = new FileNode(path.basename(filePath), filePath);
+    private buildFileNode(filePath: string, pathToCheckList: Map<string, CheckResult[]>) {
+        let relativePath = path.relative(this.clientPath, filePath);
+        relativePath = relativePath.replace(/\\/g, '/');
+        const fileNode = new FileNode(relativePath, filePath);
         fileNode.results = pathToCheckList.get(filePath) || [];
         return fileNode;
     }
@@ -260,8 +269,10 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private rootNode?: DirectoryNode;
-
-    constructor(public readonly ruleOperator: RuleOperator) {}
+    private clientPath: string;
+    constructor(public readonly ruleOperator: RuleOperator, rootPath: string) {
+        this.clientPath = path.join(rootPath, 'client').replace(/\\/g, '/');
+    }
 
     private get displayMode(): string {
         return vscode.workspace.getConfiguration('script-rule-check').get('displayMode', 'tree');
@@ -388,7 +399,9 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         );
         let directoryNode = new DirectoryNode(rule.taskName, rule.taskPath);
         for (const checkResult of sortedCheckList) {
-            const fileNode = new FileNode(path.basename(checkResult.path), checkResult.path);
+            let relativePath = path.relative(this.clientPath, checkResult.path);
+            relativePath = relativePath.replace(/\\/g, '/');
+            const fileNode = new FileNode(relativePath, checkResult.path);
             fileNode.results = [checkResult];
             directoryNode.children.set(checkResult.path, fileNode)
         }
