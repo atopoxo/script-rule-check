@@ -18,6 +18,7 @@
   "activationEvents": [
     "*"
   ],
+  "icon": "assets/icons/logo.png",
   "contributes": {
     "configuration": {
       "title": "脚本规则检查",
@@ -166,7 +167,7 @@
         {
           "id": "script-rule-check",
           "title": "脚本规则检查",
-          "icon": "assets/icons/dark/logo.svg"
+          "icon": "assets/icons/logo.svg"
         }
       ]
     },
