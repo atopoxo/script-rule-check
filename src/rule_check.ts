@@ -270,12 +270,12 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private rootNode?: DirectoryNode;
     private clientPath: string;
-    constructor(public readonly ruleOperator: RuleOperator, rootPath: string) {
+    constructor(public readonly ruleOperator: RuleOperator, rootPath: string, private extensionName: string) {
         this.clientPath = path.join(rootPath, 'client').replace(/\\/g, '/');
     }
 
     private get displayMode(): string {
-        return vscode.workspace.getConfiguration('script-rule-check').get('displayMode', 'tree');
+        return vscode.workspace.getConfiguration(this.extensionName).get('displayMode', 'tree');
     }
 
     refresh() {

@@ -4,13 +4,14 @@ import {CheckRule} from './output_format'
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-    private config = vscode.workspace.getConfiguration('script-rule-check');
     private allCheckRules: CheckRule[] = [];
+    private config: vscode.WorkspaceConfiguration;
 
-    constructor() {
+    constructor(config: vscode.WorkspaceConfiguration) {
+        this.config = config
     }
-    refresh(): void {
-        this.config = vscode.workspace.getConfiguration('script-rule-check');
+    refresh(config: vscode.WorkspaceConfiguration): void {
+        this.config = config;
         this._onDidChangeTreeData.fire();
     }
 

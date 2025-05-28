@@ -10,14 +10,39 @@ let ruleOperator: RuleOperator;
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
+let allCheckRules: CheckRule[] = [];
 let registered = false;
+const extensionName = 'script-rule-check';
 export function activate(context: vscode.ExtensionContext) {
-    console.log("script-rule-check actived!");
-    const configurationProvider = new ConfigurationProvider();
+    console.log(`${extensionName} actived!`);
+    customConfig = vscode.workspace.getConfiguration(extensionName);
+    const configurationProvider = new ConfigurationProvider(customConfig);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
-    customConfig = vscode.workspace.getConfiguration('script-rule-check');
     const productDir = customConfig.get<string>('productDir', '');
+    const updateDisplayMode = () => {
+        const displayMode = customConfig.get<string>('displayMode', 'tree');
+        vscode.commands.executeCommand('setContext', `${extensionName}.displayMode`, displayMode);
+        return displayMode;
+    };
+    let currentDisplayMode = updateDisplayMode();
     context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration(extensionName)) {
+                customConfig = vscode.workspace.getConfiguration(extensionName);
+                currentDisplayMode = updateDisplayMode();
+                const newDir = customConfig.get<string>('productDir', '');
+                if (fs.existsSync(newDir)) {
+                    if (!registered) {
+                        registerCommands(context, configurationProvider, newDir);
+                        registered = true;
+                    }
+                    ruleResultProvider.refresh();
+                } else {
+                    vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
+                }
+                configurationProvider.refresh(customConfig);
+            }
+        }),
         vscode.commands.registerCommand('extension.setProductDir', async () => {
             const currentDir = customConfig.get<string>('productDir', '');
             const newDir = await vscode.window.showInputBox({
@@ -32,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
                     }
                     await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
                 } else {
-                    vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
+                    vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
                 }
             }
         })
@@ -62,15 +87,9 @@ function registerCommands(context: vscode.ExtensionContext, configurationProvide
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
     const ruleDir = path.join(toolDir, "Case");
     ruleOperator = new RuleOperator(productDir);
-	ruleResultProvider = new RuleResultProvider(ruleOperator, productDir);
-    const allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
+	ruleResultProvider = new RuleResultProvider(ruleOperator, productDir, extensionName);
+    allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
 	configurationProvider.setCheckRules(allCheckRules);
-    const updateDisplayMode = () => {
-        const displayMode = customConfig.get<string>('displayMode', 'tree');
-        vscode.commands.executeCommand('setContext', 'script-rule-check.displayMode', displayMode);
-        return displayMode;
-    };
-    let currentDisplayMode = updateDisplayMode();
     // const watcher = fs.watch(ruleDir, (eventType, filename) => {
     //     if (filename != undefined) {
     //         if (filename.endsWith('.lua') || filename.endsWith('.py')) {
@@ -85,14 +104,6 @@ function registerCommands(context: vscode.ExtensionContext, configurationProvide
     context.subscriptions.push(
         // { dispose: () => watcher.close() },
         treeView,
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('script-rule-check')) {
-                customConfig = vscode.workspace.getConfiguration('script-rule-check');
-                currentDisplayMode = updateDisplayMode();
-                ruleResultProvider.refresh();
-                configurationProvider.refresh();
-            }
-        }),
 		vscode.commands.registerCommand('extension.checkAllRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, allCheckRules);
 		}),
@@ -105,7 +116,7 @@ function registerCommands(context: vscode.ExtensionContext, configurationProvide
             let selectedRules: string[] = customConfig.get('customCheckRules', []);
             selectedRules = selectedRules.includes(ruleId) ? selectedRules.filter(id => id !== ruleId) : [...selectedRules, ruleId];
             await customConfig.update('customCheckRules', selectedRules, vscode.ConfigurationTarget.Global);
-            configurationProvider.refresh();
+            configurationProvider.refresh(customConfig);
         }),
         vscode.commands.registerCommand('extension.checkCustomRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             const selectedRules = customConfig.get<string[]>('customCheckRules', []);
