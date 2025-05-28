@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "./out/extension.js",
   "repository": {
     "type": "git",
@@ -309,11 +309,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "axios": "^1.9.0",
     "chardet": "^2.1.0",
-    "cheerio": "^1.0.0",
-    "iconv-lite": "^0.6.3",
-    "jsdom": "^26.1.0",
-    "tough-cookie": "^5.1.2"
+    "iconv-lite": "^0.6.3"
   }
 }

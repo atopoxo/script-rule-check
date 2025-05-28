@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import axios from 'axios';
-const { CookieJar } = require('tough-cookie');
-const { JSDOM } = require('jsdom');
+// import axios from 'axios';
+// const { CookieJar } = require('tough-cookie');
+// const { JSDOM } = require('jsdom');
 const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
 import {ConfigurationProvider} from './configuration';
@@ -39,9 +39,9 @@ export function activate(context: vscode.ExtensionContext) {
     const productDir = customConfig.get<string>('productDir', '');
     
     context.subscriptions.push(
-        vscode.commands.registerCommand('extension.forceRestart', async () => {
-            await checkAndForceUpdate(context);
-        }),
+        // vscode.commands.registerCommand('extension.forceRestart', async () => {
+        //     await checkAndForceUpdate(context);
+        // }),
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(extensionName)) {
                 customConfig = vscode.workspace.getConfiguration(extensionName);
@@ -91,79 +91,79 @@ export function activate(context: vscode.ExtensionContext) {
     // checkAndForceUpdate(context);
 }
 
-async function checkAndForceUpdate(context: vscode.ExtensionContext) {
-    const currentVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
-    const latestVersion = await getLastVersion(currentVersion);
-    if (latestVersion && currentVersion !== latestVersion) {
-        const choice = await vscode.window.showWarningMessage(
-            `必须更新插件到 v${latestVersion} 才能继续使用 (当前版本: v${currentVersion})`,
-            { modal: true },
-            '立即更新'
-        );
-        if (choice === '立即更新') {
-            await saveWorkspaceState();
-            vscode.commands.executeCommand('workbench.extensions.installExtension', EXTENSION_ID);
-            vscode.commands.executeCommand('workbench.action.reloadWindow');
-        } else {
-            context.subscriptions.forEach(d => d.dispose());
-            vscode.window.showErrorMessage('插件已禁用，请更新后重启VSCode');
-        }
-    }
-}
+// async function checkAndForceUpdate(context: vscode.ExtensionContext) {
+//     const currentVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
+//     const latestVersion = await getLastVersion(currentVersion);
+//     if (latestVersion && currentVersion !== latestVersion) {
+//         const choice = await vscode.window.showWarningMessage(
+//             `必须更新插件到 v${latestVersion} 才能继续使用 (当前版本: v${currentVersion})`,
+//             { modal: true },
+//             '立即更新'
+//         );
+//         if (choice === '立即更新') {
+//             await saveWorkspaceState();
+//             vscode.commands.executeCommand('workbench.extensions.installExtension', EXTENSION_ID);
+//             vscode.commands.executeCommand('workbench.action.reloadWindow');
+//         } else {
+//             context.subscriptions.forEach(d => d.dispose());
+//             vscode.window.showErrorMessage('插件已禁用，请更新后重启VSCode');
+//         }
+//     }
+// }
 
-async function getLastVersion(currentVersion: string) {
-    let version = undefined;
-    try{
-        const cookieJar = new CookieJar();
-        const instance = axios.create({
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9'
-            },
-            timeout: 20000,
-            validateStatus: () => true
-        });
-        instance.interceptors.response.use((response) => {
-            const cookies = response.headers['set-cookie'];
-            if (cookies) {
-                cookies.forEach(cookie => {
-                    cookieJar.setCookieSync(cookie, response.config.url);
-                });
-            }
-            return response;
-        });
-        const { data } = await instance.get(VERSION_CHECK_URL);
-        const dom = new JSDOM(data);
-        const doc = dom.window.document;
-        const publisherDataScript = doc.querySelector('script.publisher-data');
-        if (publisherDataScript) {
-            const jsonData = JSON.parse(publisherDataScript.textContent);
-            const targetVersions = jsonData?.publisherTenants?.[0]?.publishers?.[0]?.extensions?.[0]?.versions;
-            if (targetVersions) {
-                const result = {
-                    versions: targetVersions.map((version: Version) => ({
-                        version: version.version,
-                        flags: version.flags,
-                        lastUpdated: version.lastUpdated,
-                        files: version.files.map(file => ({
-                            assetType: file.assetType,
-                            source: file.source
-                        })),
-                        assetUri: version.assetUri,
-                        fallbackAssetUri: version.fallbackAssetUri
-                    }))
-                };
+// async function getLastVersion(currentVersion: string) {
+//     let version = undefined;
+//     try{
+//         const cookieJar = new CookieJar();
+//         const instance = axios.create({
+//             headers: {
+//                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+//                 'Accept-Language': 'en-US,en;q=0.9'
+//             },
+//             timeout: 20000,
+//             validateStatus: () => true
+//         });
+//         instance.interceptors.response.use((response) => {
+//             const cookies = response.headers['set-cookie'];
+//             if (cookies) {
+//                 cookies.forEach(cookie => {
+//                     cookieJar.setCookieSync(cookie, response.config.url);
+//                 });
+//             }
+//             return response;
+//         });
+//         const { data } = await instance.get(VERSION_CHECK_URL);
+//         const dom = new JSDOM(data);
+//         const doc = dom.window.document;
+//         const publisherDataScript = doc.querySelector('script.publisher-data');
+//         if (publisherDataScript) {
+//             const jsonData = JSON.parse(publisherDataScript.textContent);
+//             const targetVersions = jsonData?.publisherTenants?.[0]?.publishers?.[0]?.extensions?.[0]?.versions;
+//             if (targetVersions) {
+//                 const result = {
+//                     versions: targetVersions.map((version: Version) => ({
+//                         version: version.version,
+//                         flags: version.flags,
+//                         lastUpdated: version.lastUpdated,
+//                         files: version.files.map(file => ({
+//                             assetType: file.assetType,
+//                             source: file.source
+//                         })),
+//                         assetUri: version.assetUri,
+//                         fallbackAssetUri: version.fallbackAssetUri
+//                     }))
+//                 };
                 
-                console.log(JSON.stringify(result, null, 2));
-            } 
-        }
-    } catch (error) {
-        console.error('Error fetching extension version:', error);
-    } finally {
-        return version;
-    }
+//                 console.log(JSON.stringify(result, null, 2));
+//             } 
+//         }
+//     } catch (error) {
+//         console.error('Error fetching extension version:', error);
+//     } finally {
+//         return version;
+//     }
     
-}
+// }
 
 async function saveWorkspaceState() {
     const unsavedDocs = vscode.workspace.textDocuments.filter(doc => doc.isDirty);
