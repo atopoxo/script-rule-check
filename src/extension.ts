@@ -8,29 +8,35 @@ const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
 import {ConfigurationProvider} from './configuration';
 import {CheckRule} from './output_format';
+import { ChatViewProvider } from './chat_view';
+import { ChatManager } from './chat_manager';
+import { ReferenceSystem } from './reference_system';
+import { ModelSelector } from './model_selector';
 
 let ruleOperator: RuleOperator;
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
 let allCheckRules: CheckRule[] = [];
+let chatManager: ChatManager;
+let chatViewProvider: ChatViewProvider;
 let registered = false;
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
-const EXTENSION_ID = `${publisher}.${extensionName}`;
-const VERSION_CHECK_URL = `https://marketplace.visualstudio.com/manage/publishers/${publisher}`;
+// const EXTENSION_ID = `${publisher}.${extensionName}`;
+// const VERSION_CHECK_URL = `https://marketplace.visualstudio.com/manage/publishers/${publisher}`;
 
-interface Version {
-    version: string;
-    flags: string;
-    lastUpdated: string;
-    files: Array<{
-        assetType: string;
-        source: string;
-    }>;
-    assetUri: string;
-    fallbackAssetUri: string;
-}
+// interface Version {
+//     version: string;
+//     flags: string;
+//     lastUpdated: string;
+//     files: Array<{
+//         assetType: string;
+//         source: string;
+//     }>;
+//     assetUri: string;
+//     fallbackAssetUri: string;
+// }
 export function activate(context: vscode.ExtensionContext) {
     console.log(`${extensionName} actived!`);
     customConfig = vscode.workspace.getConfiguration(extensionName);
@@ -49,7 +55,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const newDir = customConfig.get<string>('productDir', '');
                 if (fs.existsSync(newDir)) {
                     if (!registered) {
-                        registerCommands(context, configurationProvider, newDir);
+                        registerNormalCommands(context, configurationProvider, newDir);
                         registered = true;
                     }
                     ruleResultProvider.refresh();
@@ -68,7 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (newDir !== undefined) {
                 if (fs.existsSync(newDir)) {
                     if (!registered) {
-                        registerCommands(context, configurationProvider, newDir);
+                        registerNormalCommands(context, configurationProvider, newDir);
                         registered = true;
                     }
                     await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
@@ -78,12 +84,13 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
+    registerAICommands(context, configurationProvider);
     if (!fs.existsSync(productDir)) {
         vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
         return;
     }
     if (!registered) {
-        registerCommands(context, configurationProvider, productDir);
+        registerNormalCommands(context, configurationProvider, productDir);
         registered = true;
     }
 
@@ -176,7 +183,57 @@ function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
     return displayMode;
 }
 
-function registerCommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider, productDir: string) {
+function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
+    chatManager = ChatManager.getInstance(context);
+    chatViewProvider = new ChatViewProvider(context, chatManager);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
+        vscode.commands.registerCommand('extension.chat.createNewSession', async () => {
+            await chatViewProvider.createNewSession();
+        }),
+        vscode.commands.registerCommand('extension.chat.showHistory', () => {
+            chatViewProvider.showHistory();
+        }),
+        vscode.commands.registerCommand('extension.chat.deleteHistorySession', async (sessionId: string) => {
+            await chatViewProvider.deleteSession(sessionId);
+        }),
+        vscode.commands.registerCommand('extension.chat.sendMessage', async () => {
+            // 发送消息实现
+        }),
+        vscode.commands.registerCommand('extension.chat.cancelResponse', () => {
+            // 取消响应实现
+        }),
+        vscode.commands.registerCommand('extension.chat.addReference', async () => {
+            await chatViewProvider.addReference();
+        }),
+        vscode.commands.registerCommand('extension.chat.selectModel', async () => {
+            await chatViewProvider.selectModel();
+        }),
+        // vscode.commands.registerCommand('extension.chat.addCodeReference', async () => {
+        //     const reference = await ReferenceSystem.addCodeReference();
+        //     if (reference) {
+        //         chatViewProvider.addReference(reference);
+        //     }
+        // }),
+        // vscode.commands.registerCommand('extension.chat.addFileReference', async () => {
+        //     const reference = await ReferenceSystem.addFileReference();
+        //     if (reference) {
+        //         chatViewProvider.addReference(reference);
+        //     }
+        // }),
+        // vscode.commands.registerCommand('extension.chat.addFolderReference', async () => {
+        //     const reference = await ReferenceSystem.addFolderReference();
+        //     if (reference) {
+        //         chatViewProvider.addReference(reference);
+        //     }
+        // }),
+        vscode.commands.registerCommand('extension.chat.addSelectionToChat', async () => {
+            await chatViewProvider.addSelectionToChat();
+        })
+    );
+}
+
+function registerNormalCommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider, productDir: string) {
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
     const ruleDir = path.join(toolDir, "Case");
     ruleOperator = new RuleOperator(productDir);

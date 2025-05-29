@@ -51,6 +51,14 @@
           ],
           "default": "tree",
           "description": "结果展示模式：树形结构(tree)或平铺列表(flat)"
+        },
+        "script-rule-chat.models": {
+          "type": "array",
+          "default": [
+            {"name": "deepseek-v3", "type": "deepseek v3"},
+            {"name": "deepseek-r1", "type": "deepseek r1"}
+          ],
+          "description": "Available AI models for chat"
         }
       }
     },
@@ -155,6 +163,56 @@
       {
         "command": "extension.checkSpecificRule.rule11",
         "title": "▶ 场景对应脚本检查"
+      },
+      {
+        "command": "extension.chat.createNewSession",
+        "title": "创建新会话",
+        "icon": "$(add)"
+      },
+      {
+        "command": "extension.chat.showHistory",
+        "title": "查看历史会话",
+        "icon": "$(history)"
+      },
+      {
+        "command": "extension.chat.deleteHistorySession",
+        "title": "删除历史记录"
+      },
+      {
+        "command": "extension.chat.sendMessage",
+        "title": "发送消息"
+      },
+      {
+        "command": "extension.chat.cancelResponse",
+        "title": "取消响应",
+        "icon": "$(close)"
+      },
+      {
+        "command": "extension.chat.addReference",
+        "title": "添加引用",
+        "icon": "$(link)"
+      },
+      {
+        "command": "extension.chat.selectModel",
+        "title": "选择模型",
+        "icon": "$(server)"
+      },
+      {
+        "command": "extension.chat.addCodeReference",
+        "title": "Add Code Reference"
+      },
+      {
+        "command": "extension.chat.addFileReference",
+        "title": "Add File Reference"
+      },
+      {
+        "command": "extension.chat.addFolderReference",
+        "title": "Add Folder Reference"
+      },
+      {
+        "command": "extension.chat.addSelectionToChat",
+        "title": "添加到聊天",
+        "category": "Editor"
       }
     ],
     "submenus": [
@@ -193,6 +251,16 @@
           "command": "extension.setDisplayFlatMode",
           "when": "view == ruleCheckResults",
           "group": "navigation@5"
+        },
+        {
+          "command": "extension.chat.createNewSession",
+          "when": "view == chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "extension.chat.showHistory",
+          "when": "view == chatView",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [],
@@ -221,6 +289,11 @@
         {
           "command": "extension.checkCustomRules",
           "group": "navigation@3"
+        },
+        {
+          "command": "extension.chat.addSelectionToChat",
+          "when": "editorHasSelection",
+          "group": "navigation@4"
         }
       ],
       "checkSpecificRules.submenu": [
@@ -277,6 +350,11 @@
         {
           "id": "ruleCheckResults",
           "name": "Script Check Results"
+        },
+        {
+          "id": "chatView",
+          "name": "AI Chat",
+          "type": "webview"
         }
       ]
     },
@@ -290,8 +368,9 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && npm run copy-media",
     "compile": "tsc -p ./",
+    "copy-media": "copyfiles -u 1 src/**/*.js media/ && copyfiles -u 1 src/**/*.css media/",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",

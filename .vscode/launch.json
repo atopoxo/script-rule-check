@@ -15,7 +15,46 @@
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
 			],
-			"preLaunchTask": "${defaultBuildTask}"
-		}
-	]
+			"sourceMaps": true,
+			"preLaunchTask": "npm: watch",
+			"internalConsoleOptions": "openOnSessionStart",
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+		},
+		{
+            "name": "Debug Webview JS",
+            "type": "chrome",
+            "request": "attach",
+            "port": 9222,
+            "urlFilter": "**/*.html",
+            "webRoot": "${workspaceFolder}",
+            "sourceMaps": true,
+            "sourceMapPathOverrides": {
+                "webview-preview://*": "${webRoot}/*",
+                "vscode-webview://*": "${webRoot}/media/*"
+            },
+            "timeout": 30000
+        },
+		{
+            "name": "Debug Webview JS",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/out/extension.js", // 目标JS文件路径
+            "skipFiles": ["<node_internals>/**"],
+            "sourceMaps": true,
+            "outFiles": ["${workspaceFolder}/out/**/*.js"],
+			"console": "integratedTerminal"
+        }
+	],
+	"compounds": [
+		{
+            "name": "Full Debug",
+            "configurations": ["Run Extension", "Debug Webview JS"]
+        },
+        {
+            "name": "Debug TS + JS",
+            "configurations": ["Run Extension", "Debug Webview JS"]
+        }
+    ]
 }
