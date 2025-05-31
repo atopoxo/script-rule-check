@@ -3,10 +3,40 @@ import * as path from 'path';
 import * as os from 'os';
 import { ChatManager, ChatSession, ChatMessage, ReferenceItem } from './chat_manager';
 
-export class ChatViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'chatView';
+export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
+    readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private _view?: vscode.WebviewView;
+    constructor(
+        private context: vscode.ExtensionContext,
+        private chatManager: any // 替换为你的 ChatManager 类型
+    ) {}
+
+    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: vscode.TreeItem): Thenable<vscode.TreeItem[]> {
+        if (element) {
+            return Promise.resolve([]);
+        } else {
+            const item = new vscode.TreeItem('打开聊天面板', vscode.TreeItemCollapsibleState.None);
+            item.command = {
+                command: 'extension.openChatPanel',
+                title: '打开聊天面板'
+            };
+            item.iconPath = new vscode.ThemeIcon('comment');
+            return Promise.resolve([item]);
+        }
+    }
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+}
+
+export class ChatViewProvider implements vscode.WebviewViewProvider {
+    private view: vscode.WebviewView | undefined;
     private _extensionUri: vscode.Uri;
     private chatManager: ChatManager;
     private currentSession: ChatSession | null = null;
@@ -23,17 +53,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     public resolveWebviewView(
-        webviewView: vscode.WebviewView,
+        view: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
-        this._view = webviewView;
-
-        webviewView.webview.options = {
+        this.view = view;
+        view.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri]
+            localResourceRoots: [
+                this._extensionUri,
+                vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static'),
+                vscode.Uri.parse('http://localhost:5173')
+            ],
+            enableCommandUris: true,
+            portMapping: [{ 
+                webviewPort: 5173, // Vite 开发服务器默认端口
+                extensionHostPort: 9222
+            }],
         };
-        webviewView.webview.onDidReceiveMessage(async data => {
+        view.webview.onDidReceiveMessage(async data => {
             switch (data.type) {
                 case 'ready':
                     this.isWebviewReady = true;
@@ -71,7 +109,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
             }
         });
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        view.onDidDispose(() => {
+            this.view = undefined;
+        }, null, this.context.subscriptions);
+        try {
+            view.webview.html = this.getHtmlForWebview(view.webview);
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     private async sendMessage(content: string, references: any[]) {
@@ -221,8 +266,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 range: selection
             };
             
-            if (this._view) {
-                this._view.webview.postMessage({
+            if (this.view) {
+                this.view.webview.postMessage({
                     type: 'addReference',
                     reference
                 });
@@ -259,7 +304,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             placeHolder: '选择要引用的函数或符号'
         });
 
-        if (selected && this._view) {
+        if (selected && this.view) {
             const content = document.getText(selected.symbol.range);
             
             const reference: ReferenceItem = {
@@ -270,7 +315,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 range: selected.symbol.range
             };
             
-            this._view.webview.postMessage({
+            this.view.webview.postMessage({
                 type: 'addReference',
                 reference
             });
@@ -289,7 +334,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             placeHolder: '选择要引用的文件'
         });
 
-        if (selected && this._view) {
+        if (selected && this.view) {
             try {
                 const content = await vscode.workspace.fs.readFile(selected.file);
                 const text = Buffer.from(content).toString('utf8');
@@ -301,7 +346,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     content: text
                 };
                 
-                this._view.webview.postMessage({
+                this.view.webview.postMessage({
                     type: 'addReference',
                     reference
                 });
@@ -328,14 +373,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             placeHolder: '选择要引用的文件夹'
         });
 
-        if (selected && this._view) {
+        if (selected && this.view) {
             const reference: ReferenceItem = {
                 type: 'folder',
                 path: selected.folder.fsPath,
                 name: path.basename(selected.folder.fsPath)
             };
             
-            this._view.webview.postMessage({
+            this.view.webview.postMessage({
                 type: 'addReference',
                 reference
             });
@@ -343,9 +388,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     public updateWebview() {
-        if (this._view && this.isWebviewReady) {
+        if (this.view && this.isWebviewReady) {
             try {
-                this._view.webview.postMessage({
+                this.view.webview.postMessage({
                     type: 'update',
                     session: this.currentSession,
                     isInHistoryView: this.isInHistoryView,
@@ -357,12 +402,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private _getHtmlForWebview(webview: vscode.Webview) {
+    private getHtmlForWebview(webview: vscode.Webview) {
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'chat_view.js')
+            vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static', 'main.js')
         );
         const styleUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'media', 'chat_view.css')
+            vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static', 'main.css')
+        );
+        
+        // 开发模式下使用 Vite 开发服务器
+        let isDevelopment = process.env.NODE_ENV === 'development';
+        // isDevelopment = false;
+        const baseUri = isDevelopment 
+            ? 'http://localhost:5173'
+            : webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist')).toString();
+            
+        return `<!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <link rel="icon" type="image/svg+xml" href="./vite.svg" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>大模型聊天窗口</title>
+                ${isDevelopment 
+                    ? `<script type="module" src="${baseUri}/@vite/client"></script>
+                       <script type="module" src="${baseUri}/src/main.ts"></script>`
+                    : `<script type="module" crossorigin src="${scriptUri}"></script>
+                       <link rel="stylesheet" crossorigin href="${styleUri}">`
+                }
+            </head>
+            <body>
+                <div id="app"></div>
+            </body>
+        </html>`;
+    }
+
+    private _getHtmlForWebview(webview: vscode.Webview) {
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'chatview.js')
+        );
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'media', 'chatview.css')
         );
         const codiconsUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
@@ -370,13 +450,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         return `<!DOCTYPE html>
         <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>大模型聊天窗口</title>
-            <link href="${styleUri}" rel="stylesheet">
-            <link href="${codiconsUri}" rel="stylesheet">
-        </head>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>大模型聊天窗口</title>
+                <link href="${styleUri}" rel="stylesheet">
+                <link href="${codiconsUri}" rel="stylesheet">
+            </head>
         <body>
             <div id="app">
                 <!-- 内容由JavaScript动态生成 -->

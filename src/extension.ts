@@ -8,7 +8,7 @@ const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
 import {ConfigurationProvider} from './configuration';
 import {CheckRule} from './output_format';
-import { ChatViewProvider } from './chat_view';
+import { ChatViewProvider, ChatViewTreeDataProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { ReferenceSystem } from './reference_system';
 import { ModelSelector } from './model_selector';
@@ -39,6 +39,11 @@ const publisher = 'shaoyi';
 // }
 export function activate(context: vscode.ExtensionContext) {
     console.log(`${extensionName} actived!`);
+    
+    process.env.NODE_ENV = context.extensionMode === vscode.ExtensionMode.Development 
+    ? 'development' 
+    : 'production';
+
     customConfig = vscode.workspace.getConfiguration(extensionName);
     const configurationProvider = new ConfigurationProvider(customConfig);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
@@ -84,7 +89,6 @@ export function activate(context: vscode.ExtensionContext) {
             }
         })
     );
-    registerAICommands(context, configurationProvider);
     if (!fs.existsSync(productDir)) {
         vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
         return;
@@ -93,6 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
         registerNormalCommands(context, configurationProvider, productDir);
         registered = true;
     }
+    registerAICommands(context, configurationProvider);
 
     updateDisplayMode(customConfig);
     // checkAndForceUpdate(context);
@@ -187,7 +192,10 @@ function registerAICommands(context: vscode.ExtensionContext, configurationProvi
     chatManager = ChatManager.getInstance(context);
     chatViewProvider = new ChatViewProvider(context, chatManager);
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatViewProvider),
+        vscode.window.registerWebviewViewProvider('chatView', chatViewProvider),
+        vscode.commands.registerCommand('extension.openWebviewDevTools', () => {
+            vscode.commands.executeCommand('workbench.action.webview.openDeveloperTools');
+        }),
         vscode.commands.registerCommand('extension.chat.createNewSession', async () => {
             await chatViewProvider.createNewSession();
         }),

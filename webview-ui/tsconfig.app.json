@@ -1,0 +1,25 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "strict": true,
+    "moduleResolution": "Node",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "allowImportingTsExtensions": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"], // 添加 DOM 支持
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/**/*.ts", 
+    "src/**/*.tsx", 
+    "src/**/*.vue", 
+    "src/shims-vue.d.ts", 
+    "src/global.d.ts", 
+    "src/types/**/*.ts",
+    "src/composables/**/*.ts"
+  ]
+}

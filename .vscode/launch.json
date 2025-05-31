@@ -10,51 +10,43 @@
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}"
+				"--extensionDevelopmentPath=${workspaceFolder}",
+                "--enable-proposed-api"  // 添加这个参数以启用 Webview 调试
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
 			],
 			"sourceMaps": true,
-			"preLaunchTask": "npm: watch",
+			"preLaunchTask": "${defaultBuildTask}",
 			"internalConsoleOptions": "openOnSessionStart",
             "skipFiles": [
                 "<node_internals>/**"
-            ]
+            ],
+            "env": {
+                "VSCODE_WEBVIEW_DEBUG": "true"  // 启用 Webview 调试
+            }
 		},
-		{
-            "name": "Debug Webview JS",
-            "type": "chrome",
-            "request": "attach",
-            "port": 9222,
-            "urlFilter": "**/*.html",
-            "webRoot": "${workspaceFolder}",
-            "sourceMaps": true,
+        {
+            "name": "Debug Webview",
+            "type": "chrome",  // 关键：使用浏览器调试器
+            "request": "attach",   // 附加到已运行的 Webview
+            "urlFilter": "vscode-webview://*", // 过滤 Webview URL
+            "webRoot": "${workspaceFolder}/webview-ui/src", // 在此处配置
             "sourceMapPathOverrides": {
-                "webview-preview://*": "${webRoot}/*",
-                "vscode-webview://*": "${webRoot}/media/*"
+                "vite://*": "${webRoot}/*",
+                "webpack:///src/*": "${webRoot}/*",
+                "vscode-webview://*": "${webRoot}/*",
+                "/@fs/*": "${webRoot}/*",
+                "/*": "${webRoot}/*"
             },
-            "timeout": 30000
-        },
-		{
-            "name": "Debug Webview JS",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/out/extension.js", // 目标JS文件路径
-            "skipFiles": ["<node_internals>/**"],
-            "sourceMaps": true,
-            "outFiles": ["${workspaceFolder}/out/**/*.js"],
-			"console": "integratedTerminal"
+            "port": 9222 // Webview 调试端口（需在扩展代码中设置）
         }
 	],
 	"compounds": [
-		{
-            "name": "Full Debug",
-            "configurations": ["Run Extension", "Debug Webview JS"]
-        },
         {
-            "name": "Debug TS + JS",
-            "configurations": ["Run Extension", "Debug Webview JS"]
+            "name": "Full Debug (Extension + Webview)",
+            "configurations": ["Run Extension", "Debug Webview"],
+            "stopAll": true  // 停止一个时同时停止另一个
         }
     ]
 }

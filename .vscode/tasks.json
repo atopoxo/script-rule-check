@@ -4,17 +4,34 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "defaultBuildTask",
 			"type": "npm",
-			"script": "watch",
+			"script": "debug",
+			"detail": "构建插件",
 			"problemMatcher": "$tsc-watch",
 			"isBackground": true,
-			"presentation": {
-				"reveal": "always"
+			"presentation": {"reveal": "always"},
+			"group": {"kind": "build", "isDefault": true}
+		},
+		{
+			"label": "webview-dev",
+			"type": "npm",
+			"script": "dev:sourcemap",
+			"detail": "启动Webview开发服务器（带源码映射）",
+			"isBackground": true,
+			"options": {
+				"cwd": "${workspaceFolder}/webview-ui"
 			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
+			"presentation": {
+				"reveal": "always",
+				"panel": "new"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "debug-all",
+			"dependsOn": ["defaultBuildTask", "webview-dev"],
+			"problemMatcher": []
 		}
 	]
 }

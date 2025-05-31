@@ -3,18 +3,28 @@
 		"module": "Node16",
 		"target": "es6",
 		"outDir": "out",
-		"lib": [
-			"es6"
-		],
+		"lib": ["es6"],
 		"sourceMap": true,
-		"rootDir": "src",
+		"rootDir": ".",
 		"strict": true,   /* enable all strict type-checking options */
 		"esModuleInterop": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["src/*"]
+		},
 		/* Additional Checks */
 		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
 		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
 		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
 	},
-	"exclude": ["node_modules"]
+	"include": [
+		"src/**/*",
+		"webview-ui/src/**/*"
+	],
+	"exclude": [
+		"node_modules",
+		"webview-ui/node_modules",
+		"webview-ui/dist"
+	]
 }
