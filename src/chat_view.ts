@@ -75,13 +75,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             switch (data.type) {
                 case 'ready':
                     this.isWebviewReady = true;
-                    this.updateWebview();
+                    await this.checkDefaultSession();
                     break;
                 case 'sendMessage':
                     await this.sendMessage(data.content, data.references);
                     break;
-                case 'createNewSession':
-                    await this.createNewSession();
+                case 'createSession':
+                    await this.createSession();
                     break;
                 case 'showHistory':
                     this.showHistory();
@@ -121,7 +121,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private async sendMessage(content: string, references: any[]) {
         if (!this.currentSession) {
-            await this.createNewSession();
+            await this.createSession();
         }
 
         if (this.currentSession) {
@@ -169,8 +169,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    async createNewSession() {
-        this.currentSession = await this.chatManager.createNewSession();
+    async createSession() {
+        this.currentSession = await this.chatManager.createSession();
         this.isInHistoryView = false;
         this.updateWebview();
     }
@@ -387,6 +387,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private async checkDefaultSession() {
+        if (!this.currentSession) {
+            await this.createSession();
+        }
+    }
     public updateWebview() {
         if (this.view && this.isWebviewReady) {
             try {

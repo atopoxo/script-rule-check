@@ -39,7 +39,7 @@ export class ChatManager {
         return ChatManager.instance;
     }
 
-    public async createNewSession(): Promise<ChatSession> {
+    public async createSession(): Promise<ChatSession> {
         const currentTime = Date.now();
         const sessionId = currentTime.toString();
         const newSession: ChatSession = {
@@ -98,7 +98,7 @@ export class ChatManager {
 
     public async addMessageToSession(message: ChatMessage): Promise<void> {
         if (!this.currentSession) {
-            await this.createNewSession();
+            await this.createSession();
         }
         
         if (this.currentSession) {

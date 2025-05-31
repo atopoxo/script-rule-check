@@ -1,32 +1,6 @@
 <template>
   <div id="app">
-    <!-- 欢迎视图 -->
-    <div v-if="!session && !isInHistoryView" class="welcome-view">
-      <h1>AI 聊天助手</h1>
-      <p>开始一个新的会话来与AI助手交流</p>
-      <button class="primary-button" @click="createNewSession">创建新会话</button>
-    </div>
-
-    <!-- 聊天视图 -->
-    <div v-else-if="session && !isInHistoryView" class="chat-container">
-      <!-- 标题栏 -->
-      <div class="title-bar">
-        <input 
-          type="text" 
-          class="session-title" 
-          v-model="session.title" 
-          placeholder="会话标题"
-          @change="updateTitle"
-        />
-        <button class="icon-button" @click="selectModel" title="选择模型">
-          <i class="codicon codicon-server"></i>
-        </button>
-        <button class="icon-button" @click="showHistory" title="历史会话">
-          <i class="codicon codicon-history"></i>
-        </button>
-      </div>
-
-      <!-- 引用栏 -->
+    <div v-if="session && !isInHistoryView" class="chat-container">
       <div class="references-bar">
         <div v-for="(ref, index) in references" :key="index" class="reference-tag">
           <i :class="`codicon ${getRefIcon(ref.type)}`"></i>
@@ -36,8 +10,6 @@
           </button>
         </div>
       </div>
-
-      <!-- 消息容器 -->
       <div class="messages-container">
         <div v-for="(msg, index) in session.messages" :key="index" :class="`message ${msg.role}`">
           <div class="avatar">
@@ -55,21 +27,30 @@
           </div>
         </div>
       </div>
-
-      <!-- 输入区域 -->
       <div class="input-container">
-        <button class="icon-button" @click="addReference" title="添加引用">
-          <i class="codicon codicon-link"></i>
-        </button>
         <textarea 
           v-model="messageInput" 
-          placeholder="输入消息..." 
+          placeholder="「↑↓」切换历史输入，「ctrl + ⏎」换行" 
           @keydown.enter.exact.prevent="sendMessage"
           @keydown.shift.enter.prevent="messageInput += '\n'"
         ></textarea>
-        <button class="icon-button primary" @click="sendMessage" title="发送消息">
-          <i class="codicon codicon-send"></i>
-        </button>
+        <div class="input-functions">
+          <div class="input-functions-left">
+            <button class="icon-button" @click="addReference" title="添加引用">
+              <i class="codicon codicon-link"></i>
+            </button>
+          </div>
+          <div class="input-functions-right">
+            <div class="input-functions-left">
+              <button class="icon-button" @click="selectModel" title="添加引用">
+                <i class="codicon codicon-link"></i>
+              </button>
+              <button class="icon-button primary" @click="sendMessage" title="发送消息">
+                <i class="codicon codicon-send"></i>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -149,8 +130,8 @@ export default defineComponent({
     };
 
     // 创建新会话
-    const createNewSession = () => {
-      vscode.postMessage({ type: 'createNewSession' });
+    const createSession = () => {
+      vscode.postMessage({ type: 'createSession' });
     };
 
     // 发送消息
@@ -207,8 +188,6 @@ export default defineComponent({
     const backToChat = () => {
       vscode.postMessage({ type: 'backToChat' });
     };
-
-    // 选择模型
     const selectModel = () => {
       vscode.postMessage({ type: 'selectModel' });
     };
@@ -239,7 +218,7 @@ export default defineComponent({
       groupedSessions,
       getRefIcon,
       formatTime,
-      createNewSession,
+      createSession,
       sendMessage,
       addReference,
       removeReference,
@@ -425,18 +404,44 @@ export default defineComponent({
 
 /* 输入区域 */
 .input-container {
+  position: relative;
   display: flex;
-  padding: 10px;
-  border-top: 1px solid var(--vscode-sideBarSectionHeader-border);
-  background-color: var(--vscode-editor-background);
+  flex-direction: column;
+  margin: 1.5% 1.5% 2% 1.5%;
+  /* border-top: 1px solid var(--vscode-sideBarSectionHeader-border); */
+  /* background-color: var(--vscode-editor-background); */
+  border: solid 2px transparent;
+  border-radius: 10px;
+  background-image: linear-gradient(var(--vscode-editor-background), var(--vscode-editor-background)), linear-gradient(to right, #643f42, #636067);
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+}
+.input-container:focus-within {
+  box-shadow: 0 0 15px rgba(101, 67, 66, 0.8);
+}
+.input-container:hover {
+  box-shadow: 0 0 15px rgba(101, 67, 66, 0.8);
 }
 
 .input-container textarea {
   flex: 1;
-  background: var(--vscode-input-background);
+  /* background: var(--vscode-input-background); */
+  background-color: transparent;
   color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border);
-  border-radius: 2px;
+  border: 1px solid transparent;
+  padding: 8px;
+  resize: none;
+}
+.input-container textarea:focus {
+  outline: none;
+}
+
+.input-container textarea {
+  flex: 1;
+  /* background: var(--vscode-input-background); */
+  background-color: transparent;
+  color: var(--vscode-input-foreground);
+  border: 1px solid transparent;
   padding: 8px;
   resize: none;
   font-family: inherit;

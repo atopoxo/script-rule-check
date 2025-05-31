@@ -61,7 +61,7 @@
         const newSessionBtn = document.createElement('button');
         newSessionBtn.className = 'primary-button';
         newSessionBtn.textContent = '创建新会话';
-        newSessionBtn.onclick = () => vscode.postMessage({ type: 'createNewSession' });
+        newSessionBtn.onclick = () => vscode.postMessage({ type: 'createSession' });
         welcomeDiv.appendChild(newSessionBtn);
         
         container.appendChild(welcomeDiv);

@@ -172,7 +172,7 @@
         "title": "▶ 场景对应脚本检查"
       },
       {
-        "command": "extension.chat.createNewSession",
+        "command": "extension.chat.createSession",
         "title": "创建新会话",
         "icon": "$(add)"
       },
@@ -260,7 +260,7 @@
           "group": "navigation@5"
         },
         {
-          "command": "extension.chat.createNewSession",
+          "command": "extension.chat.createSession",
           "when": "view == chatView",
           "group": "navigation@1"
         },

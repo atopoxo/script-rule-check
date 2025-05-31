@@ -193,11 +193,8 @@ function registerAICommands(context: vscode.ExtensionContext, configurationProvi
     chatViewProvider = new ChatViewProvider(context, chatManager);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('chatView', chatViewProvider),
-        vscode.commands.registerCommand('extension.openWebviewDevTools', () => {
-            vscode.commands.executeCommand('workbench.action.webview.openDeveloperTools');
-        }),
-        vscode.commands.registerCommand('extension.chat.createNewSession', async () => {
-            await chatViewProvider.createNewSession();
+        vscode.commands.registerCommand('extension.chat.createSession', async () => {
+            await chatViewProvider.createSession();
         }),
         vscode.commands.registerCommand('extension.chat.showHistory', () => {
             chatViewProvider.showHistory();
