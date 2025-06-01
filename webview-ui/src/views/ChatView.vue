@@ -30,11 +30,10 @@
       <div class="input-container" :style="{ height: containerHeight + 'px' }">
         <textarea 
           v-model="messageInput" 
-          placeholder="「↑↓」切换历史输入，「ctrl + ⏎」换行"
+          :placeholder="placeholderText"
           ref="textareaRef"
           @input="adjustTextareaHeight"
-          @keydown.enter.exact.prevent="sendMessage"
-          @keydown.shift.enter.prevent="messageInput += '\n'"
+          @keydown="handleKeyDown"
         ></textarea>
         <div class="input-functions">
           <div class="input-functions-left">
@@ -104,6 +103,8 @@ export default defineComponent({
     const session = ref<ChatSession | null>(null);
     const isInHistoryView = ref(false);
     const historySessions = ref<ChatSession[]>([]);
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const placeholderText = ref(isMac ? '「↑↓」切换历史输入，「⌘+⏎」换行' : '「↑↓」切换历史输入，「Ctrl+⏎」换行');
     const messageInput = ref('');
     const references = ref<Reference[]>([]);
     const maxTextLines = 16;
@@ -115,10 +116,24 @@ export default defineComponent({
     const defaultInputContainerHeight = textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
     const containerHeight = ref(defaultInputContainerHeight);
     const textareaRef = ref<HTMLTextAreaElement | null>(null);
+    
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          messageInput.value += '\n';
+          adjustTextareaHeight();
+        } else if (!event.shiftKey) {
+          event.preventDefault();
+          sendMessage();
+        }
+      }
+    };
+
     const adjustTextareaHeight = async() => {
       if (!textareaRef.value) return;
       const target = textareaRef.value;
-      target.style.height = 'auto';
+      target.value = messageInput.value;
       const scrollHeight = getScrollHeight(target);
       const contentHeight = Math.min(scrollHeight, maxTextAreaHeight);
       target.style.height = `${contentHeight}px`;
@@ -314,10 +329,12 @@ export default defineComponent({
       session,
       isInHistoryView,
       historySessions,
+      placeholderText,
       messageInput,
       references,
       textareaRef,
       containerHeight,
+      handleKeyDown,
       adjustTextareaHeight,
       groupedSessions,
       getRefIcon,
