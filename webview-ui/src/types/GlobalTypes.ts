@@ -16,6 +16,11 @@ declare function acquireVsCodeApi(): {
 };
 
 export interface Window {
+    setTimeout: any;
+    getComputedStyle: (
+      element: Element, 
+      pseudoElt?: string | null
+    ) => CSSStyleDeclaration;
     addEventListener(
       type: string, 
       listener: (event: MessageEvent) => void, 

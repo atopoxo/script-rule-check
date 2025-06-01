@@ -27,10 +27,12 @@
           </div>
         </div>
       </div>
-      <div class="input-container">
+      <div class="input-container" :style="{ height: containerHeight + 'px' }">
         <textarea 
           v-model="messageInput" 
-          placeholder="「↑↓」切换历史输入，「ctrl + ⏎」换行" 
+          placeholder="「↑↓」切换历史输入，「ctrl + ⏎」换行"
+          ref="textareaRef"
+          @input="adjustTextareaHeight"
           @keydown.enter.exact.prevent="sendMessage"
           @keydown.shift.enter.prevent="messageInput += '\n'"
         ></textarea>
@@ -41,14 +43,12 @@
             </button>
           </div>
           <div class="input-functions-right">
-            <div class="input-functions-left">
-              <button class="icon-button" @click="selectModel" title="添加引用">
-                <i class="codicon codicon-link"></i>
-              </button>
-              <button class="icon-button primary" @click="sendMessage" title="发送消息">
-                <i class="codicon codicon-send"></i>
-              </button>
-            </div>
+            <button class="icon-button" @click="selectModel" title="选择模型">
+              <i class="codicon codicon-link"></i>
+            </button>
+            <button class="icon-button primary" @click="sendMessage" title="发送消息">
+              <i class="codicon codicon-send"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -106,7 +106,104 @@ export default defineComponent({
     const historySessions = ref<ChatSession[]>([]);
     const messageInput = ref('');
     const references = ref<Reference[]>([]);
-    
+    const maxTextLines = 16;
+    const textAreaBorder = 2;
+    const textAreaPadding = 16;
+    const textAreaLineHeight = 19;
+    const defaultFunctionContainerHeight = 20;
+    const maxTextAreaHeight = textAreaLineHeight * maxTextLines;
+    const defaultInputContainerHeight = textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
+    const containerHeight = ref(defaultInputContainerHeight);
+    const textareaRef = ref<HTMLTextAreaElement | null>(null);
+    const adjustTextareaHeight = async() => {
+      if (!textareaRef.value) return;
+      const target = textareaRef.value;
+      target.style.height = 'auto';
+      const scrollHeight = getScrollHeight(target);
+      const contentHeight = Math.min(scrollHeight, maxTextAreaHeight);
+      target.style.height = `${contentHeight}px`;
+      target.style.overflowY = scrollHeight > maxTextAreaHeight ? 'auto' : 'hidden';
+      containerHeight.value = textAreaBorder + contentHeight + defaultFunctionContainerHeight;
+    };
+
+    function getScrollHeight(target: HTMLTextAreaElement) {
+      const hiddenTextarea = document.createElement('textarea');
+      hiddenTextarea.setAttribute('style', `
+        position: absolute;
+        visibility: hidden;
+        height: 0;
+        overflow: hidden;
+        ${getComputedStyleText(target)}  // ✅ 使用自定义方法
+      `);
+      hiddenTextarea.value = target.value;
+
+      document.body.appendChild(hiddenTextarea);
+      const style = getComputedStyle(hiddenTextarea);
+      const lineHeight = parseInt(style.lineHeight) || 20;
+      const paddingTop = parseInt(style.paddingTop) || 0;
+      const paddingBottom = parseInt(style.paddingBottom) || 0;
+      const paddingLeft = parseInt(style.paddingLeft) || 0;
+      const paddingRight = parseInt(style.paddingRight) || 0;
+      const borderTop = parseInt(style.borderTopWidth) || 0;
+      const borderBottom = parseInt(style.borderBottomWidth) || 0;
+      const fontSize = parseInt(style.fontSize) || 16;
+      const fontFamily = style.fontFamily;
+      const textareaWidth = target.clientWidth;
+      const availableWidth = textareaWidth - paddingLeft - paddingRight;
+
+      let totalLines = 0;
+      const explicitLines = target.value.split(/\r?\n|\r/);
+      explicitLines.forEach(line => {
+        if (line.length === 0) {
+          totalLines += 1;
+          return;
+        }
+        let currentLineWidth = 0;
+        let lineCountForThisLine = 1;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          const charWidth = getCharWidth(char, fontSize, fontFamily);
+          if (currentLineWidth + charWidth > availableWidth) {
+            lineCountForThisLine++;
+            currentLineWidth = charWidth;
+          } else {
+            currentLineWidth += charWidth;
+          }
+        }
+        totalLines += lineCountForThisLine;
+      });
+      let contentHeight = totalLines * lineHeight;
+      if (style.boxSizing === 'border-box') {
+        contentHeight += paddingTop + paddingBottom + borderTop + borderBottom;
+      } else {
+        contentHeight += paddingTop + paddingBottom;
+      }
+      document.body.removeChild(hiddenTextarea);
+      return contentHeight;
+    }
+
+    function getComputedStyleText(element: HTMLElement): string {
+      const computedStyle = window.getComputedStyle(element);
+      const essentialProps = [
+        'font-family', 'font-size', 'font-weight', 'font-style',
+        'line-height', 'letter-spacing', 'word-spacing',
+        'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+        'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+        'box-sizing'
+      ];
+      
+      return essentialProps.map(prop => 
+        `${prop}:${computedStyle.getPropertyValue(prop)}`
+      ).join(';');
+    }
+
+    function getCharWidth(char: string, fontSize: number, fontFamily: string): number {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      return ctx.measureText(char).width;
+    }
+
     // 计算属性：按日期分组的历史会话
     const groupedSessions = computed(() => {
       const groups: Record<string, ChatSession[]> = {};
@@ -117,7 +214,6 @@ export default defineComponent({
       });
       return groups;
     });
-
     // 获取引用图标
     const getRefIcon = (type: string) => {
       return type === 'code' ? 'codicon-symbol-method' : 
@@ -147,6 +243,11 @@ export default defineComponent({
       // 清空输入和引用
       messageInput.value = '';
       references.value = [];
+
+      if (textareaRef.value) {
+        textareaRef.value.style.height = 'auto';
+        containerHeight.value = defaultInputContainerHeight;
+      }
     };
 
     // 添加引用
@@ -215,6 +316,9 @@ export default defineComponent({
       historySessions,
       messageInput,
       references,
+      textareaRef,
+      containerHeight,
+      adjustTextareaHeight,
       groupedSessions,
       getRefIcon,
       formatTime,
@@ -415,6 +519,8 @@ export default defineComponent({
   background-image: linear-gradient(var(--vscode-editor-background), var(--vscode-editor-background)), linear-gradient(to right, #643f42, #636067);
   background-origin: border-box;
   background-clip: content-box, border-box;
+  transition: height 0.2s ease;
+  resize: vertical;
 }
 .input-container:focus-within {
   box-shadow: 0 0 15px rgba(101, 67, 66, 0.8);
@@ -431,6 +537,10 @@ export default defineComponent({
   border: 1px solid transparent;
   padding: 8px;
   resize: none;
+  line-height: 19px;
+  min-height: 19px !important;
+  max-height: none;
+  overflow-y: hidden;
 }
 .input-container textarea:focus {
   outline: none;
@@ -446,6 +556,21 @@ export default defineComponent({
   resize: none;
   font-family: inherit;
   margin: 0 5px;
+}
+
+.input-functions {
+  display: flex;
+  flex-direction: row;
+  height: 20px;
+  width: 100%;
+}
+.input-functions-left {
+  display: flex;
+  flex-direction: row;
+}
+.input-functions-right {
+  display: flex;
+  flex-direction: row;
 }
 
 /* 历史视图 */

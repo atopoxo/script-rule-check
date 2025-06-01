@@ -390,6 +390,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async checkDefaultSession() {
         if (!this.currentSession) {
             await this.createSession();
+        } else {
+            this.updateWebview();
         }
     }
     public updateWebview() {
