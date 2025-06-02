@@ -37,17 +37,13 @@
         ></textarea>
         <div class="input-functions">
           <div class="input-functions-left">
-            <button class="icon-button" @click="addReference" title="添加引用">
-              <i class="codicon codicon-link"></i>
-            </button>
+            <button class="icon-button" @click="addReference">#</button>
+            <div class="ref-tooltip">选择上下文</div>
           </div>
           <div class="input-functions-right">
-            <button class="icon-button" @click="selectModel" title="选择模型">
-              <i class="codicon codicon-link"></i>
-            </button>
-            <button class="icon-button primary" @click="sendMessage" title="发送消息">
-              <i class="codicon codicon-send"></i>
-            </button>
+            <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
+            <button class="icon-button message-send" @click="sendMessage"></button>
+            <div class="ref-tooltip">发送⏎</div>
           </div>
         </div>
       </div>
@@ -111,7 +107,7 @@ export default defineComponent({
     const textAreaBorder = 2;
     const textAreaPadding = 16;
     const textAreaLineHeight = 19;
-    const defaultFunctionContainerHeight = 20;
+    const defaultFunctionContainerHeight = 32;
     const maxTextAreaHeight = textAreaLineHeight * maxTextLines;
     const defaultInputContainerHeight = textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
     const containerHeight = ref(defaultInputContainerHeight);
@@ -355,7 +351,7 @@ export default defineComponent({
 </script>
 
 <style scoped>
-/* 原有的 chat_view.css 内容可以放在这里 */
+
 #app {
   height: 100%;
   display: flex;
@@ -562,7 +558,6 @@ export default defineComponent({
 .input-container textarea:focus {
   outline: none;
 }
-
 .input-container textarea {
   flex: 1;
   /* background: var(--vscode-input-background); */
@@ -577,17 +572,120 @@ export default defineComponent({
 
 .input-functions {
   display: flex;
+  margin: 3px 10px;
+  align-items: center;
   flex-direction: row;
-  height: 20px;
-  width: 100%;
+  justify-content: space-between;
+  height: 26px;
 }
 .input-functions-left {
+  position: relative;
   display: flex;
   flex-direction: row;
+  align-items: center;
+  height: 100%;
 }
+.input-functions-left button {
+  height: 26px;
+  width: 26px;
+  padding: 0;
+  margin: 0;
+  line-height: 26px;
+  text-align: center;
+  font-size: 14px;
+  font-family: "Comic Sans MS", cursive, sans-serif;
+  border-radius: 30%;
+}
+.ref-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground);
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+  border: 1px solid var(--vscode-widget-border);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+  margin-bottom: 10px;
+}
+.ref-tooltip::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 0);
+  z-index: 3;
+  box-sizing: content-box;
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--vscode-editorWidget-background) transparent transparent transparent;
+}
+.ref-tooltip::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 50%;
+  top: calc(100% + 1px);
+  transform: translate(-50%, 0);
+  z-index: 2;
+  box-sizing: content-box;
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--vscode-widget-border) transparent transparent transparent;
+}
+.input-functions-left button:hover + .ref-tooltip {
+  opacity: 1;
+}
+
 .input-functions-right {
+  position: relative;
   display: flex;
   flex-direction: row;
+  align-items: center;
+  height: 100%;
+}
+.input-functions-right .icon-button.model-select {
+  height: 22px;
+  padding: 2px 4px;
+  margin: 0;
+  line-height: 18px;
+  text-align: center;
+  font-size: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--vscode-widget-border);
+}
+.input-functions-right .icon-button.message-send {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  width: 26px;
+  height: 26px;
+  border: none;
+}
+@media (prefers-color-scheme: light) {
+  .message-send {
+    background-image: url('@/assets/icons/light/send.svg');
+  }
+}
+
+/* 深色主题图标 */
+@media (prefers-color-scheme: dark) {
+  .message-send {
+    background-image: url('@/assets/icons/dark/send.svg');
+  }
+}
+.input-functions-right .icon-button.message-send:hover + .ref-tooltip {
+  opacity: 1;
 }
 
 /* 历史视图 */
