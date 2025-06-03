@@ -43,7 +43,7 @@
           <div class="input-functions-right">
             <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
             <button class="icon-button message-send" @click="sendMessage"></button>
-            <div class="ref-tooltip">发送⏎</div>
+            <div class="send-tooltip">发送⏎</div>
           </div>
         </div>
       </div>
@@ -668,9 +668,12 @@ export default defineComponent({
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
+  background-size: 14px;
   width: 26px;
   height: 26px;
   border: none;
+  border-radius: 30%;
+  margin: 0 0 0 5px;
 }
 @media (prefers-color-scheme: light) {
   .message-send {
@@ -684,7 +687,54 @@ export default defineComponent({
     background-image: url('@/assets/icons/dark/send.svg');
   }
 }
-.input-functions-right .icon-button.message-send:hover + .ref-tooltip {
+.send-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: calc(100% - 13px);
+  transform: translateX(-50%);
+  background-color: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground);
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+  border: 1px solid var(--vscode-widget-border);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+  margin-bottom: 10px;
+}
+.send-tooltip::before {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 0);
+  z-index: 3;
+  box-sizing: content-box;
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--vscode-editorWidget-background) transparent transparent transparent;
+}
+.send-tooltip::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 50%;
+  top: calc(100% + 1px);
+  transform: translate(-50%, 0);
+  z-index: 2;
+  box-sizing: content-box;
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--vscode-widget-border) transparent transparent transparent;
+}
+.input-functions-right .icon-button.message-send:hover + .send-tooltip {
   opacity: 1;
 }
 
