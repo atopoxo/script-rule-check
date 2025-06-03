@@ -42,6 +42,15 @@
           </div>
           <div class="input-functions-right">
             <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
+            <sy-selector v-if="showModelSelector" class="model-selector"
+              :visible="showModelSelector"
+              title="选择模型"
+              :items="modelOptions"
+              :mutiSelect="false"
+              :showChoice="true"
+              @close="showModelSelector = false"
+              @select="handleModelSelect"
+            />
             <button class="icon-button message-send" @click="sendMessage"></button>
             <div class="send-tooltip">发送⏎</div>
           </div>
@@ -90,15 +99,44 @@
 import { defineComponent, onMounted, ref, computed } from 'vue';
 import type { ChatSession, Reference } from '../types/ChatTypes';
 import type { Window }  from '../types/GlobalTypes';
+import SySelector from '../components/sy_selector.vue';
 
 declare const window: Window;
 
 export default defineComponent({
+  components: {
+    SySelector
+  },
   setup() {
     const vscode = (window as any).acquireVsCodeApi();
     const session = ref<ChatSession | null>(null);
     const isInHistoryView = ref(false);
     const historySessions = ref<ChatSession[]>([]);
+    const showModelSelector = ref(false);
+    const selectedModel = ref('DeepSeek-V3-0324');
+    const selectModelTagfontSize = "9px";
+    const modelOptions = ref([
+      {
+        id: 'deepseek-v3-0324',
+        name: 'DeepSeek-V3-0324',
+        tag: { text: '快速响应', fontSize: selectModelTagfontSize, border: true }
+      },
+      {
+        id: 'deepseek-r1',
+        name: 'Deepseek-R1',
+        tag: { text: '深度思考', fontSize: selectModelTagfontSize, border: true }
+      },
+      {
+        id: 'deepseek-v3',
+        name: 'DeepSeek-V3',
+        tag: { text: '快速响应', fontSize: selectModelTagfontSize, border: true }
+      },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        tag: { text: '快速响应', fontSize: selectModelTagfontSize, border: true }
+      }
+    ]);
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const placeholderText = ref(isMac ? '「↑↓」切换历史输入，「⌘+⏎」换行' : '「↑↓」切换历史输入，「Ctrl+⏎」换行');
     const messageInput = ref('');
@@ -301,7 +339,13 @@ export default defineComponent({
       vscode.postMessage({ type: 'backToChat' });
     };
     const selectModel = () => {
-      vscode.postMessage({ type: 'selectModel' });
+      // vscode.postMessage({ type: 'selectModel' });
+      showModelSelector.value = true;
+    };
+    const handleModelSelect = (selected: any[]) => {
+      if (selected.length > 0) {
+        selectedModel.value = selected[0].name;
+      }
     };
 
     onMounted(() => {
@@ -344,7 +388,10 @@ export default defineComponent({
       deleteSession,
       showHistory,
       backToChat,
-      selectModel
+      showModelSelector,
+      modelOptions,
+      selectModel,
+      handleModelSelect
     };
   }
 });
@@ -680,12 +727,14 @@ export default defineComponent({
     background-image: url('@/assets/icons/light/send.svg');
   }
 }
-
-/* 深色主题图标 */
 @media (prefers-color-scheme: dark) {
   .message-send {
     background-image: url('@/assets/icons/dark/send.svg');
   }
+}
+.model-selector {
+  bottom: 100%;
+  right: 0;
 }
 .send-tooltip {
   position: absolute;
@@ -737,6 +786,7 @@ export default defineComponent({
 .input-functions-right .icon-button.message-send:hover + .send-tooltip {
   opacity: 1;
 }
+
 
 /* 历史视图 */
 .history-container {
