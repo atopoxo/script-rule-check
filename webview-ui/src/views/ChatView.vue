@@ -40,8 +40,10 @@
             <button class="icon-button" @click="selectReference">#</button>
             <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector"
               title="上下文"
+              :width="320"
+              :isDark = isDark
               :items="ReferenceOptions"
-              :mutiSelect="false"
+              :mutiSelect="true"
               :showChoice="true"
               @close="showReferenceSelector = false"
               @select="handleReferenceSelect"
@@ -52,6 +54,7 @@
             <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
             <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector"
               title="选择模型"
+              :width="250"
               :items="modelOptions"
               :mutiSelect="false"
               :showChoice="true"
@@ -139,7 +142,24 @@ export default defineComponent({
           id: 'code',
           name: 'Code',
           icon: `${themeFolder}/code.svg`,
-          tag: { text: '添加代码作为上下文', fontSize: selectTagfontSize, border: false }
+          tag: { text: '添加代码作为上下文', fontSize: selectTagfontSize, border: false },
+          children: [
+            {
+              id: 'addReference',
+              name: 'addReference',
+              tag: { text: '添加引用', fontSize: selectTagfontSize, border: false }
+            },
+            {
+              id: 'selectedModel',
+              name: 'selectedModel',
+              tag: { text: '选择模型', fontSize: selectTagfontSize, border: false }
+            },
+            {
+              id: 'acquireHistory',
+              name: 'acquireHistory',
+              tag: { text: '获取历史', fontSize: selectTagfontSize, border: false }
+            }
+          ]
         },
         {
           id: 'files',
@@ -381,14 +401,14 @@ export default defineComponent({
       vscode.postMessage({ type: 'backToChat' });
     };
     const selectReference = () => {
-      showReferenceSelector.value = true;
+      showReferenceSelector.value = showReferenceSelector.value ? false : true;
     }
     const handleReferenceSelect = (selected: any[]) => { 
       referenceItems.value = selected;
     };
     const selectModel = () => {
       // vscode.postMessage({ type: 'selectModel' });
-      showModelSelector.value = true;
+      showModelSelector.value = showModelSelector.value? false : true;
     };
     const handleModelSelect = (selected: any[]) => {
       if (selected.length > 0) {
@@ -721,7 +741,7 @@ export default defineComponent({
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
-  z-index: 1000;
+  z-index: 10;
   border: 1px solid var(--vscode-widget-border);
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   margin-bottom: 10px;
@@ -820,7 +840,7 @@ export default defineComponent({
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
-  z-index: 1000;
+  z-index: 10;
   border: 1px solid var(--vscode-widget-border);
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   margin-bottom: 10px;

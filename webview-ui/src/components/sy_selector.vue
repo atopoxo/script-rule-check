@@ -1,23 +1,20 @@
 <!-- src/components/sy_selector.vue -->
 <template>
     <div class="selector-container" v-if="visible" @click.self="handleOutsideClick">
-        <div class="selector-box">
+        <div class="selector-box" :style="{ width: width + 'px' }">
             <div class="selector-header">
                 <h3>{{ title }}</h3>
-                <button class="close-button" @click="closeSelector">X</button>
             </div>
             <div class="selector-content">
                 <div v-for="(item, index) in items" :key="index" class="selector-item"
                     :class="{
-                        'has-children': item.children && item.children.length > 0,
-                        'selected': isSelected(item),
-                        'expanded': expandedItem === item
+                        'selected': isSelected(item)
                     }"
                     @click="handleItemClick(item)"
                     @mouseenter="handleItemHover(item)"
-                    >
+                >
                     <div class="item-indicators" v-if="isSelected(item) && (mutiSelect || showChoice)">
-                        <i class="codicon codicon-check"></i>
+                        <img :src="getIconPath(choiceIconPath)"/>
                     </div>
                     <div class="item-content">
                         <div class="item-content-left">
@@ -29,65 +26,56 @@
                         <div class="item-content-right">
                             <div class="item-tag" v-if="item.tag"
                                 :style="{
-                                'font-size': item.tag.fontSize || '12px',
-                                'border': item.tag.border ? '1px solid currentColor' : 'none'
+                                    'font-size': item.tag.fontSize || '12px',
+                                    'border': item.tag.border ? '1px solid currentColor' : 'none'
                                 }"
                             >{{ item.tag.text }}</div>
+                            <div class="item-indicators" v-if="item.children && item.children.length > 0">
+                                <img class="transparent-icon" :src="getIconPath(expandIconPath)"/>
+                            </div>
                         </div>
                     </div>
-                    <div class="item-indicators" v-if="item.children && item.children.length > 0">
-                        <i class="codicon codicon-chevron-right"></i>
-                    </div>
-                
-                <div 
-                    v-if="item.children && item.children.length > 0 && expandedItem === item"
-                    class="sub-menu"
-                    @mouseleave="expandedItem = null"
-                >
-                    <div 
-                    v-for="(child, childIndex) in item.children"
-                    :key="childIndex"
-                    class="sub-item"
-                    :class="{'selected': isSelected(child)}"
-                    @click.stop="handleItemClick(child)"
+                    <div v-if="canExpand(item)" class="sub-menu"
+                        @mouseleave="expandedItem = null"
                     >
-                    <div class="sub-item-content">
-                        <div class="item-icon" v-if="child.icon">
-                        <i :class="`codicon ${child.icon}`"></i>
+                        <div class="selector-header">
+                            <h3>{{ item.name }}</h3>
                         </div>
-                        <div class="item-info">
-                        <div class="item-name">{{ child.name }}</div>
-                        <div 
-                            class="item-tag" 
-                            v-if="child.tag"
-                            :style="{
-                            'font-size': child.tag.fontSize || '12px',
-                            'border': child.tag.border ? '1px solid currentColor' : 'none'
-                            }"
-                        >
-                            {{ child.tag.text }}
+                        <div class="selector-content">
+                            <div v-for="(child, childIndex) in item.children" :key="childIndex" class="selector-item"
+                                :class="{'selected': isSelected(child)}"
+                                @click.stop="handleItemClick(child)"
+                            >
+                                <div class="item-indicators" v-if="isSelected(child) && (mutiSelect || showChoice)">
+                                    <img :src="getIconPath(choiceIconPath)"/>
+                                </div>
+                                <div class="item-content">
+                                    <div class="item-content-left">
+                                        <div class="item-icon" v-if="child.icon">
+                                            <img :src="getIconPath(child.icon)"/>
+                                        </div>
+                                        <div class="item-name">{{ child.name }}</div>
+                                    </div>
+                                    <div class="item-content-right">
+                                        <div class="item-tag" v-if="child.tag"
+                                            :style="{
+                                                'font-size': child.tag.fontSize || '12px',
+                                                'border': child.tag.border ? '1px solid currentColor' : 'none'
+                                            }"
+                                        >{{ child.tag.text }}</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        </div>
-                    </div>
-                    <div class="item-indicators">
-                        <i 
-                        v-if="isSelected(child) && (mutiSelect || showChoice)"
-                        class="codicon codicon-check"
-                        ></i>
-                    </div>
                     </div>
                 </div>
-                </div>
-            </div>
-            <div class="selector-footer" v-if="mutiSelect">
-                <button class="confirm-button" @click="confirmSelection">确认选择</button>
             </div>
         </div>
     </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue';
+import { defineComponent, ref, watchEffect } from 'vue';
 import type { PropType } from 'vue';
 import type { Window }  from '../types/GlobalTypes';
 import { currentModuleUrl } from '../types/GlobalTypes';
@@ -112,6 +100,14 @@ export default defineComponent({
     name: 'SySelector',
   
     props: {
+        width: {
+            type: Number,
+            default: 200
+        },
+        isDark: {
+            type: Boolean,
+            default: false
+        },
         visible: {
             type: Boolean,
             required: true
@@ -139,6 +135,8 @@ export default defineComponent({
   setup(props, { emit }) {
     const selectedItems = ref<SelectorItem[]>([]);
     const expandedItem = ref<SelectorItem | null>(null);
+    const expandIconPath = ref<string>('');
+    const choiceIconPath = ref<string>('');
     
     const isSelected = (item: SelectorItem) => {
       return selectedItems.value.some(selected => selected.id === item.id);
@@ -146,7 +144,6 @@ export default defineComponent({
     
     const handleItemClick = (item: SelectorItem) => {
       if (props.mutiSelect) {
-        // 多选模式：切换选中状态
         const index = selectedItems.value.findIndex(i => i.id === item.id);
         if (index >= 0) {
           selectedItems.value.splice(index, 1);
@@ -154,26 +151,21 @@ export default defineComponent({
           selectedItems.value.push(item);
         }
       } else {
-        // 单选模式：直接选中并返回结果
         selectedItems.value = [item];
         emit('select', [item]);
-        emit('close');
+        closeSelector();
       }
     };
     
     const handleItemHover = (item: SelectorItem) => {
-      if (item.children && item.children.length > 0) {
-        expandedItem.value = item;
-      }
+      expandedItem.value = item;
     };
     
     const handleOutsideClick = () => {
       if (props.mutiSelect && selectedItems.value.length > 0) {
-        // 多选模式下点击外部区域返回结果
         confirmSelection();
       } else {
-        // 没有选择或单选模式下直接关闭
-        emit('close');
+        closeSelector();
       }
     };
     
@@ -181,29 +173,12 @@ export default defineComponent({
       if (selectedItems.value.length > 0) {
         emit('select', [...selectedItems.value]);
       }
-      emit('close');
+      closeSelector();
     };
     
     const closeSelector = () => {
         emit('close');
     };
-    // const loadAllIcons = async () => {
-    //     const promises = props.items
-    //         .filter(item => item.icon)
-    //         .map(item => loadIcon(item.icon as string)); 
-    //     await Promise.all(promises);
-    // };
-
-    // const loadIcon = async(iconPath: string) => {
-    //     try {
-    //         const module = await import(`../../assets/icons/${iconPath}`);
-    //         iconDataUrls.value[iconPath] = module.default;
-    //         return module.value;
-    //     } catch (error) {
-    //         console.error('图标加载失败:', error);
-    //         return '';
-    //     }
-    // };
 
     const getIconPath = (iconPath: string) => {
         try {
@@ -214,20 +189,31 @@ export default defineComponent({
         }
     }
 
-    // onMounted(async () => {
-    //     await loadAllIcons();
-    // });
+    const canExpand = (item: SelectorItem) => {
+        if (item.children && item.children.length > 0) {
+            return expandedItem.value?.id == item.id;
+        } else {
+            return false;
+        }
+    }
 
-    // watchEffect(() => {
-    //     if (props.items.length > 0) {
-    //         loadAllIcons();
-    //     }
-    // });
+    watchEffect(() => {
+        if (props.isDark) {
+            expandIconPath.value = 'dark/expand.svg';
+            choiceIconPath.value = 'dark/check.svg';
+        } else {
+            expandIconPath.value = 'light/expand.svg';
+            choiceIconPath.value = 'light/check.svg';
+        }
+    });
     
     return {
       selectedItems,
       expandedItem,
+      expandIconPath,
+      choiceIconPath,
       isSelected,
+      canExpand,
       handleItemClick,
       handleItemHover,
       handleOutsideClick,
@@ -248,11 +234,23 @@ export default defineComponent({
   z-index: 1000;
 }
 
+/* .selector-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    background-color: rgba(0, 0, 0, 0.01);
+} */
+
 .selector-box {
     background-color: var(--vscode-editor-background);
     border-radius: 6px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    width: 320px;
     max-height: 80vh;
     display: flex;
     flex-direction: column;
@@ -273,7 +271,7 @@ export default defineComponent({
     color: var(--vscode-foreground);
     opacity: 0.5;
 }
-.close-button {
+/* .close-button {
     width: 20px;
     height: 20px;
     background: none;
@@ -287,7 +285,7 @@ export default defineComponent({
 }
 .close-button:hover {
     background-color: var(--vscode-toolbar-hoverBackground);
-}
+} */
 
 .selector-content {
     flex: 1;
@@ -297,12 +295,11 @@ export default defineComponent({
 }
 
 .selector-item {
-    position: relative;
     display: flex;
     flex-direction: row;
     align-items: center;
     cursor: pointer;
-    margin: 4px 0;
+    margin: 3px 0;
     border-radius: 5px;
 }
 .selector-item:hover {
@@ -318,7 +315,7 @@ export default defineComponent({
     justify-content: space-between;
     align-items: center;
     flex: 1;
-    padding: 6px 8px;
+    padding: 5px 8px;
 }
 .item-content-left {
     display: flex;
@@ -353,64 +350,25 @@ export default defineComponent({
 }
 
 .item-indicators {
-  width: 20px;
-  display: flex;
-  justify-content: flex-end;
+    width: 15px;
+    height: 15px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.transparent-icon {
+    opacity: 0.6;
 }
 
 .sub-menu {
-  position: absolute;
-  top: 0;
-  left: 100%;
-  background-color: var(--vscode-editor-background);
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  width: 280px;
-  z-index: 10;
-  padding: 4px 0;
-}
-
-.sub-item {
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-}
-
-.sub-item:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-.sub-item.selected {
-  background-color: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
-.sub-item-content {
-  display: flex;
-  align-items: center;
-  flex: 1;
-}
-
-.selector-footer {
-  padding: 12px 16px;
-  border-top: 1px solid var(--vscode-sideBarSectionHeader-border);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.confirm-button {
-  background-color: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
-  border: none;
-  padding: 6px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.confirm-button:hover {
-  background-color: var(--vscode-button-hoverBackground);
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    background-color: var(--vscode-editor-background);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    width: 320px;
+    z-index: 10;
+    padding: 4px 0;
 }
 </style>
