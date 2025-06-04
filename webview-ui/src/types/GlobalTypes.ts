@@ -15,8 +15,15 @@ declare function acquireVsCodeApi(): {
   setState(state: any): void;
 };
 
+export const getModulePath = (): string => {
+  const meta = import.meta as { url?: string };
+  return meta.url || '';
+};
+export const currentModuleUrl = getModulePath();
+
 export interface Window {
     setTimeout: any;
+    matchMedia: (query: string) => MediaQueryList;
     getComputedStyle: (
       element: Element, 
       pseudoElt?: string | null

@@ -6,7 +6,7 @@
     "strict": true,
     "jsx": "preserve",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "types": ["vite/client", "vscode"],
+    "types": ["vite/client", "vscode", "node"],
     "typeRoots": [
       "node_modules/@types", 
       "./src",

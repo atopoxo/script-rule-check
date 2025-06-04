@@ -37,13 +37,20 @@
         ></textarea>
         <div class="input-functions">
           <div class="input-functions-left">
-            <button class="icon-button" @click="addReference">#</button>
+            <button class="icon-button" @click="selectReference">#</button>
+            <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector"
+              title="上下文"
+              :items="ReferenceOptions"
+              :mutiSelect="false"
+              :showChoice="true"
+              @close="showReferenceSelector = false"
+              @select="handleReferenceSelect"
+            />
             <div class="ref-tooltip">选择上下文</div>
           </div>
           <div class="input-functions-right">
             <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
-            <sy-selector v-if="showModelSelector" class="model-selector"
-              :visible="showModelSelector"
+            <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector"
               title="选择模型"
               :items="modelOptions"
               :mutiSelect="false"
@@ -51,7 +58,11 @@
               @close="showModelSelector = false"
               @select="handleModelSelect"
             />
-            <button class="icon-button message-send" @click="sendMessage"></button>
+            <button class="icon-button message-send" @click="sendMessage"
+              :class="{
+                'dark-theme': isDark,
+                'light-theme': !isDark
+              }"></button>
             <div class="send-tooltip">发送⏎</div>
           </div>
         </div>
@@ -107,34 +118,65 @@ export default defineComponent({
   components: {
     SySelector
   },
+  computed: {
+    themeClass() {
+      return this.isDark ? 'vscode-dark' : 'vscode-light';
+    }
+  },
   setup() {
     const vscode = (window as any).acquireVsCodeApi();
     const session = ref<ChatSession | null>(null);
     const isInHistoryView = ref(false);
     const historySessions = ref<ChatSession[]>([]);
+    const selectTagfontSize = "9px";
+    const showReferenceSelector = ref(false);
+    const referenceItems = ref<Reference[]>([]);
+    const isDark = ref<boolean>(false);
+    const ReferenceOptions = computed(() => {
+      const themeFolder = isDarkTheme() ? 'dark' : 'light';
+      return [
+        {
+          id: 'code',
+          name: 'Code',
+          icon: `${themeFolder}/code.svg`,
+          tag: { text: '添加代码作为上下文', fontSize: selectTagfontSize, border: false }
+        },
+        {
+          id: 'files',
+          name: 'Files',
+          icon: `${themeFolder}/files.svg`,
+          tag: { text: '添加文件作为上下文', fontSize: selectTagfontSize, border: false }
+        },
+        {
+          id: 'workspace',
+          name: 'Workspace',
+          icon: `${themeFolder}/workspace.svg`,
+          tag: { text: '使用工作区代码作为上下文', fontSize: selectTagfontSize, border: false }
+        }
+      ];
+    });
     const showModelSelector = ref(false);
     const selectedModel = ref('DeepSeek-V3-0324');
-    const selectModelTagfontSize = "9px";
     const modelOptions = ref([
       {
         id: 'deepseek-v3-0324',
         name: 'DeepSeek-V3-0324',
-        tag: { text: '快速响应', fontSize: selectModelTagfontSize, border: true }
+        tag: { text: '快速响应', fontSize: selectTagfontSize, border: true }
       },
       {
         id: 'deepseek-r1',
         name: 'Deepseek-R1',
-        tag: { text: '深度思考', fontSize: selectModelTagfontSize, border: true }
+        tag: { text: '深度思考', fontSize: selectTagfontSize, border: true }
       },
       {
         id: 'deepseek-v3',
         name: 'DeepSeek-V3',
-        tag: { text: '快速响应', fontSize: selectModelTagfontSize, border: true }
+        tag: { text: '快速响应', fontSize: selectTagfontSize, border: true }
       },
       {
         id: 'gpt-4o',
         name: 'GPT-4o',
-        tag: { text: '快速响应', fontSize: selectModelTagfontSize, border: true }
+        tag: { text: '快速响应', fontSize: selectTagfontSize, border: true }
       }
     ]);
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -338,6 +380,12 @@ export default defineComponent({
     const backToChat = () => {
       vscode.postMessage({ type: 'backToChat' });
     };
+    const selectReference = () => {
+      showReferenceSelector.value = true;
+    }
+    const handleReferenceSelect = (selected: any[]) => { 
+      referenceItems.value = selected;
+    };
     const selectModel = () => {
       // vscode.postMessage({ type: 'selectModel' });
       showModelSelector.value = true;
@@ -348,10 +396,17 @@ export default defineComponent({
       }
     };
 
+    const isDarkTheme = () => {
+        return isDark.value;
+    };
+
     onMounted(() => {
         window.addEventListener('message', (event: MessageEvent) => {
             const message = event.data;
             switch (message.type) {
+              case 'themeUpdate':
+                  isDark.value = message.isDark;
+                  break;
               case 'update':
                   session.value = message.session;
                   isInHistoryView.value = message.isInHistoryView;
@@ -366,6 +421,8 @@ export default defineComponent({
     });
 
     return {
+      vscode,
+      isDark,
       session,
       isInHistoryView,
       historySessions,
@@ -388,6 +445,10 @@ export default defineComponent({
       deleteSession,
       showHistory,
       backToChat,
+      showReferenceSelector,
+      ReferenceOptions,
+      selectReference,
+      handleReferenceSelect,
       showModelSelector,
       modelOptions,
       selectModel,
@@ -643,6 +704,9 @@ export default defineComponent({
   font-family: "Comic Sans MS", cursive, sans-serif;
   border-radius: 30%;
 }
+.reference-selector {
+  bottom: 100%;
+}
 .ref-tooltip {
   position: absolute;
   bottom: 100%;
@@ -722,16 +786,22 @@ export default defineComponent({
   border-radius: 30%;
   margin: 0 0 0 5px;
 }
-@media (prefers-color-scheme: light) {
+.vscode-light .message-send {
+  background-image: url('@assets/icons/light/send.svg');
+}
+.vscode-dark .message-send {
+  background-image: url('@assets/icons/dark/send.svg');
+}
+/* @media (prefers-color-scheme: light) {
   .message-send {
-    background-image: url('@/assets/icons/light/send.svg');
+    background-image: url('@assets/icons/light/send.svg');
   }
 }
 @media (prefers-color-scheme: dark) {
   .message-send {
-    background-image: url('@/assets/icons/dark/send.svg');
+    background-image: url('@assets/icons/dark/send.svg');
   }
-}
+} */
 .model-selector {
   bottom: 100%;
   right: 0;

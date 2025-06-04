@@ -22,7 +22,7 @@
                     <div class="item-content">
                         <div class="item-content-left">
                             <div class="item-icon" v-if="item.icon">
-                            <i :class="`codicon ${item.icon}`"></i>
+                                <img :src="getIconPath(item.icon)"/>
                             </div>
                             <div class="item-name">{{ item.name }}</div>
                         </div>
@@ -89,6 +89,10 @@
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
 import type { PropType } from 'vue';
+import type { Window }  from '../types/GlobalTypes';
+import { currentModuleUrl } from '../types/GlobalTypes';
+
+declare const window: Window;
 
 export interface SelectorItemTag {
   text: string;
@@ -181,8 +185,44 @@ export default defineComponent({
     };
     
     const closeSelector = () => {
-      emit('close');
+        emit('close');
     };
+    // const loadAllIcons = async () => {
+    //     const promises = props.items
+    //         .filter(item => item.icon)
+    //         .map(item => loadIcon(item.icon as string)); 
+    //     await Promise.all(promises);
+    // };
+
+    // const loadIcon = async(iconPath: string) => {
+    //     try {
+    //         const module = await import(`../../assets/icons/${iconPath}`);
+    //         iconDataUrls.value[iconPath] = module.default;
+    //         return module.value;
+    //     } catch (error) {
+    //         console.error('图标加载失败:', error);
+    //         return '';
+    //     }
+    // };
+
+    const getIconPath = (iconPath: string) => {
+        try {
+            return new URL(`../assets/icons/${iconPath}`, currentModuleUrl).href;
+        } catch (error) {
+            console.error('图标加载失败:', iconPath, error);
+            return '';
+        }
+    }
+
+    // onMounted(async () => {
+    //     await loadAllIcons();
+    // });
+
+    // watchEffect(() => {
+    //     if (props.items.length > 0) {
+    //         loadAllIcons();
+    //     }
+    // });
     
     return {
       selectedItems,
@@ -192,7 +232,8 @@ export default defineComponent({
       handleItemHover,
       handleOutsideClick,
       confirmSelection,
-      closeSelector
+      closeSelector,
+      getIconPath
     };
   }
 });
@@ -222,8 +263,8 @@ export default defineComponent({
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 3px 20px;
-    border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+    padding: 3px 20px 1px 20px;
+    /* border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border); */
 }
 .selector-header h3 {
     margin: 0;
@@ -252,7 +293,7 @@ export default defineComponent({
     flex: 1;
     flex-direction: column;
     overflow-y: auto;
-    padding: 3px 10px 10px 10px;
+    padding: 0px 10px 10px 10px;
 }
 
 .selector-item {
@@ -289,11 +330,12 @@ export default defineComponent({
 }
 
 .item-icon {
-    margin-right: 10px;
+    margin-right: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
+    width: 16px;
+    height: 16px;
 }
 .item-info {
     flex: 1;

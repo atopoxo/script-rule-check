@@ -4,6 +4,7 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
+  assetsInclude: ['​**​/*.svg', '​**​/*.png', '​**​/*.jpg'],
   plugins: [
     vue({
       script: {
@@ -45,7 +46,7 @@ export default defineConfig({
       output: {
         entryFileNames: `static/[name].js`,
         chunkFileNames: `static/[name].js`,
-        assetFileNames: `static/[name].[ext]`
+        assetFileNames: `static/[name].[ext]`,
       }
     }
   },

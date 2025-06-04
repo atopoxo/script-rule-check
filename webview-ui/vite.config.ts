@@ -50,7 +50,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
-      '@types': path.resolve(__dirname, 'src/types')
+      '@types': path.resolve(__dirname, 'src/types'),
+      "@assets": path.resolve(__dirname, 'src/assets'),
     },
     extensions: ['.ts', '.js', '.vue', '.json']
   },
