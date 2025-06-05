@@ -43,3 +43,9 @@ export interface SelectorItem {
   reference?: Reference;
   children?: SelectorItem[];
 }
+
+export interface MenuItem {
+  id: string;
+  icon: string;
+  tooltip: string;
+}

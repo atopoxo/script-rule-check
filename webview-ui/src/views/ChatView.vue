@@ -1,6 +1,9 @@
 <template>
   <div id="app">
     <div v-if="session && !isInHistoryView" class="chat-container">
+      <div class="title-bar">
+        <sy-menu-bar :isDark="isDark" :title="titleBarText" :items="menuItems"></sy-menu-bar>
+      </div>
       <div class="messages-container">
         <div v-for="(msg, index) in session.messages" :key="index" :class="`message ${msg.role}`">
           <div class="avatar">
@@ -109,8 +112,9 @@
 
 <script lang="ts">
 import { defineComponent, watch, onMounted, onBeforeUnmount, ref, computed } from 'vue';
-import type { ChatSession, SelectorItem } from '../types/ChatTypes';
+import type { ChatSession, SelectorItem, MenuItem } from '../types/ChatTypes';
 import type { Window }  from '../types/GlobalTypes';
+import SyMenuBar from '../components/sy_menu_bar.vue';
 import SySelector from '../components/sy_selector.vue';
 import SyTag from '../components/sy_tag.vue';
 
@@ -118,7 +122,7 @@ declare const window: Window;
 
 export default defineComponent({
   components: {
-    SySelector, SyTag
+    SyMenuBar, SySelector, SyTag
   },
   computed: {
     themeClass() {
@@ -127,6 +131,12 @@ export default defineComponent({
   },
   setup() {
     const vscode = (window as any).acquireVsCodeApi();
+    const titleBarText = ref('大模型聊天');
+    const menuItems = ref<MenuItem[]>([
+      { id: 'newSession', tooltip: '创建新会话', icon: 'create-session.svg' },
+      { id: 'showHistory', tooltip: '查看历史会话', icon: 'history.svg' },
+      { id: 'settings', tooltip: '设置', icon:'settings.svg' },
+    ]);
     const session = ref<ChatSession | null>(null);
     const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
@@ -506,6 +516,8 @@ export default defineComponent({
     return {
       vscode,
       isDark,
+      titleBarText,
+      menuItems,
       session,
       referenceSelector,
       modelSelector,
@@ -594,8 +606,8 @@ export default defineComponent({
 
 .title-bar {
   display: flex;
-  padding: 10px;
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+  flex-direction: column;
+  padding: 3px 5px;
   background-color: var(--vscode-editor-background);
 }
 
@@ -684,7 +696,6 @@ export default defineComponent({
   margin-right: 5px;
 }
 
-/* 输入区域 */
 .input-container {
   position: relative;
   display: flex;
