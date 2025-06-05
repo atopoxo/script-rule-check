@@ -1,15 +1,6 @@
 <template>
   <div id="app">
     <div v-if="session && !isInHistoryView" class="chat-container">
-      <div class="references-bar">
-        <div v-for="(ref, index) in references" :key="index" class="reference-tag">
-          <i :class="`codicon ${getRefIcon(ref.type)}`"></i>
-          <span>{{ ref.name }}</span>
-          <button class="delete-reference" @click="removeReference(index)">
-            <i class="codicon codicon-close"></i>
-          </button>
-        </div>
-      </div>
       <div class="messages-container">
         <div v-for="(msg, index) in session.messages" :key="index" :class="`message ${msg.role}`">
           <div class="avatar">
@@ -28,6 +19,13 @@
         </div>
       </div>
       <div class="input-container" :style="{ height: containerHeight + 'px' }">
+        <div class="references-bar" ref="referencesBar">
+          <div v-for="(ref, index) in referenceItems" :key="index">
+            <div v-if="ref.reference">
+              <sy-tag :isDark = isDark :data = ref @remove="removeReference"></sy-tag>
+            </div>
+          </div>
+        </div>
         <textarea 
           v-model="messageInput" 
           :placeholder="placeholderText"
@@ -38,7 +36,7 @@
         <div class="input-functions">
           <div class="input-functions-left">
             <button class="icon-button" @click="selectReference">#</button>
-            <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector"
+            <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector" ref="referenceSelector"
               title="上下文"
               :width="320"
               :isDark = isDark
@@ -52,7 +50,7 @@
           </div>
           <div class="input-functions-right">
             <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
-            <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector"
+            <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector" ref="modelSelector"
               title="选择模型"
               :width="250"
               :items="modelOptions"
@@ -110,16 +108,17 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, ref, computed } from 'vue';
-import type { ChatSession, Reference } from '../types/ChatTypes';
+import { defineComponent, watch, onMounted, onBeforeUnmount, ref, computed } from 'vue';
+import type { ChatSession, SelectorItem } from '../types/ChatTypes';
 import type { Window }  from '../types/GlobalTypes';
 import SySelector from '../components/sy_selector.vue';
+import SyTag from '../components/sy_tag.vue';
 
 declare const window: Window;
 
 export default defineComponent({
   components: {
-    SySelector
+    SySelector, SyTag
   },
   computed: {
     themeClass() {
@@ -129,11 +128,13 @@ export default defineComponent({
   setup() {
     const vscode = (window as any).acquireVsCodeApi();
     const session = ref<ChatSession | null>(null);
+    const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
+    const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
     const historySessions = ref<ChatSession[]>([]);
     const selectTagfontSize = "9px";
     const showReferenceSelector = ref(false);
-    const referenceItems = ref<Reference[]>([]);
+    const referenceItems = ref<SelectorItem[]>([]);
     const isDark = ref<boolean>(false);
     const ReferenceOptions = computed(() => {
       const themeFolder = isDarkTheme() ? 'dark' : 'light';
@@ -143,21 +144,25 @@ export default defineComponent({
           name: 'Code',
           icon: `${themeFolder}/code.svg`,
           tag: { text: '添加代码作为上下文', fontSize: selectTagfontSize, border: false },
+          reference: { type: 'code', name: 'Code'},
           children: [
             {
-              id: 'addReference',
-              name: 'addReference',
-              tag: { text: '添加引用', fontSize: selectTagfontSize, border: false }
+              id: 'showReference',
+              name: 'showReference',
+              tag: { text: '显示引用', fontSize: selectTagfontSize, border: false },
+              reference: { type: 'function', name: 'showReference'}
             },
             {
               id: 'selectedModel',
               name: 'selectedModel',
-              tag: { text: '选择模型', fontSize: selectTagfontSize, border: false }
+              tag: { text: '选择模型', fontSize: selectTagfontSize, border: false },
+              reference: { type: 'function', name: 'selectedModel'}
             },
             {
               id: 'acquireHistory',
               name: 'acquireHistory',
-              tag: { text: '获取历史', fontSize: selectTagfontSize, border: false }
+              tag: { text: '获取历史', fontSize: selectTagfontSize, border: false },
+              reference: { type: 'function', name: 'acquireHistory'}
             }
           ]
         },
@@ -165,13 +170,15 @@ export default defineComponent({
           id: 'files',
           name: 'Files',
           icon: `${themeFolder}/files.svg`,
-          tag: { text: '添加文件作为上下文', fontSize: selectTagfontSize, border: false }
+          tag: { text: '添加文件作为上下文', fontSize: selectTagfontSize, border: false },
+          reference: { type: 'files', name: 'Files' }
         },
         {
           id: 'workspace',
           name: 'Workspace',
           icon: `${themeFolder}/workspace.svg`,
-          tag: { text: '使用工作区代码作为上下文', fontSize: selectTagfontSize, border: false }
+          tag: { text: '使用工作区代码作为上下文', fontSize: selectTagfontSize, border: false },
+          reference: { type: 'workspace', name: 'Workspace' }
         }
       ];
     });
@@ -202,14 +209,17 @@ export default defineComponent({
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const placeholderText = ref(isMac ? '「↑↓」切换历史输入，「⌘+⏎」换行' : '「↑↓」切换历史输入，「Ctrl+⏎」换行');
     const messageInput = ref('');
-    const references = ref<Reference[]>([]);
+    const defaultReferenceHeight = 0;
+    const referenceBarHeight = ref(defaultReferenceHeight);
+    const referencesBar = ref<HTMLElement | null>(null);
+    let referencesBarResizeObserver: ResizeObserver | null = null;
     const maxTextLines = 16;
     const textAreaBorder = 2;
     const textAreaPadding = 16;
     const textAreaLineHeight = 19;
     const defaultFunctionContainerHeight = 32;
     const maxTextAreaHeight = textAreaLineHeight * maxTextLines;
-    const defaultInputContainerHeight = textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
+    const defaultInputContainerHeight = defaultReferenceHeight + textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
     const containerHeight = ref(defaultInputContainerHeight);
     const textareaRef = ref<HTMLTextAreaElement | null>(null);
     
@@ -234,7 +244,7 @@ export default defineComponent({
       const contentHeight = Math.min(scrollHeight, maxTextAreaHeight);
       target.style.height = `${contentHeight}px`;
       target.style.overflowY = scrollHeight > maxTextAreaHeight ? 'auto' : 'hidden';
-      containerHeight.value = textAreaBorder + contentHeight + defaultFunctionContainerHeight;
+      containerHeight.value = referenceBarHeight.value + textAreaBorder + contentHeight + defaultFunctionContainerHeight;
     };
 
     function getScrollHeight(target: HTMLTextAreaElement) {
@@ -315,6 +325,22 @@ export default defineComponent({
       return ctx.measureText(char).width;
     }
 
+    const handleReferenceSelect = (selected: any[]) => { 
+      referenceItems.value = selected;
+    };
+
+    const addReference = () => {
+      vscode.postMessage({ type: 'addReference' });
+    };
+
+    const removeReference = (id: string) => {
+      referenceItems.value = referenceItems.value.filter(item => item.id !== id)
+    };
+
+    const references = () => {
+      referenceItems.value.map(item => item.reference);
+    }
+
     // 计算属性：按日期分组的历史会话
     const groupedSessions = computed(() => {
       const groups: Record<string, ChatSession[]> = {};
@@ -348,27 +374,17 @@ export default defineComponent({
       vscode.postMessage({
         type: 'sendMessage',
         content: messageInput.value,
-        references: references.value
+        references: references
       });
       
       // 清空输入和引用
       messageInput.value = '';
-      references.value = [];
+      // references.value = [];
 
       if (textareaRef.value) {
         textareaRef.value.style.height = 'auto';
         containerHeight.value = defaultInputContainerHeight;
       }
-    };
-
-    // 添加引用
-    const addReference = () => {
-      vscode.postMessage({ type: 'addReference' });
-    };
-
-    // 移除引用
-    const removeReference = (index: number) => {
-      references.value.splice(index, 1);
     };
 
     // 更新标题
@@ -403,9 +419,6 @@ export default defineComponent({
     const selectReference = () => {
       showReferenceSelector.value = showReferenceSelector.value ? false : true;
     }
-    const handleReferenceSelect = (selected: any[]) => { 
-      referenceItems.value = selected;
-    };
     const selectModel = () => {
       // vscode.postMessage({ type: 'selectModel' });
       showModelSelector.value = showModelSelector.value? false : true;
@@ -420,7 +433,51 @@ export default defineComponent({
         return isDark.value;
     };
 
+    watch(() => referencesBar.value, (newVal, oldVal) => {
+        if (oldVal && referencesBarResizeObserver) {
+            referencesBarResizeObserver.unobserve(oldVal);
+        }
+        if (newVal) {
+          if (!referencesBarResizeObserver) {
+              referencesBarResizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    referenceBarHeight.value = entry.contentRect.height;
+                    adjustTextareaHeight();
+                }
+            });
+          }
+          referencesBarResizeObserver.observe(newVal);
+        }
+      },
+      { immediate: true } // 首次加载立即触发
+    );
+
+    watch(showReferenceSelector, (newVal, oldVal) => {
+        if (oldVal === true && newVal === false) {
+            if (referenceSelector.value) {
+                referenceSelector.value.confirmSelection();
+            }
+        }
+    });
+
+    watch(showModelSelector, (newVal, oldVal) => {
+        if (oldVal === true && newVal === false) {
+            if (modelSelector.value) {
+                modelSelector.value.confirmSelection();
+            }
+        }
+    });
+
     onMounted(() => {
+        if (referencesBar.value) {
+            referencesBarResizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    referenceBarHeight.value = entry.contentRect.height;
+                    adjustTextareaHeight();
+                }
+            });
+            referencesBarResizeObserver.observe(referencesBar.value);
+        }
         window.addEventListener('message', (event: MessageEvent) => {
             const message = event.data;
             switch (message.type) {
@@ -433,23 +490,33 @@ export default defineComponent({
                   historySessions.value = message.historySessions || [];
                   break;
               case 'addReference':
-                  references.value.push(message.reference);
+                  // references.value.push(message.reference);
                   break;
               }
         });
         vscode.postMessage({ type: 'ready' });
     });
 
+    onBeforeUnmount(() => {
+        if (referencesBarResizeObserver) {
+            referencesBarResizeObserver.disconnect();
+        }
+    });
+
     return {
       vscode,
       isDark,
       session,
+      referenceSelector,
+      modelSelector,
       isInHistoryView,
       historySessions,
       placeholderText,
       messageInput,
-      references,
+      referencesBar,
+      referenceItems,
       textareaRef,
+      referenceBarHeight,
       containerHeight,
       handleKeyDown,
       adjustTextareaHeight,
@@ -556,36 +623,6 @@ export default defineComponent({
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
-/* 引用栏 */
-.references-bar {
-  display: flex;
-  flex-wrap: wrap;
-  padding: 5px;
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
-  background-color: var(--vscode-sideBar-background);
-  max-height: 80px;
-  overflow-y: auto;
-}
-
-.reference-tag {
-  display: flex;
-  align-items: center;
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-  border-radius: 3px;
-  padding: 3px 8px;
-  margin: 3px;
-  font-size: 12px;
-}
-
-.delete-reference {
-  background: none;
-  border: none;
-  color: inherit;
-  margin-left: 5px;
-  cursor: pointer;
-}
-
 /* 消息容器 */
 .messages-container {
   flex: 1;
@@ -669,7 +706,12 @@ export default defineComponent({
 .input-container:hover {
   box-shadow: 0 0 15px rgba(101, 67, 66, 0.8);
 }
-
+.references-bar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 0 5px;
+}
 .input-container textarea {
   flex: 1;
   /* background: var(--vscode-input-background); */

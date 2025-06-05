@@ -63,6 +63,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [
                 this._extensionUri,
                 vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static'),
+                vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'src', 'assets'),
                 vscode.Uri.parse('http://localhost:5173')
             ],
             enableCommandUris: true,
@@ -71,11 +72,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 extensionHostPort: 9222
             }],
         };
+        vscode.window.onDidChangeActiveColorTheme(theme => {
+            this.updateTheme(theme.kind);
+        });
         view.webview.onDidReceiveMessage(async data => {
             switch (data.type) {
                 case 'ready':
                     this.isWebviewReady = true;
                     await this.checkDefaultSession();
+                    await this.updateTheme(vscode.window.activeColorTheme.kind);
                     break;
                 case 'sendMessage':
                     await this.sendMessage(data.content, data.references);
@@ -116,6 +121,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             view.webview.html = this.getHtmlForWebview(view.webview);
         } catch (error) {
             console.error(error);
+        }
+    }
+
+    private async updateTheme(theme: vscode.ColorThemeKind) {
+        if (this.view && this.isWebviewReady) {
+            try {
+                this.view.webview.postMessage({
+                    type: 'themeUpdate',
+                    isDark: theme === vscode.ColorThemeKind.Dark
+                });
+            } catch (error) {
+                console.error("Failed to post message to Webview:", error);
+            }
         }
     }
 

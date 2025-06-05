@@ -1,7 +1,9 @@
+//ReferenceType = 'code' | 'files' | 'workspace' | 'function';
+
 export interface Reference {
-  type: 'code' | 'file' | 'folder';
+  type: string;
   name: string;
-  path?: string;
+  paths?: string[];
   content?: string;
   range?: any;
 }
@@ -25,4 +27,19 @@ declare global {
   type IChatMessage = ChatMessage;
   type IChatSession = ChatSession;
   type IReference = Reference;
+}
+
+export interface SelectorItemTag {
+  text: string;
+  fontSize?: string;
+  border?: boolean;
+}
+
+export interface SelectorItem {
+  id: string | number;
+  name: string;
+  icon?: string;
+  tag?: SelectorItemTag;
+  reference?: Reference;
+  children?: SelectorItem[];
 }

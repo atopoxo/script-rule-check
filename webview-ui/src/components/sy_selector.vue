@@ -75,26 +75,13 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect } from 'vue';
+import { defineComponent, ref, watchEffect, defineExpose } from 'vue';
 import type { PropType } from 'vue';
 import type { Window }  from '../types/GlobalTypes';
 import { currentModuleUrl } from '../types/GlobalTypes';
+import type { SelectorItem } from '../types/ChatTypes';
 
 declare const window: Window;
-
-export interface SelectorItemTag {
-  text: string;
-  fontSize?: string;
-  border?: boolean;
-}
-
-export interface SelectorItem {
-  id: string | number;
-  name: string;
-  icon?: string;
-  tag?: SelectorItemTag;
-  children?: SelectorItem[];
-}
 
 export default defineComponent({
     name: 'SySelector',
@@ -120,6 +107,10 @@ export default defineComponent({
             type: Array as PropType<SelectorItem[]>,
             required: true
         },
+        selectedItems: {
+            type: Array as PropType<SelectorItem[]>,
+            default: () => []
+        },
         mutiSelect: {
             type: Boolean,
             default: false
@@ -143,17 +134,16 @@ export default defineComponent({
     };
     
     const handleItemClick = (item: SelectorItem) => {
-      if (props.mutiSelect) {
+    if (!item.reference || (item.reference.type === 'function')) {
         const index = selectedItems.value.findIndex(i => i.id === item.id);
         if (index >= 0) {
-          selectedItems.value.splice(index, 1);
+            selectedItems.value.splice(index, 1);
         } else {
-          selectedItems.value.push(item);
+            selectedItems.value.push(item);
         }
-      } else {
-        selectedItems.value = [item];
-        emit('select', [item]);
-        closeSelector();
+      } 
+      if (!props.mutiSelect) {
+        confirmSelection();
       }
     };
     
@@ -198,6 +188,7 @@ export default defineComponent({
     }
 
     watchEffect(() => {
+        selectedItems.value = props.selectedItems;
         if (props.isDark) {
             expandIconPath.value = 'dark/expand.svg';
             choiceIconPath.value = 'dark/check.svg';
@@ -206,7 +197,11 @@ export default defineComponent({
             choiceIconPath.value = 'light/check.svg';
         }
     });
-    
+
+    defineExpose({
+        confirmSelection
+    });
+
     return {
       selectedItems,
       expandedItem,

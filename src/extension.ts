@@ -48,11 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
     const configurationProvider = new ConfigurationProvider(customConfig);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     const productDir = customConfig.get<string>('productDir', '');
-    
     context.subscriptions.push(
-        // vscode.commands.registerCommand('extension.forceRestart', async () => {
-        //     await checkAndForceUpdate(context);
-        // }),
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(extensionName)) {
                 customConfig = vscode.workspace.getConfiguration(extensionName);
