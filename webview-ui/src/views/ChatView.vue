@@ -2,7 +2,7 @@
   <div id="app">
     <div v-if="session && !isInHistoryView" class="chat-container">
       <div class="title-bar">
-        <sy-menu-bar :isDark="isDark" :title="titleBarText" :items="menuItems"></sy-menu-bar>
+        <sy-menu-bar :isDark="isDark" :title="titleBarText" :items="menuItems" @click="handleMenuClick"></sy-menu-bar>
       </div>
       <div class="messages-container">
         <div v-for="(msg, index) in session.messages" :key="index" :class="`message ${msg.role}`">
@@ -72,57 +72,26 @@
         </div>
       </div>
     </div>
-
-    <!-- 历史视图 -->
     <div v-else-if="isInHistoryView" class="history-container">
-      <div class="title-bar">
-        <button class="icon-button" @click="backToChat">
-          <i class="codicon codicon-arrow-left"></i>
-        </button>
-        <h2>历史会话</h2>
-      </div>
-      
-      <div v-for="(group, date) in groupedSessions" :key="date" class="date-section">
-        <div class="date-header">{{ date }}</div>
-        <div class="sessions-list">
-          <div 
-            v-for="sess in group" 
-            :key="sess.id" 
-            class="session-item"
-            @click="loadSession(sess.id)"
-          >
-            <i class="codicon codicon-comment"></i>
-            <div class="session-info">
-              <div class="session-title">{{ sess.title }}</div>
-              <div class="session-time">{{ formatTime(sess.lastActive) }}</div>
-            </div>
-            <button 
-              class="icon-button delete-button" 
-              @click.stop="deleteSession(sess.id)"
-              title="删除会话"
-            >
-              <i class="codicon codicon-trash"></i>
-            </button>
-          </div>
-        </div>
-      </div>
+      <history-view :isDark="isDark" :groupedSessions="historySessions"></history-view>
     </div>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, watch, onMounted, onBeforeUnmount, ref, computed } from 'vue';
-import type { ChatSession, SelectorItem, MenuItem } from '../types/ChatTypes';
+import type { ChatSession, SessionRecordList, SelectorItem, MenuItem } from '../types/ChatTypes';
 import type { Window }  from '../types/GlobalTypes';
-import SyMenuBar from '../components/sy_menu_bar.vue';
-import SySelector from '../components/sy_selector.vue';
-import SyTag from '../components/sy_tag.vue';
+import SyMenuBar from '../components/SyMenuBar.vue';
+import SySelector from '../components/SySelector.vue';
+import SyTag from '../components/SyTag.vue';
+import HistoryView from './HistoryView.vue';
 
 declare const window: Window;
 
 export default defineComponent({
   components: {
-    SyMenuBar, SySelector, SyTag
+    SyMenuBar, SySelector, SyTag, HistoryView
   },
   computed: {
     themeClass() {
@@ -141,7 +110,23 @@ export default defineComponent({
     const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
-    const historySessions = ref<ChatSession[]>([]);
+    const sessionTagFontSize = "11px";
+    const historySessions = ref<SessionRecordList[]>([
+      {
+        date: '2025-06-06',
+        records: [
+          { id: "1", title: "聊天一", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] },
+          { id: "2", title: "聊天二", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] }
+        ]
+      },
+      {
+        date: '2025-06-05',
+        records: [
+          { id: "3", title: "聊天三", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] },
+          { id: "4", title: "聊天四", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] }
+        ]
+      }
+    ]);
     const selectTagfontSize = "9px";
     const showReferenceSelector = ref(false);
     const referenceItems = ref<SelectorItem[]>([]);
@@ -233,6 +218,20 @@ export default defineComponent({
     const containerHeight = ref(defaultInputContainerHeight);
     const textareaRef = ref<HTMLTextAreaElement | null>(null);
     
+    const handleMenuClick = (id: string) => {
+      switch (id) {
+        case 'newSession':
+          // vscode.postMessage({ type: 'newSession' });
+          break;
+        case 'showHistory':
+          isInHistoryView.value = isInHistoryView.value ? false : true;
+          // vscode.postMessage({ type: 'showHistory' });
+          break;
+        case 'settings':
+          // vscode.postMessage({ type: 'settings' });
+          break;
+      }
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Enter') {
         if (event.ctrlKey || event.metaKey) {
@@ -352,15 +351,15 @@ export default defineComponent({
     }
 
     // 计算属性：按日期分组的历史会话
-    const groupedSessions = computed(() => {
-      const groups: Record<string, ChatSession[]> = {};
-      historySessions.value.forEach(sess => {
-        const date = new Date(sess.lastActive).toLocaleDateString();
-        if (!groups[date]) groups[date] = [];
-        groups[date].push(sess);
-      });
-      return groups;
-    });
+    // const groupedSessions = computed(() => {
+    //   const groups: Record<string, ChatSession[]> = {};
+    //   historySessions.value.forEach(sess => {
+    //     const date = new Date(sess.lastActive).toLocaleDateString();
+    //     if (!groups[date]) groups[date] = [];
+    //     groups[date].push(sess);
+    //   });
+    //   return groups;
+    // });
     // 获取引用图标
     const getRefIcon = (type: string) => {
       return type === 'code' ? 'codicon-symbol-method' : 
@@ -497,7 +496,7 @@ export default defineComponent({
               case 'update':
                   session.value = message.session;
                   isInHistoryView.value = message.isInHistoryView;
-                  historySessions.value = message.historySessions || [];
+                  // historySessions.value = message.historySessions || [];
                   break;
               case 'addReference':
                   // references.value.push(message.reference);
@@ -530,9 +529,9 @@ export default defineComponent({
       textareaRef,
       referenceBarHeight,
       containerHeight,
+      handleMenuClick,
       handleKeyDown,
       adjustTextareaHeight,
-      groupedSessions,
       getRefIcon,
       formatTime,
       createSession,
@@ -930,13 +929,6 @@ export default defineComponent({
   opacity: 1;
 }
 
-
-/* 历史视图 */
-.history-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
 
 .date-section {
   margin-bottom: 15px;

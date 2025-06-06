@@ -49,3 +49,16 @@ export interface MenuItem {
   icon: string;
   tooltip: string;
 }
+
+export interface SessionRecord {
+  id: string;
+  title: string;
+  icon?: string;
+  tag?: SelectorItemTag;
+  messages: ChatMessage[];
+}
+
+export interface SessionRecordList {
+  date: string;
+  records: SessionRecord[];
+}

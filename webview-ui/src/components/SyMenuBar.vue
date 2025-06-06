@@ -1,9 +1,8 @@
-<!-- src/components/sy_selector.vue -->
 <template>
     <div class="menu-bar">
         <div class="menu-content">
             <div class="menu-content-left">
-                <span>{{ title }}</span>
+                <span class="menu-describe">{{ title }}</span>
             </div>
             <div class="menu-content-right">
                 <div v-for="(item, index) in items" :key="index" class="menu-item">
@@ -20,7 +19,7 @@
 <script lang="ts">
 import { defineComponent, ref, watchEffect } from 'vue';
 import type { PropType } from 'vue';
-import { currentModuleUrl } from '../types/GlobalTypes';
+import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 import type { MenuItem } from '../types/ChatTypes';
 
 export default defineComponent({
@@ -48,7 +47,7 @@ export default defineComponent({
 
         const getIconPath = (iconPath: string) => {
             try {
-                return new URL(`../assets/icons/${themeIconRelativePath.value}/${iconPath}`, currentModuleUrl).href;
+                return new URL(`${iconRoot}${themeIconRelativePath.value}/${iconPath}`, currentModuleUrl).href;
             } catch (error) {
                 console.error('图标加载失败:', iconPath, error);
                 return '';
@@ -91,15 +90,16 @@ export default defineComponent({
     justify-content: space-between;
     padding: 2px 5px;
     background-color: var(--sy-menu-bar-background-color);
-    color: var(--sy-menu-bar-text-color);
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
 }
 .menu-content-left {
     display: flex;
     flex-direction: row;
     align-items: center;
+}
+.menu-describe {
+    font-size: 12px;
+    opacity: 0.8;
+    color: var(--sy-menu-bar-text-color);
 }
 .menu-content-right {
     display: flex;
@@ -116,15 +116,19 @@ export default defineComponent({
 .menu-item button {
     height: 16px;
     width: 16px;
-    padding: 0;
+    padding: 1px;
     margin: 0;
     background: none;
     border: none;
-    line-height: 26px;
+    line-height: 14px;
     text-align: center;
     font-size: 14px;
     font-family: "Comic Sans MS", cursive, sans-serif;
     border-radius: 30%;
+    cursor: pointer;
+}
+.menu-item button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
 }
 .menu-item-tooltip {
     position: absolute;

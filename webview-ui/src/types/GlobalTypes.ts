@@ -21,6 +21,8 @@ export const getModulePath = (): string => {
 };
 export const currentModuleUrl = getModulePath();
 
+export const iconRoot = '../assets/icons/';
+
 export interface Window {
     setTimeout: any;
     matchMedia: (query: string) => MediaQueryList;

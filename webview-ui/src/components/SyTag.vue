@@ -1,4 +1,3 @@
-<!-- src/components/sy_selector.vue -->
 <template>
     <div class="reference-tag" @mouseenter="handleItemHover()" @mouseleave="showRemoveButton = false">
         <span>{{ data.reference?.name }}</span>
@@ -12,7 +11,7 @@
 import { defineComponent, ref, watchEffect } from 'vue';
 import type { PropType } from 'vue';
 import type { Window }  from '../types/GlobalTypes';
-import { currentModuleUrl } from '../types/GlobalTypes';
+import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 import type { SelectorItem } from '../types/ChatTypes';
 
 declare const window: Window;
@@ -39,7 +38,7 @@ export default defineComponent({
 
         const getIconPath = (iconPath: string) => {
             try {
-                return new URL(`../assets/icons/${iconPath}`, currentModuleUrl).href;
+                return new URL(`${iconRoot}${iconPath}`, currentModuleUrl).href;
             } catch (error) {
                 console.error('图标加载失败:', iconPath, error);
                 return '';
