@@ -1,0 +1,16 @@
+{
+    "models": [
+        {
+            "id": "deepseek-v3",
+            "name": "deepseek-v3",
+            "type": "快速响应",
+            "key": "sk-deepseek-v3-2025-06-06"
+        },
+        {
+            "id": "deepseek-r1",
+            "name": "deepseek-r1",
+            "type": "深度思考",
+            "key": "sk-deepseek-r1-2023-07-01"
+        }
+    ]
+}

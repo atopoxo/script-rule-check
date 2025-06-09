@@ -51,21 +51,12 @@
             "按规则显示"
           ],
           "default": "tree",
-          "description": "结果展示模式：树形结构(tree)或平铺列表(flat)"
+          "description": "结果展示模式：树形结构(tree)/平铺列表(flat)/规则结构(rule)"
         },
-        "script-rule-chat.models": {
-          "type": "array",
-          "default": [
-            {
-              "name": "deepseek-v3",
-              "type": "deepseek v3"
-            },
-            {
-              "name": "deepseek-r1",
-              "type": "deepseek r1"
-            }
-          ],
-          "description": "Available AI models for chat"
+        "script-rule-check.selectedModel": {
+          "type": "string",
+          "default": "",
+          "description": "当前选中的大模型"
         }
       }
     },
@@ -170,6 +161,10 @@
       {
         "command": "extension.checkSpecificRule.rule11",
         "title": "▶ 场景对应脚本检查"
+      },
+      {
+        "command": "extension.model.editInfo",
+        "title": "修改模型配置"
       },
       {
         "command": "extension.chat.createSession",

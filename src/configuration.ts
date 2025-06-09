@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import {CheckRule} from './output_format'
+import {CheckRule, ModelInfo} from './output_format'
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private allCheckRules: CheckRule[] = [];
+    private allModelInfos: ModelInfo[] = [];
     private config: vscode.WorkspaceConfiguration;
 
     constructor(config: vscode.WorkspaceConfiguration) {
@@ -20,6 +21,11 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         this._onDidChangeTreeData.fire();
     }
 
+    setModelInfos(modelInfos: ModelInfo[]) {
+        this.allModelInfos = modelInfos;
+        this._onDidChangeTreeData.fire();
+    }
+
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
         return element;
     }
@@ -30,12 +36,17 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
                 this.createConfigItem(),
                 this.createCustomCheckRuleSelectorItem(),
                 this.createModeSelectorItem(),
+                this.createModelSelectorItem()
             ];
         }
         if (element.contextValue === 'customCheckRuleSelector') {
             return this.createCustomCheckRuleItems();
         } else if (element.contextValue === 'modeSelector') {
             return this.createModeItems();
+        } else if (element.contextValue === 'modelSelector') {
+            return this.createModelItems();
+        } else if (element.contextValue === 'modelInfo') {
+            return this.getModelConfigItems(element);
         }
         
         return [];
@@ -65,6 +76,14 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         item.contextValue = 'modeSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         item.iconPath = new vscode.ThemeIcon(currentMode === 'tree' ? 'list-tree' : 'list-flat');
+        return item;
+    }
+
+    private createModelSelectorItem(): vscode.TreeItem {
+        const selectedModel = this.config.get('selectedModel', '');
+        const item = new vscode.TreeItem(`当前模型: ${selectedModel}`);
+        item.contextValue = 'modelSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
     }
 
@@ -104,5 +123,47 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         };
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
         return item;
+    }
+
+    private createModelItems(): vscode.TreeItem[] {
+        return this.allModelInfos.map(item => this.createModelItem(item));
+    }
+
+    private createModelItem(info: ModelInfo): vscode.TreeItem {
+        const isSelected = this.config.get<string>('selectedModel', '') === info.id;
+        const item = new vscode.TreeItem(info.name);
+        item.id = info.id;
+        item.contextValue = 'modelInfo';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        // item.command = {
+        //     command: 'extension.toggleModelInfo',
+        //     title: info.name,
+        //     arguments: [info.id]
+        // };
+        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        return item;
+    }
+
+    private getModelConfigItems(modelInfo: vscode.TreeItem): vscode.TreeItem[] {
+        const currentModel = this.allModelInfos.find(info => info.id === modelInfo.id);
+        let key = "";
+        if (currentModel) {
+            key = currentModel.key;
+        }
+        const config = {
+            "key": key
+        }
+
+        return Object.entries(config).map(([key, value]) => {
+            const configItem = new vscode.TreeItem(`${key}: ${value}`);
+            configItem.contextValue = 'modelConfig';
+            configItem.iconPath = new vscode.ThemeIcon('settings');
+            configItem.command = {
+                command: 'extension.model.editInfo',
+                title: '修改模型配置',
+                arguments: [modelInfo.id, {key: value}]
+            };
+            return configItem;
+        });
     }
 }

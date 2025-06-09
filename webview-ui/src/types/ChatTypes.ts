@@ -62,3 +62,19 @@ export interface SessionRecordList {
   date: string;
   records: SessionRecord[];
 }
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface ReferenceOption {
+  type: string;
+  id: string;
+  name: string;
+  describe: string;
+  icon?: string;
+  reference?: Reference;
+  children?: ReferenceOption[];
+}

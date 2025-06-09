@@ -1,0 +1,25 @@
+{
+    "options": [
+        {
+          "type": "code",
+          "id": "code",
+          "name": "Code",
+          "icon": "code.svg",
+          "describe": "添加代码作为上下文"
+        },
+        {
+          "type": "files",
+          "id": "files",
+          "name": "Files",
+          "icon": "files.svg",
+          "describe": "添加文件作为上下文"
+        },
+        {
+          "type": "workspace",
+          "id": "workspace",
+          "name": "Workspace",
+          "icon": "workspace.svg",
+          "describe": "使用工作区代码作为上下文"
+        }
+    ]
+}

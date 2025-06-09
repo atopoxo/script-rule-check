@@ -6,6 +6,8 @@ import * as fs from 'fs';
 // const { JSDOM } = require('jsdom');
 const iconv = require('iconv-lite');
 import {RuleOperator, RuleResultProvider} from './rule_check';
+import {ModelOperator} from './model_operator';
+import { ReferenceOperator } from './reference_operator';
 import {ConfigurationProvider} from './configuration';
 import {CheckRule} from './output_format';
 import { ChatViewProvider, ChatViewTreeDataProvider } from './chat_view';
@@ -14,6 +16,8 @@ import { ReferenceSystem } from './reference_system';
 import { ModelSelector } from './model_selector';
 
 let ruleOperator: RuleOperator;
+let modelOperator: ModelOperator;
+let referenceOperator: ReferenceOperator
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
@@ -184,11 +188,43 @@ function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
     return displayMode;
 }
 
-function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
+async function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
     chatManager = ChatManager.getInstance(context);
-    chatViewProvider = new ChatViewProvider(context, chatManager);
+    modelOperator = new ModelOperator(extensionName);
+    referenceOperator = new ReferenceOperator(extensionName);
+    chatViewProvider = new ChatViewProvider(context, chatManager, modelOperator, referenceOperator);
+    const allModelInfos = modelOperator.getAvailableModels();
+	configurationProvider.setModelInfos(allModelInfos);
+    chatViewProvider.setModelInfos(allModelInfos);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('chatView', chatViewProvider),
+        vscode.commands.registerCommand('extension.toggleModelInfo', async (modelID: string) => {
+            let selectedModel: string = customConfig.get('selectedModel', '');
+            selectedModel = selectedModel === modelID ? '' : modelID;
+            await customConfig.update('selectedModel', selectedModel, vscode.ConfigurationTarget.Global);
+            configurationProvider.refresh(customConfig);
+        }),
+        vscode.commands.registerCommand('extension.model.editInfo', async (modelID: string, data: object) => {
+            const modelInfo = allModelInfos.find(info => info.id === modelID);
+            if (!modelInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${modelID} 的模型。`);
+                return;
+            }
+            const entries = Object.entries(data);
+            await entries.forEach(async ([key, value]) => {
+                const newValue = await vscode.window.showInputBox({
+                    prompt: `请输入模型"${modelInfo.name}"的新属性"${key}"`,
+                    value: value || ''
+                });
+                if (newValue === undefined) {
+                    return;
+                }
+                (modelInfo as any)[key] = newValue;
+                modelOperator.saveModelConfig(allModelInfos);
+                configurationProvider.refresh(customConfig);
+                vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
+            })
+        }),
         vscode.commands.registerCommand('extension.chat.createSession', async () => {
             await chatViewProvider.createSession();
         }),
@@ -207,8 +243,8 @@ function registerAICommands(context: vscode.ExtensionContext, configurationProvi
         vscode.commands.registerCommand('extension.chat.addReference', async () => {
             await chatViewProvider.addReference();
         }),
-        vscode.commands.registerCommand('extension.chat.selectModel', async () => {
-            await chatViewProvider.selectModel();
+        vscode.commands.registerCommand('extension.chat.selectModel', async (id: string) => {
+            await chatViewProvider.selectModel(id);
         }),
         // vscode.commands.registerCommand('extension.chat.addCodeReference', async () => {
         //     const reference = await ReferenceSystem.addCodeReference();

@@ -43,23 +43,23 @@
               title="上下文"
               :width="320"
               :isDark = isDark
-              :items="ReferenceOptions"
+              :items="referenceOptions"
               :mutiSelect="true"
               :showChoice="true"
-              @close="showReferenceSelector = false"
+              @close="handleReferenceSelectorClose"
               @select="handleReferenceSelect"
             />
             <div class="ref-tooltip">选择上下文</div>
           </div>
           <div class="input-functions-right">
-            <button class="icon-button model-select" @click="selectModel">DeepSeek-V3-0324</button>
+            <button class="icon-button model-select" @click="selectModel">{{ selectedModel }}</button>
             <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector" ref="modelSelector"
               title="选择模型"
               :width="250"
               :items="modelOptions"
               :mutiSelect="false"
               :showChoice="true"
-              @close="showModelSelector = false"
+              @close="handleModelSelectorClose"
               @select="handleModelSelect"
             />
             <button class="icon-button message-send" @click="sendMessage"
@@ -79,8 +79,8 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, watch, onMounted, onBeforeUnmount, ref, computed } from 'vue';
-import type { ChatSession, SessionRecordList, SelectorItem, MenuItem } from '../types/ChatTypes';
+import { defineComponent, watch, onMounted, onBeforeUnmount, ref } from 'vue';
+import type { ChatSession, SessionRecordList, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
 import type { Window }  from '../types/GlobalTypes';
 import SyMenuBar from '../components/SyMenuBar.vue';
 import SySelector from '../components/SySelector.vue';
@@ -127,80 +127,13 @@ export default defineComponent({
         ]
       }
     ]);
-    const selectTagfontSize = "9px";
     const showReferenceSelector = ref(false);
     const referenceItems = ref<SelectorItem[]>([]);
     const isDark = ref<boolean>(false);
-    const ReferenceOptions = computed(() => {
-      const themeFolder = isDarkTheme() ? 'dark' : 'light';
-      return [
-        {
-          id: 'code',
-          name: 'Code',
-          icon: `${themeFolder}/code.svg`,
-          tag: { text: '添加代码作为上下文', fontSize: selectTagfontSize, border: false },
-          reference: { type: 'code', name: 'Code'},
-          children: [
-            {
-              id: 'showReference',
-              name: 'showReference',
-              tag: { text: '显示引用', fontSize: selectTagfontSize, border: false },
-              reference: { type: 'function', name: 'showReference'}
-            },
-            {
-              id: 'selectedModel',
-              name: 'selectedModel',
-              tag: { text: '选择模型', fontSize: selectTagfontSize, border: false },
-              reference: { type: 'function', name: 'selectedModel'}
-            },
-            {
-              id: 'acquireHistory',
-              name: 'acquireHistory',
-              tag: { text: '获取历史', fontSize: selectTagfontSize, border: false },
-              reference: { type: 'function', name: 'acquireHistory'}
-            }
-          ]
-        },
-        {
-          id: 'files',
-          name: 'Files',
-          icon: `${themeFolder}/files.svg`,
-          tag: { text: '添加文件作为上下文', fontSize: selectTagfontSize, border: false },
-          reference: { type: 'files', name: 'Files' }
-        },
-        {
-          id: 'workspace',
-          name: 'Workspace',
-          icon: `${themeFolder}/workspace.svg`,
-          tag: { text: '使用工作区代码作为上下文', fontSize: selectTagfontSize, border: false },
-          reference: { type: 'workspace', name: 'Workspace' }
-        }
-      ];
-    });
     const showModelSelector = ref(false);
-    const selectedModel = ref('DeepSeek-V3-0324');
-    const modelOptions = ref([
-      {
-        id: 'deepseek-v3-0324',
-        name: 'DeepSeek-V3-0324',
-        tag: { text: '快速响应', fontSize: selectTagfontSize, border: true }
-      },
-      {
-        id: 'deepseek-r1',
-        name: 'Deepseek-R1',
-        tag: { text: '深度思考', fontSize: selectTagfontSize, border: true }
-      },
-      {
-        id: 'deepseek-v3',
-        name: 'DeepSeek-V3',
-        tag: { text: '快速响应', fontSize: selectTagfontSize, border: true }
-      },
-      {
-        id: 'gpt-4o',
-        name: 'GPT-4o',
-        tag: { text: '快速响应', fontSize: selectTagfontSize, border: true }
-      }
-    ]);
+    const selectedModel = ref('');
+    const modelOptions = ref<SelectorItem[]>([]);
+    const referenceOptions = ref<SelectorItem[]>([]);
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const placeholderText = ref(isMac ? '「↑↓」切换历史输入，「⌘+⏎」换行' : '「↑↓」切换历史输入，「Ctrl+⏎」换行');
     const messageInput = ref('');
@@ -232,6 +165,57 @@ export default defineComponent({
           break;
       }
     }
+
+    const selectModel = () => {
+      showModelSelector.value = showModelSelector.value? false : true;
+    };
+
+    const handleModelSelectorClose = () => {
+      showModelSelector.value = false;
+    }
+    const handleModelSelect = (selected: any[]) => {
+      if (selected.length > 0) {
+        vscode.postMessage({ type: 'selectModel', data: {id: selected[0].id} });
+      }
+    };
+
+    const getModels = (modelInfos: ModelInfo[]): SelectorItem[] => {
+      const selectTagfontSize = "9px";
+      return modelInfos.map((item) => ({
+        id: item.id,
+        name: item.name,
+        tag: {
+          text: item.type,
+          fontSize: selectTagfontSize,
+          border: true
+        }
+      }));
+    };
+
+    const selectReference = () => {
+      showReferenceSelector.value = showReferenceSelector.value ? false : true;
+    }
+
+    const handleReferenceSelectorClose = () => {
+      showReferenceSelector.value = false;
+    }
+    const handleReferenceSelect = (selected: any[]) => { 
+      referenceItems.value = selected;
+    };
+
+    const getReferenceOptions = (referenceOptions: ReferenceOption[]): SelectorItem[] => {
+      const themeFolder = isDarkTheme() ? 'dark' : 'light';
+      const selectTagfontSize = "9px";
+      return referenceOptions.map((item) => ({
+        id: item.id,
+        name: item.name,
+        icon: item.icon ? `${themeFolder}/${item.icon}` : undefined,
+        tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+        reference: item.reference,
+        children: (item.children && item.children.length > 0) ? getReferenceOptions(item.children) : undefined
+      }));
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Enter') {
         if (event.ctrlKey || event.metaKey) {
@@ -334,10 +318,6 @@ export default defineComponent({
       return ctx.measureText(char).width;
     }
 
-    const handleReferenceSelect = (selected: any[]) => { 
-      referenceItems.value = selected;
-    };
-
     const addReference = () => {
       vscode.postMessage({ type: 'addReference' });
     };
@@ -425,18 +405,6 @@ export default defineComponent({
     const backToChat = () => {
       vscode.postMessage({ type: 'backToChat' });
     };
-    const selectReference = () => {
-      showReferenceSelector.value = showReferenceSelector.value ? false : true;
-    }
-    const selectModel = () => {
-      // vscode.postMessage({ type: 'selectModel' });
-      showModelSelector.value = showModelSelector.value? false : true;
-    };
-    const handleModelSelect = (selected: any[]) => {
-      if (selected.length > 0) {
-        selectedModel.value = selected[0].name;
-      }
-    };
 
     const isDarkTheme = () => {
         return isDark.value;
@@ -489,14 +457,22 @@ export default defineComponent({
         }
         window.addEventListener('message', (event: MessageEvent) => {
             const message = event.data;
-            switch (message.type) {
-              case 'themeUpdate':
-                  isDark.value = message.isDark;
+            const type = message.type;
+            const data = message.data;
+            switch (type) {
+              case 'initSession':
+                  isDark.value = data.isDark;
+                  session.value = data.currentSession;
+                  selectedModel.value = data.selectedModel.name;
+                  modelOptions.value = getModels(data.modelInfos);
+                  referenceOptions.value = getReferenceOptions(data.referenceOptions)
+                  isInHistoryView.value = false;
                   break;
-              case 'update':
-                  session.value = message.session;
-                  isInHistoryView.value = message.isInHistoryView;
-                  // historySessions.value = message.historySessions || [];
+              case 'themeUpdate':
+                  isDark.value = data.isDark;
+                  break;
+              case 'selectModel':
+                  selectedModel.value = data.selectedModel.name;
                   break;
               case 'addReference':
                   // references.value.push(message.reference);
@@ -544,12 +520,15 @@ export default defineComponent({
       showHistory,
       backToChat,
       showReferenceSelector,
-      ReferenceOptions,
+      referenceOptions,
       selectReference,
+      handleReferenceSelectorClose,
       handleReferenceSelect,
       showModelSelector,
       modelOptions,
+      selectedModel,
       selectModel,
+      handleModelSelectorClose,
       handleModelSelect
     };
   }

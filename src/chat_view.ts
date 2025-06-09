@@ -2,6 +2,9 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { ChatManager, ChatSession, ChatMessage, ReferenceItem } from './chat_manager';
+import {ModelInfo} from './output_format'
+import {ModelOperator} from './model_operator';
+import {ReferenceOperator} from './reference_operator';
 
 export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -9,7 +12,7 @@ export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.
 
     constructor(
         private context: vscode.ExtensionContext,
-        private chatManager: any // 替换为你的 ChatManager 类型
+        private chatManager: any
     ) {}
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -42,10 +45,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private currentSession: ChatSession | null = null;
     private isInHistoryView = false;
     private isWebviewReady = false;
+    private allModelInfos: ModelInfo[] = [];
 
     constructor(
         private context: vscode.ExtensionContext,
-        private chatManagerInstance: ChatManager
+        private chatManagerInstance: ChatManager,
+        private modelOperator: ModelOperator,
+        private referenceOperator: ReferenceOperator
     ) {
         this._extensionUri = context.extensionUri;
         this.chatManager = chatManagerInstance;
@@ -75,12 +81,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         vscode.window.onDidChangeActiveColorTheme(theme => {
             this.updateTheme(theme.kind);
         });
-        view.webview.onDidReceiveMessage(async data => {
-            switch (data.type) {
+        view.webview.onDidReceiveMessage(async message => {
+            const type = message.type;
+            const data = message.data;
+            switch (type) {
                 case 'ready':
                     this.isWebviewReady = true;
-                    await this.checkDefaultSession();
-                    await this.updateTheme(vscode.window.activeColorTheme.kind);
+                    await this.initSession(vscode.window.activeColorTheme.kind);
+                    break;
+                case 'selectModel':
+                    await this.selectModel(data.id);
                     break;
                 case 'sendMessage':
                     await this.sendMessage(data.content, data.references);
@@ -106,9 +116,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'removeReference':
                     await this.removeReference(data.refIndex);
                     break;
-                case 'selectModel':
-                    await this.selectModel();
-                    break;
                 case 'updateTitle':
                     await this.updateSessionTitle(data.title);
                     break;
@@ -124,17 +131,51 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async updateTheme(theme: vscode.ColorThemeKind) {
+    public setModelInfos(modelInfos: ModelInfo[]) {
+        this.allModelInfos = modelInfos;
+    }
+
+    private getModelInfos(): ModelInfo[] { 
+        return this.allModelInfos;
+    }
+
+    public updateWebview(type: string, data: any) {
         if (this.view && this.isWebviewReady) {
             try {
                 this.view.webview.postMessage({
-                    type: 'themeUpdate',
-                    isDark: theme === vscode.ColorThemeKind.Dark
+                    type: type,
+                    data: data
                 });
             } catch (error) {
                 console.error("Failed to post message to Webview:", error);
             }
         }
+    }
+
+    private async initSession(theme: vscode.ColorThemeKind) {
+        if (!this.currentSession) {
+            this.currentSession = await this.chatManager.createSession();
+        }
+        const data = {
+            isDark: theme === vscode.ColorThemeKind.Dark,
+            modelInfos: this.getModelInfos(),
+            selectedModel: await this.modelOperator.getSelectedModel(this.allModelInfos),
+            referenceOptions: await this.referenceOperator.getOptions(),
+            currentSession: this.currentSession
+        }
+        this.updateWebview('initSession', data);
+    }
+
+    private async updateTheme(theme: vscode.ColorThemeKind) {
+        this.updateWebview('themeUpdate', {isDark: theme === vscode.ColorThemeKind.Dark});
+    }
+
+    public async selectModel(id: string) {
+        await this.modelOperator.setSelectedModel(this.allModelInfos, id);
+        const data = {
+            selectedModel: await this.modelOperator.getSelectedModel(this.allModelInfos)
+        }
+        this.updateWebview('selectModel', data);
     }
 
     private async sendMessage(content: string, references: any[]) {
@@ -157,7 +198,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             };
 
             await this.chatManager.addMessageToSession(userMessage);
-            this.updateWebview();
+            this.updateWebview('sendMessage', {});
 
             // 模拟AI响应
             const thinkingMessage: ChatMessage = {
@@ -166,7 +207,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 timestamp: Date.now()
             };
             await this.chatManager.addMessageToSession(thinkingMessage);
-            this.updateWebview();
+            this.updateWebview('sendMessage', {});
 
             // 延迟后生成响应
             setTimeout(async () => {
@@ -181,7 +222,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     };
                     
                     await this.chatManager.addMessageToSession(aiResponse);
-                    this.updateWebview();
+                    this.updateWebview('sendMessage', {});
                 }
             }, 2000);
         }
@@ -190,13 +231,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     async createSession() {
         this.currentSession = await this.chatManager.createSession();
         this.isInHistoryView = false;
-        this.updateWebview();
+        this.updateWebview('createSession', {});
     }
 
     private async loadSession(sessionId: string) {
         this.currentSession = await this.chatManager.loadSession(sessionId);
         this.isInHistoryView = false;
-        this.updateWebview();
+        this.updateWebview('loadSession', {});
     }
 
     public async deleteSession(sessionId: string) {
@@ -204,17 +245,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (this.currentSession?.id === sessionId) {
             this.currentSession = null;
         }
-        this.updateWebview();
+        this.updateWebview('deleteSession', {});
     }
 
     public showHistory() {
         this.isInHistoryView = true;
-        this.updateWebview();
+        this.updateWebview('showHistory', {});
     }
 
     private backToChat() {
         this.isInHistoryView = false;
-        this.updateWebview();
+        this.updateWebview('backToChat', {});
     }
 
     public async addReference() {
@@ -238,35 +279,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (lastMessage && lastMessage.references && refIndex < lastMessage.references.length) {
                 lastMessage.references.splice(refIndex, 1);
                 await this.chatManager.saveSession(this.currentSession);
-                this.updateWebview();
+                this.updateWebview('removeReference', {});
             }
-        }
-    }
-
-    public async selectModel() {
-        const config = vscode.workspace.getConfiguration('script-rule-chat');
-        const models = config.get<any[]>('models', []);
-        
-        const items = models.map(model => ({
-            label: model.name,
-            description: model.type,
-            id: model.id
-        }));
-        
-        const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: '选择AI模型'
-        });
-        
-        if (selected && this.currentSession) {
-            await this.chatManager.saveSession(this.currentSession);
-            this.updateWebview();
         }
     }
 
     private async updateSessionTitle(title: string) {
         if (this.currentSession) {
             await this.chatManager.updateSessionTitle(this.currentSession.id, title);
-            this.updateWebview();
+            this.updateWebview('updateSessionTitle', {});
         }
     }
 
@@ -402,28 +423,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 type: 'addReference',
                 reference
             });
-        }
-    }
-
-    private async checkDefaultSession() {
-        if (!this.currentSession) {
-            await this.createSession();
-        } else {
-            this.updateWebview();
-        }
-    }
-    public updateWebview() {
-        if (this.view && this.isWebviewReady) {
-            try {
-                this.view.webview.postMessage({
-                    type: 'update',
-                    session: this.currentSession,
-                    isInHistoryView: this.isInHistoryView,
-                    historySessions: this.chatManager.getAllSessions()
-                });
-            } catch (error) {
-                console.error("Failed to post message to Webview:", error);
-            }
         }
     }
 

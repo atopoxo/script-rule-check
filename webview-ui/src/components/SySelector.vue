@@ -142,7 +142,7 @@ export default defineComponent({
         }
       } 
       if (!props.mutiSelect) {
-        confirmSelection();
+        closeSelector();
       }
     };
     
@@ -151,18 +151,13 @@ export default defineComponent({
     };
     
     const handleOutsideClick = () => {
-      if (props.mutiSelect && selectedItems.value.length > 0) {
-        confirmSelection();
-      } else {
-        closeSelector();
-      }
+      closeSelector();
     };
     
     const confirmSelection = () => {
       if (selectedItems.value.length > 0) {
         emit('select', [...selectedItems.value]);
       }
-      closeSelector();
     };
     
     const closeSelector = () => {
