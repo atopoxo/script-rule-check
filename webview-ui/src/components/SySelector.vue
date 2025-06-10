@@ -34,7 +34,7 @@
                             </div>
                         </div>
                     </div>
-                    <div v-if="canExpand(item)" class="sub-menu"
+                    <div v-if="canExpand(item)" class="sub-menu" :style="{ width: width + 'px' }"
                         @mouseleave="expandedItem = null"
                     >
                         <div class="selector-header">
@@ -120,7 +120,7 @@ export default defineComponent({
         }
     },
   
-    emits: ['close', 'select'],
+    emits: ['close', 'select', 'selectFiles', 'selectWorkspace'],
   
   setup(props, { emit }) {
     const selectedItems = ref<SelectorItem[]>([]);
@@ -129,22 +129,75 @@ export default defineComponent({
     const choiceIconPath = ref<string>('');
     
     const isSelected = (item: SelectorItem) => {
-      return selectedItems.value.some(selected => selected.id === item.id);
+        if (item.children && item.children.length > 0) {
+            let flag = true;
+            item.children.forEach(child => {
+                if (!isSelected(child)) {
+                    flag = false;
+                    return;
+                }
+            });
+            updateSelectedItems(item, true, flag);
+        }
+        return selectedItems.value.some(selected => selected.id === item.id);
     };
     
     const handleItemClick = (item: SelectorItem) => {
-    if (!item.reference || (item.reference.type === 'function')) {
-        const index = selectedItems.value.findIndex(i => i.id === item.id);
-        if (index >= 0) {
-            selectedItems.value.splice(index, 1);
-        } else {
-            selectedItems.value.push(item);
+        switch (item.type) {
+            case "code":
+                const flag = !isSelected(item);
+                item.children?.map(child => {
+                    updateSelectedItems(child, true, flag);
+                });
+                updateSelectedItems(item, true, flag);
+                break;
+            case "function":
+                updateSelectedItems(item);
+                break;
+            case "files":
+                filesSelect(true);
+                break;
+            case "folders":
+                filesSelect(false);
+                break;
+            case "workspace":
+                workspaceSelect();
+                break;
         }
-      } 
-      if (!props.mutiSelect) {
-        closeSelector();
-      }
+        if (!props.mutiSelect) {
+            closeSelector();
+        }
     };
+
+    const updateSelectedItems = (item: SelectorItem, force?: boolean, flag?: boolean) => {
+        if (force) {
+            const index = selectedItems.value.findIndex(i => i.id === item.id);
+            if (flag) {
+                if (index < 0) {
+                    selectedItems.value.push(item);
+                }
+            } else {
+                if (index >= 0) {
+                    selectedItems.value.splice(index, 1);
+                }
+            }
+        } else {
+            const index = selectedItems.value.findIndex(i => i.id === item.id);
+            if (index >= 0) {
+                selectedItems.value.splice(index, 1);
+            } else {
+                selectedItems.value.push(item);
+            }
+        }
+    }
+
+    const filesSelect = (onlyFiles: boolean) => {
+        emit('selectFiles', onlyFiles);
+    };
+
+    const workspaceSelect = () => {
+        emit('selectWorkspace');
+    }
     
     const handleItemHover = (item: SelectorItem) => {
       expandedItem.value = item;
@@ -279,7 +332,10 @@ export default defineComponent({
 .selector-content {
     flex: 1;
     flex-direction: column;
+    justify-content: space-between;
+    overflow-x: hidden;
     overflow-y: auto;
+    max-height: 600px;
     padding: 0px 10px 10px 10px;
 }
 
@@ -290,6 +346,7 @@ export default defineComponent({
     cursor: pointer;
     margin: 3px 0;
     border-radius: 5px;
+    width: 100%;
 }
 .selector-item:hover {
     background-color: var(--vscode-list-hoverBackground);
@@ -305,14 +362,19 @@ export default defineComponent({
     align-items: center;
     flex: 1;
     padding: 5px 8px;
+    width: calc(100% - 16px);
 }
 .item-content-left {
     display: flex;
     align-items: center;
+    width: 50%;
 }
 .item-content-right {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    white-space: nowrap;
+    width: 50%;
 }
 .item-icon {
     margin-right: 3px;
@@ -325,6 +387,8 @@ export default defineComponent({
 .item-name {
     font-size: 14px;
     line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .item-tag {
@@ -332,6 +396,8 @@ export default defineComponent({
     padding: 1px 2px;
     border-radius: 4px;
     display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .item-indicators {
@@ -352,7 +418,6 @@ export default defineComponent({
     background-color: var(--vscode-editor-background);
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    width: 320px;
     z-index: 10;
     padding: 4px 0;
 }

@@ -92,6 +92,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'selectModel':
                     await this.selectModel(data.id);
                     break;
+                case 'showReferenceOptions':
+                    await this.showReferenceOptions(data);
+                    break;
+                case 'selectFiles':
+                    await this.selectFiles(data);
+                    break;
+                case 'selectWorkspace':
+                    await this.selectWorkspace();
+                    break;
                 case 'sendMessage':
                     await this.sendMessage(data.content, data.references);
                     break;
@@ -160,7 +169,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             isDark: theme === vscode.ColorThemeKind.Dark,
             modelInfos: this.getModelInfos(),
             selectedModel: await this.modelOperator.getSelectedModel(this.allModelInfos),
-            referenceOptions: await this.referenceOperator.getOptions(),
+            referenceOptions: await this.referenceOperator.getOptions(undefined),
             currentSession: this.currentSession
         }
         this.updateWebview('initSession', data);
@@ -176,6 +185,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             selectedModel: await this.modelOperator.getSelectedModel(this.allModelInfos)
         }
         this.updateWebview('selectModel', data);
+    }
+
+    public async showReferenceOptions(data: object | undefined) {
+        const result = {
+            referenceOptions: await this.referenceOperator.getOptions(data)
+        }
+        this.updateWebview('showReferenceOptions', result);
+    }
+
+    private async selectFiles(data: any) {
+        const result = {
+            selectFiles: await this.referenceOperator.selectFiles(data.onlyFiles)
+        }
+        this.updateWebview('selectFiles', result);
+    }
+
+    private async selectWorkspace() {
+        const result = {
+            selectWorkspace: await this.referenceOperator.selectWorkspace()
+        }
+        this.updateWebview('selectWorkspace', result);
     }
 
     private async sendMessage(content: string, references: any[]) {

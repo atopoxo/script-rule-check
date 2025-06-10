@@ -36,6 +36,7 @@ export interface SelectorItemTag {
 }
 
 export interface SelectorItem {
+  type: string;
   id: string | number;
   name: string;
   icon?: string;

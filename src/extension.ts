@@ -225,6 +225,11 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
         }),
+        vscode.window.onDidChangeActiveTextEditor(editor => {
+            if (editor) {
+                chatViewProvider.showReferenceOptions(undefined);
+            }
+        }),
         vscode.commands.registerCommand('extension.chat.createSession', async () => {
             await chatViewProvider.createSession();
         }),

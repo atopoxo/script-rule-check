@@ -38,16 +38,19 @@
         ></textarea>
         <div class="input-functions">
           <div class="input-functions-left">
-            <button class="icon-button" @click="selectReference">#</button>
+            <button class="icon-button" @click="showReferenceOptions">#</button>
             <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector" ref="referenceSelector"
               title="上下文"
-              :width="320"
+              :width="460"
               :isDark = isDark
               :items="referenceOptions"
               :mutiSelect="true"
               :showChoice="true"
+              :selectedItems="referenceItems"
               @close="handleReferenceSelectorClose"
               @select="handleReferenceSelect"
+              @selectFiles="handleReferenceSelectFiles"
+              @selectWorkspace="handleReferenceSelectWorkspace"
             />
             <div class="ref-tooltip">选择上下文</div>
           </div>
@@ -182,6 +185,7 @@ export default defineComponent({
     const getModels = (modelInfos: ModelInfo[]): SelectorItem[] => {
       const selectTagfontSize = "9px";
       return modelInfos.map((item) => ({
+        type: 'model',
         id: item.id,
         name: item.name,
         tag: {
@@ -192,7 +196,8 @@ export default defineComponent({
       }));
     };
 
-    const selectReference = () => {
+    const showReferenceOptions = () => {
+      vscode.postMessage({ type: 'showReferenceOptions' });
       showReferenceSelector.value = showReferenceSelector.value ? false : true;
     }
 
@@ -203,10 +208,19 @@ export default defineComponent({
       referenceItems.value = selected;
     };
 
+    const handleReferenceSelectFiles = (onlyFiles: boolean) => {
+      vscode.postMessage({ type: 'selectFiles' , data: {onlyFiles: onlyFiles}});
+    };
+
+    const handleReferenceSelectWorkspace = () => {
+      vscode.postMessage({ type: 'selectWorkspace' });
+    };
+
     const getReferenceOptions = (referenceOptions: ReferenceOption[]): SelectorItem[] => {
       const themeFolder = isDarkTheme() ? 'dark' : 'light';
       const selectTagfontSize = "9px";
       return referenceOptions.map((item) => ({
+        type: item.type,
         id: item.id,
         name: item.name,
         icon: item.icon ? `${themeFolder}/${item.icon}` : undefined,
@@ -214,6 +228,23 @@ export default defineComponent({
         reference: item.reference,
         children: (item.children && item.children.length > 0) ? getReferenceOptions(item.children) : undefined
       }));
+    };
+
+    const updateReferences  = (item: ReferenceOption) => {
+      const selectTagfontSize = "9px";
+      const newItem: SelectorItem = {
+        type: item.type,
+        id: item.id,
+        name: item.name,
+        tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+        reference: item.reference
+      }
+      const index = referenceItems.value.findIndex(existing => existing.id === newItem.id);
+      if (index !== -1) {
+        referenceItems.value[index] = newItem;
+      } else {
+        referenceItems.value.push(newItem);
+      }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -474,6 +505,15 @@ export default defineComponent({
               case 'selectModel':
                   selectedModel.value = data.selectedModel.name;
                   break;
+              case 'showReferenceOptions':
+                  referenceOptions.value = getReferenceOptions(data.referenceOptions);
+                  break;
+              case 'selectFiles':
+                  updateReferences(data.selectFiles);
+                  break;
+              case 'selectWorkspace':
+                  updateReferences(data.selectWorkspace);
+                  break;
               case 'addReference':
                   // references.value.push(message.reference);
                   break;
@@ -521,9 +561,11 @@ export default defineComponent({
       backToChat,
       showReferenceSelector,
       referenceOptions,
-      selectReference,
+      showReferenceOptions,
       handleReferenceSelectorClose,
       handleReferenceSelect,
+      handleReferenceSelectFiles,
+      handleReferenceSelectWorkspace,
       showModelSelector,
       modelOptions,
       selectedModel,

@@ -15,6 +15,13 @@
           "describe": "添加文件作为上下文"
         },
         {
+          "type": "folders",
+          "id": "folders",
+          "name": "Folders",
+          "icon": "folders.svg",
+          "describe": "添加文件夹作为上下文"
+        },
+        {
           "type": "workspace",
           "id": "workspace",
           "name": "Workspace",
