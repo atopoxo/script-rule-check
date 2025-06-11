@@ -27,10 +27,9 @@ export class ReferenceOperator {
         cc: (content) => this.parseCpp(content),
         h: (content) => this.parseCpp(content),
         hpp: (content) => this.parseCpp(content),
-        cpp: (content) => this.parseCpp(content),
-        vue: (content) => this.parseVue(content)
+        cpp: (content) => this.parseCpp(content)
     };
-    private filters = ['js', 'ts', 'py', 'lua', 'vue', 'c', 'cc', 'h', 'hpp', 'cpp'];
+    private filters = ['js', 'ts', 'py', 'lua', 'c', 'cc', 'h', 'hpp', 'cpp'];
     private folderBlackList = ['node_modules', 'build', '.git', '.vscode'];
 
     constructor(private extensionName: string) {
@@ -40,7 +39,10 @@ export class ReferenceOperator {
         let options = this.getOptionsFromFile();
         options.forEach(option => {
             if (option.type == 'code') {
-                option.children = this.getCodeReferenceOptions(data)
+                option.children = this.getCodeReferenceOptions(data);
+                if (option.children && option.children.length == 0) {
+                    option.children = undefined;
+                }
             }
         })
         return options;
@@ -216,38 +218,131 @@ export class ReferenceOperator {
         const ast = require('luaparse').parse(content, {locations: true, ranges: true});
         const functions: ReferenceOption[] = [];
 
-        ast.body.forEach((node: any) => {
-            if (node.type === 'FunctionDeclaration' || (node.type === 'LocalStatement' && node.init?.[0]?.type === 'FunctionExpression')) {
-                let functionName = '';
-                if (node.type === 'FunctionDeclaration') {
-                    functionName = this.getLuaFunctionName(node.identifier);
-                } else if (node.type === 'LocalStatement') {
-                    functionName = node.variables[0].name;
-                }
-                const funcBody = node.type === 'FunctionDeclaration' ? node : node.init[0];
-                const functionContent = content.substring(funcBody.range[0], funcBody.range[1]);
-                const lineStart = funcBody.loc.start.line;
-                const lineEnd = funcBody.loc.end.line;
-                functions.push({
-                    type: 'function',
-                    id: functionName,
-                    name: functionName,
-                    describe: `Lua函数: ${functionName}`,
-                    reference: { type: 'function', name: functionName, content: functionContent, range: {start:lineStart, end:lineEnd} }
-                });
-            } else if (node.type === 'CallExpression') {
-                if (node.callee.type === 'Identifier') {
-                    functions.push({
-                        type: 'call',
-                        id: node.callee.name,
-                        name: node.callee.name,
-                        describe: `调用函数: ${node.callee.name}`
-                    });
-                }
-            }
-        });
+        this.traverseLua(ast, content, functions);
+        return functions;
+    }
+
+    // parseLua(content: string): ReferenceOption[] {
+    //     const Parser = require('tree-sitter');
+    //     const parser = new Parser();
+    //     const language = require('tree-sitter-lua');
+    //     parser.setLanguage(language);
+    //     const ast = parser.parse(content);
+    //     const functions: ReferenceOption[] = [];
+        
+    //     this.traverseLua(ast.rootNode, content, functions);
+
+    //     return functions;
+    // }
+
+    parsePython(content: string): ReferenceOption[] {
+        const Parser = require('tree-sitter');
+        const parser = new Parser();
+        const language = require('tree-sitter-python');
+        parser.setLanguage(language);
+        const ast = parser.parse(content);
+        const functions: ReferenceOption[] = [];
+        
+        this.traversePython(ast.rootNode, content, functions);
 
         return functions;
+    }
+
+    parseJsTs(content: string): ReferenceOption[] {
+        const Parser = require('tree-sitter');
+        const parser = new Parser();
+        const JavaScript = require('tree-sitter-javascript');
+        const TypeScript = require('tree-sitter-typescript');
+        const isTypeScript = /\.tsx?$/.test(content) || /(^|\n)\s*@ts-/.test(content);
+        const language = isTypeScript ? TypeScript.typescript : JavaScript;
+        parser.setLanguage(language);
+        const ast = parser.parse(content);
+        const functions: ReferenceOption[] = [];
+        
+        this.traverseJavaScript(ast.rootNode, content, functions);
+
+        return functions;
+    }
+
+    parseCpp(content: string): ReferenceOption[] {
+        const Parser = require('tree-sitter');
+        const parser = new Parser();
+        const language = require('tree-sitter-cpp');
+        parser.setLanguage(language);
+        const ast = parser.parse(content);
+        const functions: ReferenceOption[] = [];
+        
+        this.traverseCpp(ast.rootNode, content, functions);
+
+        return functions;
+    }
+
+    // traverseLua(node: any, content: string, functions: ReferenceOption[]) {
+    //     if (node.type === 'function_definition') {
+    //         const nameNode = this.getLuaFunctionName(node);
+    //         const functionName = nameNode ? nameNode.text : 'anonymous';
+            
+    //         functions.push(this.createReferenceOption(node, content, node, functionName));
+    //     } else if (node.type === 'local_function') {
+    //         const nameNode = node.childForFieldName('name');
+    //         if (nameNode) {
+    //             functions.push(this.createReferenceOption(nameNode, content, node, nameNode.text));
+    //         }
+    //     } else if (node.type === 'field') {
+    //         const keyNode = node.childForFieldName('key');
+    //         const valueNode = node.childForFieldName('value');
+            
+    //         if (keyNode && valueNode && valueNode.type === 'function_definition') {
+    //             let tableName = 'table';
+    //             let parent = node.parent;
+    //             while (parent) {
+    //                 if (parent.type === 'table') {
+    //                     const tableVar = this.findTableVariableName(parent);
+    //                     if (tableVar) {
+    //                         tableName = tableVar;
+    //                         break;
+    //                     }
+    //                 }
+    //                 parent = parent.parent;
+    //             }
+                
+    //             const functionName = `${tableName}.${keyNode.text}`;
+    //             functions.push(this.createReferenceOption(valueNode, content, valueNode, functionName));
+    //         }
+    //     }
+    //     for (let i = 0; i < node.childCount; i++) {
+    //         this.traverseLua(node.child(i), content, functions);
+    //     }
+    // }
+
+    traverseLua(node: any, content: string, functions: ReferenceOption[]) {
+        if (node.type === 'FunctionDeclaration') {
+            const functionName = this.getLuaFunctionName(node.identifier);
+            const functionContent = content.substring(node.range[0], node.range[1]);
+            functions.push(this.createReferenceOptionForLua(node, functionName, functionContent));
+        } else if (node.type === 'LocalStatement' && node.init && node.init[0]?.type === 'FunctionExpression') {
+            const functionName = node.variables[0].name;
+            const funcBody = node.init[0];
+            const functionContent = content.substring(funcBody.range[0], funcBody.range[1]);
+            functions.push(this.createReferenceOptionForLua(funcBody, functionName, functionContent));
+        } else if (node.type === 'AssignmentStatement' && node.init[0]?.type === 'FunctionExpression') {
+            const functionName = this.getLuaFunctionName(node.variables[0]);
+            const funcBody = node.init[0];
+            const functionContent = content.substring(funcBody.range[0], funcBody.range[1]);
+            functions.push(this.createReferenceOptionForLua(funcBody, functionName, functionContent));
+        }
+        if (node.body) {
+            node.body.forEach((childNode: any) => this.traverseLua(childNode, content, functions));
+        }
+        if (node.expression) {
+            this.traverseLua(node.expression, content, functions);
+        }
+        if (node.init && Array.isArray(node.init)) {
+            node.init.forEach((childNode: any) => this.traverseLua(childNode, content, functions));
+        }
+        if (node.arguments) {
+            node.arguments.forEach((childNode: any) => this.traverseLua(childNode, content, functions));
+        }
     }
 
     getLuaFunctionName(identifier: any): string {
@@ -260,122 +355,332 @@ export class ReferenceOperator {
         }
     }
 
-    parsePython(content: string): ReferenceOption[] {
-        const ast = require('acorn').parse(content, { ecmaVersion: 2020 });
-        const functions: ReferenceOption[] = [];
-
-        require('acorn-walk').simple(ast, {
-            FunctionDef(node: any) {
-                functions.push({
-                    type: 'function',
-                    id: node.name,
-                    name: node.name,
-                    describe: `Python函数: ${node.name}`
-                });
-            },
-            Call(node: any) {
-                if (node.callee.type === 'Name') {
-                    functions.push({
-                        type: 'call',
-                        id: node.callee.name,
-                        name: node.callee.name,
-                        describe: `调用函数: ${node.callee.name}`
-                    });
+    createReferenceOptionForLua(node: any, functionName: string, functionContent: string): ReferenceOption {
+        return {
+            type: 'function',
+            id: functionName,
+            name: functionName,
+            describe: `函数: ${functionName}`,
+            reference: {
+                type: 'function',
+                name: functionName,
+                content: functionContent,
+                range: {
+                    start: node.loc.start.line,
+                    end: node.loc.end.line
                 }
             }
-        });
-
-        return functions;
+        }
     }
 
-    parseJsTs(content: string): ReferenceOption[] {
-        const ast = require('esprima').parseScript(content, { range: true });
-        const functions: ReferenceOption[] = [];
+    // getLuaFunctionName(node: any): any | null {
+    //     const prefixNode = node.childForFieldName('prefix');
+    //     const nameNode = node.childForFieldName('name');
+        
+    //     if (prefixNode && nameNode) {
+    //         return this.getDotFunctionName(prefixNode, nameNode);
+    //     } else if (nameNode) {
+    //         return nameNode;
+    //     }
+    //     return null;
+    // }
 
-        require('estraverse').traverse(ast, {
-            enter(node: any) {
-                if (node.type === 'FunctionDeclaration') {
-                    functions.push({
-                        type: 'function',
-                        id: node.id.name,
-                        name: node.id.name,
-                        describe: `JS/TS函数: ${node.id.name}`,
-                        reference: {
-                            type: 'function',
-                            name: node.id.name,
-                            content: content.substring(node.range[0], node.range[1]),
-                            range: { start: node.range[0] + 1, end: node.range[1] + 1 }
+    // getDotFunctionName(prefixNode: any, nameNode: any): any {
+    //     const prefix = prefixNode.type === 'identifier' ? prefixNode.text : 
+    //                 (prefixNode.type === 'field_expression' ? 
+    //                 this.getDotFunctionName(prefixNode.childForFieldName('prefix'), 
+    //                 prefixNode.childForFieldName('name')) : 
+    //                 prefixNode.text);
+        
+    //     return {
+    //         text: `${prefix}.${nameNode.text}`,
+    //         startIndex: prefixNode.startIndex,
+    //         endIndex: nameNode.endIndex
+    //     };
+    // }
+
+    // findTableVariableName(tableNode: any): string | null {
+    //     let parent = tableNode.parent;
+    //     while (parent) {
+    //         if (parent.type === 'assignment_statement') {
+    //             const variableList = parent.childForFieldName('left');
+    //             if (variableList && variableList.type === 'variable_list') {
+    //                 const firstVar = variableList.child(0);
+    //                 if (firstVar && firstVar.type === 'identifier') {
+    //                     return firstVar.text;
+    //                 }
+    //             }
+    //         }
+    //         parent = parent.parent;
+    //     }
+    //     return null;
+    // }
+
+    traversePython(node: any, content: string, functions: ReferenceOption[]) {
+        if (node.type === 'function_definition') {
+            if (!this.isInsideClass(node)) {
+                const nameNode = node.childForFieldName('name');
+                if (nameNode) {
+                    const referenceOption = this.createReferenceOption(nameNode, content, node);
+                    functions.push(referenceOption);
+                }
+            }
+        } else if (node.type === 'lambda') {
+            const referenceOption = this.createReferenceOption(node, content);
+            functions.push(referenceOption);
+        } else if (node.type === 'class_definition') {
+            const classNameNode = node.childForFieldName('name');
+            if (classNameNode) {
+                const className = classNameNode.text;
+                const classBody = node.childForFieldName('body');
+                if (classBody) {
+                    for (let i = 0; i < classBody.childCount; i++) {
+                        const child = classBody.child(i);
+                        if (child.type === 'function_definition') {
+                            const methodNameNode = child.childForFieldName('name');
+                            if (methodNameNode) {
+                                const fullMethodName = `${className}.${methodNameNode.text}`;
+                                functions.push(this.createReferenceOption(
+                                    methodNameNode, 
+                                    content, 
+                                    child,
+                                    fullMethodName
+                                ));
+                            }
                         }
-                    });
-                } else if (node.type === 'CallExpression') {
-                    if (node.callee.type === 'Identifier') {
-                        functions.push({
-                            type: 'call',
-                            id: node.callee.name,
-                            name: node.callee.name,
-                            describe: `调用函数: ${node.callee.name}`
-                        });
                     }
                 }
             }
-        });
-
-        return functions;
+        }
+        if (node.type !== 'class_definition') {
+            for (let i = 0; i < node.childCount; i++) {
+                this.traversePython(node.child(i), content, functions);
+            }
+        }
     }
 
-    parseCpp(content: string): ReferenceOption[] {
-        const lines = content.split('\n');
-        const functions: ReferenceOption[] = [];
-
-        lines.forEach((line, index) => {
-            const funcDef = line.match(/(\w+)\s+(\w+)\s*$.*$\s*{?/);
-            const funcCall = line.match(/(\w+)\s*\(/g);
-
-            if (funcDef) {
-                functions.push({
-                    type: 'function',
-                    id: funcDef[2],
-                    name: funcDef[2],
-                    describe: `C/C++函数: ${funcDef[2]}`
-                });
+    traverseJavaScript(node: any, content: string, functions: ReferenceOption[]) {
+        if (node.type === 'function_declaration') {
+            const nameNode = node.childForFieldName('name');
+            if (nameNode) {
+                functions.push(this.createReferenceOption(nameNode, content, node));
             }
-
-            if (funcCall) {
-                funcCall.forEach((match: string) => {
-                    const name = match.replace(/\s*\(/, '');
-                    functions.push({
-                        type: 'call',
-                        id: name,
-                        name: name,
-                        describe: `调用函数: ${name}`
-                    });
-                });
+        } else if (node.type === 'arrow_function') {
+            const functionName = this.getArrowFunctionName(node) || 'anonymous';
+            functions.push(this.createReferenceOption(node, content, node, functionName));
+        } else if (node.type === 'class_declaration') {
+            const classNameNode = node.childForFieldName('name');
+            if (classNameNode) {
+                const className = classNameNode.text;
+                const classBody = node.childForFieldName('body');
+                if (classBody) {
+                    for (let i = 0; i < classBody.childCount; i++) {
+                        const child = classBody.child(i);
+                        if (child.type === 'method_definition') {
+                            const methodNameNode = child.childForFieldName('name');
+                            if (methodNameNode) {
+                                const methodName = methodNameNode.text;
+                                const fullMethodName = `${className}.${methodName}`;
+                                functions.push(this.createReferenceOption(methodNameNode, content, child, fullMethodName));
+                            }
+                        } else if (child.type === 'public_field_definition') {
+                            const fieldNameNode = child.childForFieldName('name');
+                            const valueNode = child.childForFieldName('value');
+                            
+                            if (fieldNameNode && valueNode && valueNode.type === 'arrow_function') {
+                                const fieldName = fieldNameNode.text;
+                                const fullName = `${className}.${fieldName}`;
+                                functions.push(this.createReferenceOption(valueNode, content, valueNode, fullName));
+                            }
+                        }
+                    }
+                }
             }
-        });
-
-        return functions;
+        } else if (node.type === 'function' || node.type === 'generator_function') {
+            const nameNode = node.childForFieldName('name');
+            const functionName = nameNode ? nameNode.text : this.getFunctionExpressionName(node) || 'anonymous';
+            
+            functions.push(this.createReferenceOption(node, content, node, functionName));
+        }
+        
+        for (let i = 0; i < node.childCount; i++) {
+            this.traverseJavaScript(node.child(i), content, functions);
+        }
     }
 
-    parseVue(content: string): ReferenceOption[] {
-        const ast = require('vue-template-compiler').parseComponent(content);
-        const functions: ReferenceOption[] = [];
-
-        ast.script?.content && require('acorn').parse(ast.script.content, {
-            ecmaVersion: 2020,
-            sourceType: 'module'
-        }).children.forEach((node: any) => {
-            if (node.type === 'FunctionDeclaration') {
-                functions.push({
-                    type: 'function',
-                    id: node.name,
-                    name: node.name,
-                    describe: `Vue方法: ${node.name}`
-                });
+    traverseCpp(node: any, content: string, functions: ReferenceOption[]) {
+        if (node.type === 'function_definition') {
+            const declarator = node.childForFieldName('declarator');
+            if (declarator) {
+                const functionNameNode = this.findFunctionNameInDeclarator(declarator);
+                if (functionNameNode) {
+                    functions.push(this.createReferenceOption(functionNameNode, content, node));
+                }
             }
-        });
-
-        return functions;
+        } else if (node.type === 'class_specifier') {
+            const classNameNode = node.childForFieldName('name');
+            if (classNameNode) {
+                const className = classNameNode.text;
+                const classBody = node.childForFieldName('body');
+                if (classBody) {
+                    for (let i = 0; i < classBody.childCount; i++) {
+                        const child = classBody.child(i);
+                        if (child.type === 'function_definition') {
+                            const declarator = child.childForFieldName('declarator');
+                            if (declarator) {
+                                const functionNameNode = this.findFunctionNameInDeclarator(declarator);
+                                if (functionNameNode) {
+                                    const fullMethodName = `${className}::${functionNameNode.text}`;
+                                    functions.push(this.createReferenceOption(functionNameNode, content, child, fullMethodName));
+                                }
+                            }
+                        } else if (child.type === 'constructor_or_destructor_definition') {
+                            const nameNode = child.childForFieldName('name');
+                            if (nameNode) {
+                                const fullName = (nameNode.text === className) 
+                                    ? `${className}::${className}` // 构造函数
+                                    : `${className}::~${className}`; // 析构函数
+                                functions.push(this.createReferenceOption(nameNode, content, child, fullName));
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (node.type === 'lambda_expression') {
+            functions.push(this.createReferenceOption(node, content, node, 'lambda'));
+        }
+        for (let i = 0; i < node.childCount; i++) {
+            this.traverseCpp(node.child(i), content, functions);
+        }
     }
+
+    isInsideClass(node: any): boolean {
+        let parent = node.parent;
+        while (parent) {
+            if (parent.type === 'class_definition') {
+                return true;
+            }
+            parent = parent.parent;
+        }
+        return false;
+    }
+
+    getArrowFunctionName(node: any): string | null {
+        if (!node.parent) {
+            return null;
+        }
+        if (node.parent.type === 'variable_declarator') {
+            const nameNode = node.parent.childForFieldName('name');
+            return nameNode?.text || null;
+        } else if (node.parent.type === 'assignment_expression') {
+            const leftNode = node.parent.childForFieldName('left');
+            return leftNode?.text || null;
+        } else if (node.parent.type === 'public_field_definition') {
+            const nameNode = node.parent.childForFieldName('name');
+            return nameNode?.text || null;
+        } else {
+            return null;
+        }
+    }
+
+    getFunctionExpressionName(node: any): string | null {
+        if (!node.parent) {
+            return null;
+        }
+        if (node.parent.type === 'variable_declarator') {
+            const nameNode = node.parent.childForFieldName('name');
+            return nameNode?.text || null;
+        } else if (node.parent.type === 'assignment_expression') {
+            const leftNode = node.parent.childForFieldName('left');
+            return leftNode?.text || null;
+        } else if (node.parent.type === 'pair') {
+            const keyNode = node.parent.childForFieldName('key');
+            return keyNode?.text || null;
+        } else {
+            return null;
+        }
+    }
+
+    findFunctionNameInDeclarator(declarator: any): any | null {
+        if (declarator.type === 'identifier') {
+            return declarator;
+        }
+        if (declarator.type === 'function_declarator') {
+            const declaratorNode = declarator.childForFieldName('declarator');
+            if (declaratorNode) {
+                return this.findFunctionNameInDeclarator(declaratorNode);
+            }
+        } else if (declarator.type === 'parenthesized_declarator') {
+            return this.findFunctionNameInDeclarator(declarator.child(1));
+        } else if (declarator.type === 'qualified_identifier') {
+            const nameNode = declarator.childForFieldName('name');
+            if (nameNode) {
+                return nameNode;
+            }
+        }
+        for (let i = 0; i < declarator.childCount; i++) {
+            const result = this.findFunctionNameInDeclarator(declarator.child(i));
+            if (result) {
+                return result;
+            }
+        }
+        
+        return null;
+    }
+
+    createReferenceOption(node: any, content: string, contentNode?: any, customName?: string): ReferenceOption {
+        const targetNode = contentNode || node;
+        let functionName = customName;
+        if (!functionName) {
+            if (node.type === 'identifier') {
+                functionName = node.text;
+            } else if (node.type === 'lambda' || 
+                   node.type === 'arrow_function' || 
+                   node.type === 'lambda_expression' ||
+                   node.type === 'function_definition' && !customName) {
+                functionName = 'anonymous';
+            } else {
+                functionName = node.text || 'unknown';
+            }
+        }
+        functionName = functionName as string;
+        return {
+            type: 'function',
+            id: functionName,
+            name: functionName,
+            describe: `函数: ${functionName}`,
+            reference: {
+                type: 'function',
+                name: functionName,
+                content: content.substring(targetNode.startIndex, targetNode.endIndex),
+                range: {
+                    start: targetNode.startPosition.row + 1,
+                    end: targetNode.endPosition.row + 1
+                }
+            }
+        };
+    }
+
+    // parseVue(content: string): ReferenceOption[] {
+    //     const ast = require('vue-template-compiler').parseComponent(content);
+    //     const functions: ReferenceOption[] = [];
+
+    //     ast.script?.content && require('acorn').parse(ast.script.content, {
+    //         ecmaVersion: 2020,
+    //         sourceType: 'module'
+    //     }).children.forEach((node: any) => {
+    //         if (node.type === 'FunctionDeclaration') {
+    //             functions.push({
+    //                 type: 'function',
+    //                 id: node.name,
+    //                 name: node.name,
+    //                 describe: `Vue方法: ${node.name}`
+    //             });
+    //         }
+    //     });
+
+    //     return functions;
+    // }
 
     getEncoding(buffer: Buffer): BufferEncoding {
         const encoding = chardet.detect(buffer) || 'gbk';
