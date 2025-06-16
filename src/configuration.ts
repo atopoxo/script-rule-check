@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import {CheckRule, ModelInfo} from './output_format'
+import { ModelInfo } from './core/ai_model/base/ai_types';
+import { CheckRule } from "./output_format"
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
@@ -148,10 +149,10 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const currentModel = this.allModelInfos.find(info => info.id === modelInfo.id);
         let key = "";
         if (currentModel) {
-            key = currentModel.key;
+            key = currentModel.apiKey;
         }
         const config = {
-            "key": key
+            "apiKey": key
         }
 
         return Object.entries(config).map(([key, value]) => {

@@ -8,15 +8,6 @@ export class CheckRule {
     ) {}
 }
 
-export class ModelInfo {
-    constructor(
-        public id: string,
-        public name: string,
-        public type: string,
-        public key: string
-    ) {}
-}
-
 export class ReferenceInfo {
     constructor(
         public type: string,

@@ -163,13 +163,19 @@ export default defineComponent({
             case "workspace":
                 workspaceSelect();
                 break;
+            default:
+                updateSelectedItems(item);
+                break;
         }
         if (!props.mutiSelect) {
-            closeSelector();
+            closeSelector(selectedItems.value);
         }
     };
 
     const updateSelectedItems = (item: SelectorItem, force?: boolean, flag?: boolean) => {
+        if (!props.mutiSelect) {
+            selectedItems.value = []
+        }
         if (force) {
             const index = selectedItems.value.findIndex(i => i.id === item.id);
             if (flag) {
@@ -204,7 +210,7 @@ export default defineComponent({
     };
     
     const handleOutsideClick = () => {
-      closeSelector();
+      closeSelector(undefined);
     };
     
     const confirmSelection = () => {
@@ -213,8 +219,12 @@ export default defineComponent({
       }
     };
     
-    const closeSelector = () => {
-        emit('close');
+    const closeSelector = (items: SelectorItem[] | undefined) => {
+        let data = undefined;
+        if (items) {
+            data = [...items]
+        }
+        emit('close', data);
     };
 
     const getIconPath = (iconPath: string) => {

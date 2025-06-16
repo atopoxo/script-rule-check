@@ -59,6 +59,7 @@
             <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector" ref="modelSelector"
               title="选择模型"
               :width="250"
+              :isDark = isDark
               :items="modelOptions"
               :mutiSelect="false"
               :showChoice="true"
@@ -153,6 +154,10 @@ export default defineComponent({
     const defaultInputContainerHeight = defaultReferenceHeight + textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
     const containerHeight = ref(defaultInputContainerHeight);
     const textareaRef = ref<HTMLTextAreaElement | null>(null);
+    // let abortController: AbortController | null = null;
+    const sessionMessages = ref<any[]>([]);
+    let aiStreamMessageBeginFlag = false;
+    let aiStreamMessage: any;
     
     const handleMenuClick = (id: string) => {
       switch (id) {
@@ -173,7 +178,10 @@ export default defineComponent({
       showModelSelector.value = showModelSelector.value? false : true;
     };
 
-    const handleModelSelectorClose = () => {
+    const handleModelSelectorClose = (items: any[] | undefined) => {
+      if (items) {
+        handleModelSelect(items);
+      }
       showModelSelector.value = false;
     }
     const handleModelSelect = (selected: any[]) => {
@@ -201,7 +209,10 @@ export default defineComponent({
       showReferenceSelector.value = showReferenceSelector.value ? false : true;
     }
 
-    const handleReferenceSelectorClose = () => {
+    const handleReferenceSelectorClose = (items: any[] | undefined) => {
+      if (items) {
+        referenceItems.value = items;
+      }
       showReferenceSelector.value = false;
     }
     const handleReferenceSelect = (selected: any[]) => { 
@@ -357,9 +368,9 @@ export default defineComponent({
       referenceItems.value = referenceItems.value.filter(item => item.id !== id)
     };
 
-    const references = () => {
-      referenceItems.value.map(item => item.reference);
-    }
+    // const references = () => {
+    //   referenceItems.value.map(item => item.reference);
+    // }
 
     // 计算属性：按日期分组的历史会话
     // const groupedSessions = computed(() => {
@@ -389,15 +400,18 @@ export default defineComponent({
 
     // 发送消息
     const sendMessage = () => {
-      if (!messageInput.value.trim()) return;
+      if (!messageInput.value.trim()) {
+        return;
+      }
       
       vscode.postMessage({
         type: 'sendMessage',
-        content: messageInput.value,
-        references: references
+        data: {
+          content: messageInput.value
+        }
+        // references: references
       });
       
-      // 清空输入和引用
       messageInput.value = '';
       // references.value = [];
 
@@ -439,6 +453,33 @@ export default defineComponent({
 
     const isDarkTheme = () => {
         return isDark.value;
+    };
+
+    const handleAIStreamStart = () => { 
+      aiStreamMessage = {role: "assistant", content: "正在等待回复..."};
+      sessionMessages.value.push(aiStreamMessage);
+      scrollToBottom();
+      aiStreamMessageBeginFlag = true;
+    };
+    const handleAIStreamChunk = async (chunk: any) => {
+      if (chunk) {
+        if (aiStreamMessageBeginFlag) {
+          aiStreamMessage.content = '';
+          aiStreamMessageBeginFlag = false;
+        }
+        aiStreamMessage.content += chunk;
+      }
+    };
+
+    const handleAIStreamEnd = () => {
+      
+    };
+
+    const scrollToBottom = () => {
+      const container = document.querySelector('.chat-container');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     };
 
     watch(() => referencesBar.value, (newVal, oldVal) => {
@@ -490,6 +531,9 @@ export default defineComponent({
             const message = event.data;
             const type = message.type;
             const data = message.data;
+            if (type === 'aiStreamChunk') {
+              handleAIStreamChunk(data.content);
+            }
             switch (type) {
               case 'initSession':
                   isDark.value = data.isDark;
@@ -516,6 +560,12 @@ export default defineComponent({
                   break;
               case 'addReference':
                   // references.value.push(message.reference);
+                  break;
+              case 'aiStreamStart':
+                  handleAIStreamStart();
+                  break;
+              case 'aiStreamEnd':
+                  handleAIStreamEnd();
                   break;
               }
         });
@@ -571,7 +621,8 @@ export default defineComponent({
       selectedModel,
       selectModel,
       handleModelSelectorClose,
-      handleModelSelect
+      handleModelSelect,
+      sessionMessages
     };
   }
 });

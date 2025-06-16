@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as os from 'os';
 import { ChatManager, ChatSession, ChatMessage, ReferenceItem } from './chat_manager';
-import {ModelInfo} from './output_format'
-import {ModelOperator} from './model_operator';
+import {AIModelMgr} from './core/ai_model/manager/ai_model_mgr';
 import {ReferenceOperator} from './reference_operator';
 
 export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -11,9 +9,9 @@ export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     constructor(
-        private context: vscode.ExtensionContext,
-        private chatManager: any
-    ) {}
+        private context: vscode.ExtensionContext
+    ) {
+    }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
         return element;
@@ -41,20 +39,17 @@ export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private view: vscode.WebviewView | undefined;
     private _extensionUri: vscode.Uri;
-    private chatManager: ChatManager;
     private currentSession: ChatSession | null = null;
     private isInHistoryView = false;
     private isWebviewReady = false;
-    private allModelInfos: ModelInfo[] = [];
 
     constructor(
         private context: vscode.ExtensionContext,
-        private chatManagerInstance: ChatManager,
-        private modelOperator: ModelOperator,
+        private chatManager: ChatManager,
+        private aiModelMgr: AIModelMgr,
         private referenceOperator: ReferenceOperator
     ) {
         this._extensionUri = context.extensionUri;
-        this.chatManager = chatManagerInstance;
         this.currentSession = this.chatManager.getCurrentSession();
     }
 
@@ -140,14 +135,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    public setModelInfos(modelInfos: ModelInfo[]) {
-        this.allModelInfos = modelInfos;
-    }
-
-    private getModelInfos(): ModelInfo[] { 
-        return this.allModelInfos;
-    }
-
     public updateWebview(type: string, data: any) {
         if (this.view && this.isWebviewReady) {
             try {
@@ -167,8 +154,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
         const data = {
             isDark: theme === vscode.ColorThemeKind.Dark,
-            modelInfos: this.getModelInfos(),
-            selectedModel: await this.modelOperator.getSelectedModel(this.allModelInfos),
+            modelInfos: this.aiModelMgr.getModelInfos(),
+            selectedModel: await this.aiModelMgr.getSelectedModel(),
             referenceOptions: await this.referenceOperator.getOptions(undefined),
             currentSession: this.currentSession
         }
@@ -180,9 +167,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     public async selectModel(id: string) {
-        await this.modelOperator.setSelectedModel(this.allModelInfos, id);
+        await this.aiModelMgr.setSelectedModel(id, this.chatManager.getUserID());
         const data = {
-            selectedModel: await this.modelOperator.getSelectedModel(this.allModelInfos)
+            selectedModel: await this.aiModelMgr.getSelectedModel()
         }
         this.updateWebview('selectModel', data);
     }
@@ -208,53 +195,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('selectWorkspace', result);
     }
 
-    private async sendMessage(content: string, references: any[]) {
+    private async sendMessage(query: string, references: any[]) {
         if (!this.currentSession) {
-            await this.createSession();
+            return;
         }
 
-        if (this.currentSession) {
-            // 添加用户消息
-            const userMessage: ChatMessage = {
-                role: 'user',
-                content,
-                timestamp: Date.now(),
-                references: references.map((ref, index) => ({
-                    type: ref.type,
-                    path: ref.path,
-                    name: ref.name,
-                    content: ref.content
-                }))
-            };
-
-            await this.chatManager.addMessageToSession(userMessage);
-            this.updateWebview('sendMessage', {});
-
-            // 模拟AI响应
-            const thinkingMessage: ChatMessage = {
-                role: 'assistant',
-                content: '思考中...',
-                timestamp: Date.now()
-            };
-            await this.chatManager.addMessageToSession(thinkingMessage);
-            this.updateWebview('sendMessage', {});
-
-            // 延迟后生成响应
-            setTimeout(async () => {
-                if (this.currentSession) {
-                    // 移除"思考中..."消息
-                    this.currentSession.messages.pop();
-                    
-                    const aiResponse: ChatMessage = {
-                        role: 'assistant',
-                        content: `这是对您消息的响应:\n\n"${content}"\n\n我已经处理了您的请求。`,
-                        timestamp: Date.now()
-                    };
-                    
-                    await this.chatManager.addMessageToSession(aiResponse);
-                    this.updateWebview('sendMessage', {});
+        try {
+            if (this.view && this.isWebviewReady) {
+                const port = this.view.webview;
+                const streamGenerator = await this.chatManager.chatStream(query, false, false);
+                port.postMessage({
+                    type: 'aiStreamStart'
+                });
+                for await (const chunk of streamGenerator) {
+                    port.postMessage({
+                        type: 'aiStreamChunk',
+                        data: {content: chunk}
+                    });
                 }
-            }, 2000);
+                port.postMessage({
+                    type: 'aiStreamEnd'
+                });
+            }
+        } catch (error: any) {
+            console.error('流式输出错误:', error);
         }
     }
 

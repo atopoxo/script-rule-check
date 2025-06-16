@@ -23,7 +23,7 @@
                 "<node_internals>/**"
             ],
             "env": {
-                "VSCODE_WEBVIEW_DEBUG": "true"  // 启用 Webview 调试
+                "VSCODE_WEBVIEW_DEBUG": "true",  // 启用 Webview 调试
             }
 		},
         {

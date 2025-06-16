@@ -1,16 +1,52 @@
 {
     "models": [
         {
-            "id": "deepseek-v3",
-            "name": "deepseek-v3",
+            "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
+            "id": "online/volcengine-deepseek-chat",
+            "platform": "online",
+            "codeName": "deepseek",
+            "modelName": "volcengine-deepseek-v3",
+            "name": "volcengine-deepseek-chat",
             "type": "快速响应",
-            "key": "sk-deepseek-v3-2025-06-06"
+            "temperature": 1,
+            "maxTokens": 8192,
+            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
         },
         {
-            "id": "deepseek-r1",
-            "name": "deepseek-r1",
+            "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
+            "id": "online/volcengine-deepseek-reasoner",
+            "platform": "online",
+            "codeName": "deepseek",
+            "modelName": "volcengine-deepseek-reasoner",
+            "name": "volcengine-deepseek-reasoner",
             "type": "深度思考",
-            "key": "sk-deepseek-r1-2023-07-01"
+            "temperature": 1,
+            "maxTokens": 8192,
+            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
+        },
+        {
+            "url": "https://api.deepseek.com/v1",
+            "id": "online/deepseek-chat",
+            "platform": "online",
+            "codeName": "deepseek",
+            "modelName": "deepseek-chat",
+            "name": "deepseek-chat",
+            "type": "快速响应",
+            "temperature": 1,
+            "maxTokens": 8192,
+            "apiKey": "sk-89f8a4dba1c84888a237ba4b7f61e9b3"
+        },
+        {
+            "url": "https://api.deepseek.com/v1",
+            "id": "online/deepseek-reasoner",
+            "platform": "online",
+            "codeName": "deepseek",
+            "modelName": "deepseek-reasoner",
+            "name": "deepseek-reasoner",
+            "type": "深度思考",
+            "temperature": 1,
+            "maxTokens": 8192,
+            "apiKey": "sk-89f8a4dba1c84888a237ba4b7f61e9b3"
         }
     ]
 }

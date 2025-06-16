@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { Message, InputData } from './core/ai_model/base/ai_types';
+import { Storage } from './core/storage/storage';
+import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 
 export interface ReferenceItem {
     type: 'code' | 'file' | 'folder';
@@ -27,14 +30,31 @@ export class ChatManager {
     private static instance: ChatManager;
     private context: vscode.ExtensionContext;
     private currentSession: ChatSession | null = null;
+    private aiModelMgr: AIModelMgr;
+    private userID: string = "";
+    private storage: Storage;
+    private defaultModelID: string = "";
+    public ready: Promise<void>;
 
-    private constructor(context: vscode.ExtensionContext) {
+    private constructor(context: vscode.ExtensionContext, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr) {
         this.context = context;
+        this.userID = userID;
+        this.defaultModelID = defaultModelID;
+        this.storage = storage;
+        this.aiModelMgr = aiModelMgr;
+        this.ready = this.storage.setAIInstanceModelID(userID, "chat", defaultModelID).then(() => {
+        }).catch(err => {
+            throw err;
+        });
     }
 
-    public static getInstance(context: vscode.ExtensionContext): ChatManager {
+    public getUserID(): string {
+        return this.userID;
+    }
+
+    public static getInstance(context: vscode.ExtensionContext, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr): ChatManager {
         if (!ChatManager.instance) {
-            ChatManager.instance = new ChatManager(context);
+            ChatManager.instance = new ChatManager(context, userID, storage, defaultModelID, aiModelMgr);
         }
         return ChatManager.instance;
     }
@@ -119,6 +139,80 @@ export class ChatManager {
             if (this.currentSession?.id === sessionId) {
                 this.currentSession.title = title;
             }
+        }
+    }
+
+    public async chatStream(query: string, useKnowledge: boolean, toolsOn: boolean) {
+        const history = await this.get_messages(query, this.userID);
+        let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
+        modelID = this.getValidModelID(modelID);
+
+        const data: InputData = {
+            userID: this.userID,
+            message: history,
+            toolsOn: toolsOn,
+            useKnowledge: useKnowledge,
+            modelConfig: this.aiModelMgr.getModelConfig(modelID),
+            cache: await this.storage.getAIInstanceCache(this.userID, 'chat')
+        };
+        return this.aiModelMgr.chatStream(modelID, data);
+    }
+
+    private async get_messages(query: string, userID: string): Promise<Message[]> {
+        const message: Message = { role: 'user', content: query };
+        await this.storage.updateUserInfo(userID, message);
+        const history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
+        await this.storage.addAIChatContext(userID);
+        let haveChatContext = await this.storage.getAIChatContext(userID);
+        const num = Math.min(history.length, haveChatContext);
+        
+        let validNum = 0;
+        let validStart = 0;
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].role === 'user') {
+                validStart = i;
+                validNum++;
+            }
+            if (validNum >= num) break;
+        }
+        const messageContext = history.slice(validStart);
+        this.insertDatetime(messageContext, 'user');
+        
+        console.info(`len(message_context): ${messageContext.length} total: ${
+            messageContext.reduce((sum, msg) => sum + msg.content.length, 0)
+        }`);
+        
+        return messageContext;
+    }
+
+    private insertDatetime(messages: Message[], user: string): void {
+        const send_time = new Date().toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '-');
+        const system_tips: Message = {role: "system", content: `\n当前时间为：${send_time}\n`};
+
+        if (messages.length > 0) {
+            if (messages[0].role !== user) {
+                messages[0].content += system_tips.content;
+            } else {
+                messages.unshift(system_tips);
+            }
+        } else {
+            messages.push(system_tips);
+        }
+    }
+
+    private getValidModelID(id?: string | undefined): string {
+        if (id) {
+            return id;
+        } else {
+            return this.defaultModelID;
         }
     }
 

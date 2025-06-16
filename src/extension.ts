@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -5,18 +6,20 @@ import * as fs from 'fs';
 // const { CookieJar } = require('tough-cookie');
 // const { JSDOM } = require('jsdom');
 const iconv = require('iconv-lite');
-import {RuleOperator, RuleResultProvider} from './rule_check';
-import {ModelOperator} from './model_operator';
+import { RuleOperator, RuleResultProvider } from './rule_check';
 import { ReferenceOperator } from './reference_operator';
-import {ConfigurationProvider} from './configuration';
-import {CheckRule} from './output_format';
+import { ConfigurationProvider } from './configuration';
+import { CheckRule } from './output_format';
 import { ChatViewProvider, ChatViewTreeDataProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
+import { Storage } from './core/storage/storage';
+import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ReferenceSystem } from './reference_system';
 import { ModelSelector } from './model_selector';
 
+const extensionName = 'script-rule-check';
+const publisher = 'shaoyi';
 let ruleOperator: RuleOperator;
-let modelOperator: ModelOperator;
 let referenceOperator: ReferenceOperator
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
@@ -25,8 +28,9 @@ let allCheckRules: CheckRule[] = [];
 let chatManager: ChatManager;
 let chatViewProvider: ChatViewProvider;
 let registered = false;
-const extensionName = 'script-rule-check';
-const publisher = 'shaoyi';
+const userID = "admin"
+let storage: Storage;
+let aiModelMgr: AIModelMgr;
 // const EXTENSION_ID = `${publisher}.${extensionName}`;
 // const VERSION_CHECK_URL = `https://marketplace.visualstudio.com/manage/publishers/${publisher}`;
 
@@ -41,13 +45,22 @@ const publisher = 'shaoyi';
 //     assetUri: string;
 //     fallbackAssetUri: string;
 // }
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     console.log(`${extensionName} actived!`);
     
+    // console.log("运行环境信息:");
+    // console.log("Node.js 版本:", process.version);
+    // console.log("NODE_MODULE_VERSION:", process.versions.modules);
+    // console.log("执行文件路径:", process.execPath);
+
     process.env.NODE_ENV = context.extensionMode === vscode.ExtensionMode.Development 
     ? 'development' 
     : 'production';
 
+    const storageUri = vscode.extensions.getExtension(`${publisher}.${extensionName}`)?.extensionUri as vscode.Uri;
+    const dbPath = vscode.Uri.joinPath(storageUri, 'data.db').fsPath;
+    storage = new Storage({}, userID, dbPath);
+    await storage.ready;
     customConfig = vscode.workspace.getConfiguration(extensionName);
     const configurationProvider = new ConfigurationProvider(customConfig);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
@@ -189,13 +202,15 @@ function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
 }
 
 async function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
-    chatManager = ChatManager.getInstance(context);
-    modelOperator = new ModelOperator(extensionName);
+    aiModelMgr = new AIModelMgr({}, extensionName, storage);
+    const defaultModel = await aiModelMgr.getSelectedModel();
+    const defaultModelID = defaultModel ? defaultModel.id : '';
     referenceOperator = new ReferenceOperator(extensionName);
-    chatViewProvider = new ChatViewProvider(context, chatManager, modelOperator, referenceOperator);
-    const allModelInfos = modelOperator.getAvailableModels();
-	configurationProvider.setModelInfos(allModelInfos);
-    chatViewProvider.setModelInfos(allModelInfos);
+    chatManager = ChatManager.getInstance(context, userID, storage, defaultModelID, aiModelMgr);
+    await chatManager.ready;
+    chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, referenceOperator);
+	const allModelInfos = aiModelMgr.getModelInfos();
+    configurationProvider.setModelInfos(allModelInfos);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('chatView', chatViewProvider),
         vscode.commands.registerCommand('extension.toggleModelInfo', async (modelID: string) => {
@@ -220,7 +235,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                     return;
                 }
                 (modelInfo as any)[key] = newValue;
-                modelOperator.saveModelConfig(allModelInfos);
+                aiModelMgr.saveModelConfig(allModelInfos);
                 configurationProvider.refresh(customConfig);
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
