@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ReferenceItem } from './chat_manager';
+import { ReferenceItem } from './core/ai_model/base/ai_types';
 
 export class ReferenceSystem {
     static async addCodeReference(): Promise<ReferenceItem | undefined> {

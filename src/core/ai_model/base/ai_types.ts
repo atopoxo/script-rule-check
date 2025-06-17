@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import type { ToolCall } from '../../tools/tools_mgr';
 
 export class ModelInfo {
@@ -15,24 +16,19 @@ export class ModelInfo {
     ) {}
 }
 
+export interface ReferenceItem {
+    type: 'code' | 'file' | 'folder';
+    path: string;
+    name: string;
+    content?: string;
+    range?: vscode.Range;
+}
+
 export interface Message {
     role: string;
     content: string;
-}
-
-export interface ContentMap {
-    think_content: string;
-    conclusion_content: string;
-}
-
-export interface ToolTip {
-    tools_usage: string;
-    tools_describe: string;
-}
-
-export interface Delta {
-    reasoning?: string;
-    conclusion?: string;
+    timestamp: number;
+    references?: ReferenceItem[];
 }
 
 export interface Cache {
@@ -48,11 +44,46 @@ export interface Cache {
     };
 }
 
+export interface Session {
+    sessionId: string;
+    lastModifiedTimestamp: number;
+    name: string;
+    round: number;
+    history: Message[];
+    cache: Cache;
+}
+
+export interface AIInstance {
+    sessions: Record<string, Session>;
+    selectedSessionId: string;
+    modelId?: string;
+}
+
+export interface UserInfo {
+    aiConfig: Record<string, any>;
+    aiInstance: Record<string, AIInstance>;
+}
+
 export interface InputData {
-    userID?: string;
     message: Message[];
+    cache: Cache;
+    userID?: string;
     toolsOn?: boolean;
     useKnowledge?: boolean;
     modelConfig?: any;
-    cache: Cache;
+}
+
+export interface ContentMap {
+    think_content: string;
+    conclusion_content: string;
+}
+
+export interface ToolTip {
+    tools_usage: string;
+    tools_describe: string;
+}
+
+export interface Delta {
+    reasoning?: string;
+    conclusion?: string;
 }

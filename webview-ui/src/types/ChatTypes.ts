@@ -8,24 +8,23 @@ export interface Reference {
   range?: any;
 }
 
-export interface ChatMessage {
-  role: 'user' | 'assistant';
+export interface Message {
+  role: string;
   content: string;
   timestamp: number;
   references?: Reference[];
 }
 
-export interface ChatSession {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  lastActive: number;
-  model?: string;
+export interface Session {
+  sessionId: string;
+  lastModifiedTimestamp: number;
+  name: string;
+  history: Message[];
 }
 
 declare global {
-  type IChatMessage = ChatMessage;
-  type IChatSession = ChatSession;
+  type IChatMessage = Message;
+  type IChatSession = Session;
   type IReference = Reference;
 }
 
@@ -56,7 +55,7 @@ export interface SessionRecord {
   title: string;
   icon?: string;
   tag?: SelectorItemTag;
-  messages: ChatMessage[];
+  messages: Message[];
 }
 
 export interface SessionRecordList {

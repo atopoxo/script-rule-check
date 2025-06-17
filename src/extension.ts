@@ -245,14 +245,8 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 chatViewProvider.showReferenceOptions(undefined);
             }
         }),
-        vscode.commands.registerCommand('extension.chat.createSession', async () => {
-            await chatViewProvider.createSession();
-        }),
         vscode.commands.registerCommand('extension.chat.showHistory', () => {
             chatViewProvider.showHistory();
-        }),
-        vscode.commands.registerCommand('extension.chat.deleteHistorySession', async (sessionId: string) => {
-            await chatViewProvider.deleteSession(sessionId);
         }),
         vscode.commands.registerCommand('extension.chat.sendMessage', async () => {
             // 发送消息实现

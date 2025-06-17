@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ChatManager, ChatSession, ChatMessage, ReferenceItem } from './chat_manager';
-import {AIModelMgr} from './core/ai_model/manager/ai_model_mgr';
-import {ReferenceOperator} from './reference_operator';
+import { Session, ReferenceItem } from './core/ai_model/base/ai_types';
+import { ChatManager } from './chat_manager';
+import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
+import { ReferenceOperator } from './reference_operator';
 
 export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -39,9 +40,9 @@ export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private view: vscode.WebviewView | undefined;
     private _extensionUri: vscode.Uri;
-    private currentSession: ChatSession | null = null;
     private isInHistoryView = false;
     private isWebviewReady = false;
+    private aiStreamTransfering = false;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -50,7 +51,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         private referenceOperator: ReferenceOperator
     ) {
         this._extensionUri = context.extensionUri;
-        this.currentSession = this.chatManager.getCurrentSession();
     }
 
     public resolveWebviewView(
@@ -99,17 +99,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'sendMessage':
                     await this.sendMessage(data.content, data.references);
                     break;
-                case 'createSession':
-                    await this.createSession();
+                case 'pauseAIStreamTransfer':
+                    this.pauseAIStreamTransfer();
                     break;
                 case 'showHistory':
                     this.showHistory();
                     break;
-                case 'loadSession':
-                    await this.loadSession(data.sessionId);
+                case 'selectSession':
+                    await this.selectSession(data.sessionId);
                     break;
-                case 'deleteSession':
-                    await this.deleteSession(data.sessionId);
+                case 'addSession':
+                    await this.addSession();
+                    break;
+                case 'removeSession':
+                    await this.removeSession(data.sessionId);
                     break;
                 case 'backToChat':
                     this.backToChat();
@@ -120,8 +123,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'removeReference':
                     await this.removeReference(data.refIndex);
                     break;
-                case 'updateTitle':
-                    await this.updateSessionTitle(data.title);
+                case 'setSessionName':
+                    await this.setSessionName(data.sessionId, data.sessionName);
                     break;
             }
         });
@@ -149,17 +152,37 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async initSession(theme: vscode.ColorThemeKind) {
-        if (!this.currentSession) {
-            this.currentSession = await this.chatManager.createSession();
+        let selectedSession = await this.chatManager.getSelectedSession('chat');
+        if (!selectedSession) {
+            selectedSession = await this.chatManager.addSession('chat') as Session;
         }
         const data = {
             isDark: theme === vscode.ColorThemeKind.Dark,
             modelInfos: this.aiModelMgr.getModelInfos(),
             selectedModel: await this.aiModelMgr.getSelectedModel(),
             referenceOptions: await this.referenceOperator.getOptions(undefined),
-            currentSession: this.currentSession
+            selectedSession: selectedSession
         }
         this.updateWebview('initSession', data);
+    }
+
+    private async selectSession(sessionId: string) {
+        const selectedSession = await this.chatManager.selectSession('chat',sessionId);
+        this.isInHistoryView = false;
+        this.updateWebview('selectSession', {selectedSession: selectedSession});
+    }
+
+    private async addSession() {
+        const selectedSession = await this.chatManager.addSession('chat');
+        const sessionsSnapshot = await this.chatManager.getAllSessionsSnapshot('chat');
+        this.isInHistoryView = false;
+        this.updateWebview('addSession', {selectedSession: selectedSession, sessionsSnapshot: sessionsSnapshot});
+    }
+
+    private async removeSession(sessionId: string) {
+        const selectedSession = await this.chatManager.removeSession('chat', sessionId);
+        const sessionsSnapshot = await this.chatManager.getAllSessionsSnapshot('chat');
+        this.updateWebview('removeSession', {selectedSession: selectedSession, sessionsSnapshot: sessionsSnapshot});
     }
 
     private async updateTheme(theme: vscode.ColorThemeKind) {
@@ -196,50 +219,42 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async sendMessage(query: string, references: any[]) {
-        if (!this.currentSession) {
+        const currentSession = this.chatManager.getSelectedSession('chat');
+        if (!currentSession) {
             return;
         }
-
         try {
-            if (this.view && this.isWebviewReady) {
+            if (this.view && this.isWebviewReady && !this.aiStreamTransfering) {
+                this.aiStreamTransfering = true;
                 const port = this.view.webview;
                 const streamGenerator = await this.chatManager.chatStream(query, false, false);
                 port.postMessage({
-                    type: 'aiStreamStart'
+                    type: 'aiStreamStart',
+                    data: {selectedSession: await this.chatManager.getSelectedSession('chat')}
                 });
                 for await (const chunk of streamGenerator) {
+                    if (!this.aiStreamTransfering) {
+                        break;
+                    }
                     port.postMessage({
                         type: 'aiStreamChunk',
                         data: {content: chunk}
                     });
                 }
                 port.postMessage({
-                    type: 'aiStreamEnd'
+                    type: 'aiStreamEnd',
+                    data: {selectedSession: await this.chatManager.getSelectedSession('chat')}
                 });
+                this.aiStreamTransfering = false;
             }
         } catch (error: any) {
             console.error('流式输出错误:', error);
+            this.aiStreamTransfering = false;
         }
     }
 
-    async createSession() {
-        this.currentSession = await this.chatManager.createSession();
-        this.isInHistoryView = false;
-        this.updateWebview('createSession', {});
-    }
-
-    private async loadSession(sessionId: string) {
-        this.currentSession = await this.chatManager.loadSession(sessionId);
-        this.isInHistoryView = false;
-        this.updateWebview('loadSession', {});
-    }
-
-    public async deleteSession(sessionId: string) {
-        await this.chatManager.deleteSession(sessionId);
-        if (this.currentSession?.id === sessionId) {
-            this.currentSession = null;
-        }
-        this.updateWebview('deleteSession', {});
+    private pauseAIStreamTransfer() {
+        this.aiStreamTransfering = false;
     }
 
     public showHistory() {
@@ -268,21 +283,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async removeReference(refIndex: number) {
-        if (this.currentSession) {
-            const lastMessage = this.currentSession.messages[this.currentSession.messages.length - 1];
-            if (lastMessage && lastMessage.references && refIndex < lastMessage.references.length) {
-                lastMessage.references.splice(refIndex, 1);
-                await this.chatManager.saveSession(this.currentSession);
-                this.updateWebview('removeReference', {});
-            }
-        }
+        // if (this.currentSession) {
+        //     const lastMessage = this.currentSession.messages[this.currentSession.messages.length - 1];
+        //     if (lastMessage && lastMessage.references && refIndex < lastMessage.references.length) {
+        //         lastMessage.references.splice(refIndex, 1);
+        //         this.updateWebview('removeReference', {});
+        //     }
+        // }
     }
 
-    private async updateSessionTitle(title: string) {
-        if (this.currentSession) {
-            await this.chatManager.updateSessionTitle(this.currentSession.id, title);
-            this.updateWebview('updateSessionTitle', {});
-        }
+    private async setSessionName(sessionId: string, sessionName: string) {
+        const session = await this.chatManager.setSessionName('chat', sessionId, sessionName) as Session;
+        this.updateWebview('setSessionName', {sessionName: session.name});
     }
 
     public async addSelectionToChat() {
@@ -421,6 +433,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private getHtmlForWebview(webview: vscode.Webview) {
+        const theme = vscode.window.activeColorTheme;
+        const isDark = theme.kind === vscode.ColorThemeKind.Dark;
+        const highlightTheme = isDark ? 'github-dark' : 'github';
+        const highlightCss = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.context.extensionUri, 'media', `${highlightTheme}.min.css`)
+        );
+        
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static', 'main.js')
         );
@@ -440,6 +459,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <link rel="icon" type="image/svg+xml" href="./vite.svg" />
+                <link rel="stylesheet" href="${highlightCss}">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>大模型聊天窗口</title>
                 ${isDevelopment 
@@ -448,9 +468,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     : `<script type="module" crossorigin src="${scriptUri}"></script>
                        <link rel="stylesheet" crossorigin href="${styleUri}">`
                 }
+                <style>
+                    /* 重置代码块样式 */
+                    .hljs {
+                        background: var(--vscode-textCodeBlock-background) !important;
+                        padding: 1em;
+                        border-radius: 4px;
+                    }
+                    
+                    /* 防止 VS Code 覆盖代码颜色 */
+                    .hljs * {
+                        color: inherit !important;
+                        background: inherit !important;
+                    }
+                    
+                    /* 保持其他元素使用 VS Code 主题 */
+                    body {
+                        background: var(--vscode-editor-background);
+                        color: var(--vscode-editor-foreground);
+                        font-family: var(--vscode-font-family);
+                        padding: 0 16px;
+                    }
+                </style>
             </head>
             <body>
                 <div id="app"></div>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/highlight.min.js"></script>
+                <script>
+                    // 重新应用高亮确保颜色正确
+                    document.addEventListener('DOMContentLoaded', () => {
+                        hljs.highlightAll();
+                        
+                        // 监听主题变化
+                        const vscode = acquireVsCodeApi();
+                        window.addEventListener('message', event => {
+                            if (event.data.command === 'themeChanged') {
+                                // 重新加载页面或动态切换样式
+                                location.reload();
+                            }
+                        });
+                    });
+                </script>
             </body>
         </html>`;
     }

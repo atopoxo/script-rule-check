@@ -385,36 +385,36 @@ export class ReferenceOperator {
     //     return null;
     // }
 
-    // getDotFunctionName(prefixNode: any, nameNode: any): any {
-    //     const prefix = prefixNode.type === 'identifier' ? prefixNode.text : 
-    //                 (prefixNode.type === 'field_expression' ? 
-    //                 this.getDotFunctionName(prefixNode.childForFieldName('prefix'), 
-    //                 prefixNode.childForFieldName('name')) : 
-    //                 prefixNode.text);
+    getDotFunctionName(prefixNode: any, nameNode: any): any {
+        const prefix = prefixNode.type === 'identifier' ? prefixNode.text : 
+                    (prefixNode.type === 'field_expression' ? 
+                    this.getDotFunctionName(prefixNode.childForFieldName('prefix'), 
+                    prefixNode.childForFieldName('name')) : 
+                    prefixNode.text);
         
-    //     return {
-    //         text: `${prefix}.${nameNode.text}`,
-    //         startIndex: prefixNode.startIndex,
-    //         endIndex: nameNode.endIndex
-    //     };
-    // }
+        return {
+            text: `${prefix}.${nameNode.text}`,
+            startIndex: prefixNode.startIndex,
+            endIndex: nameNode.endIndex
+        };
+    }
 
-    // findTableVariableName(tableNode: any): string | null {
-    //     let parent = tableNode.parent;
-    //     while (parent) {
-    //         if (parent.type === 'assignment_statement') {
-    //             const variableList = parent.childForFieldName('left');
-    //             if (variableList && variableList.type === 'variable_list') {
-    //                 const firstVar = variableList.child(0);
-    //                 if (firstVar && firstVar.type === 'identifier') {
-    //                     return firstVar.text;
-    //                 }
-    //             }
-    //         }
-    //         parent = parent.parent;
-    //     }
-    //     return null;
-    // }
+    findTableVariableName(tableNode: any): string | null {
+        let parent = tableNode.parent;
+        while (parent) {
+            if (parent.type === 'assignment_statement') {
+                const variableList = parent.childForFieldName('left');
+                if (variableList && variableList.type === 'variable_list') {
+                    const firstVar = variableList.child(0);
+                    if (firstVar && firstVar.type === 'identifier') {
+                        return firstVar.text;
+                    }
+                }
+            }
+            parent = parent.parent;
+        }
+        return null;
+    }
 
     traversePython(node: any, content: string, functions: ReferenceOption[]) {
         if (node.type === 'function_definition') {

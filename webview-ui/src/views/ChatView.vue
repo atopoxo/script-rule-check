@@ -1,16 +1,16 @@
 <template>
   <div id="app">
-    <div v-if="session && !isInHistoryView" class="chat-container">
+    <div v-if="selectedSession && !isInHistoryView" class="chat-container">
       <div class="title-bar">
         <sy-menu-bar :isDark="isDark" :title="titleBarText" :items="menuItems" @click="handleMenuClick"></sy-menu-bar>
       </div>
       <div class="messages-container">
-        <div v-for="(msg, index) in session.messages" :key="index" :class="`message ${msg.role}`">
-          <div class="avatar">
-            <i :class="msg.role === 'user' ? 'codicon codicon-person' : 'codicon codicon-server'"></i>
+        <div v-for="(msg, index) in selectedSession.history" :key="index" :class="`message ${msg.role}`">
+          <div v-if="msg.role === 'user' || msg.role === 'assistant'" class="avatar">
+            <img :src=getRoleIconPath(msg.role) />
           </div>
           <div class="content">
-            <div class="text">{{ msg.content }}</div>
+            <message-render :content="msg.content"></message-render>
             <!-- 引用展示 -->
             <div v-if="msg.references && msg.references.length > 0" class="references">
               <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
@@ -68,8 +68,8 @@
             />
             <button class="icon-button message-send" @click="sendMessage"
               :class="{
-                'dark-theme': isDark,
-                'light-theme': !isDark
+                'ai-stream-finish': !isAIStreamTransfer,
+                'ai-stream-transfering': isAIStreamTransfer
               }"></button>
             <div class="send-tooltip">发送⏎</div>
           </div>
@@ -83,19 +83,21 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, watch, onMounted, onBeforeUnmount, ref } from 'vue';
-import type { ChatSession, SessionRecordList, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
+import { defineComponent, watch, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue';
+import type { Session, SessionRecordList, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
 import type { Window }  from '../types/GlobalTypes';
 import SyMenuBar from '../components/SyMenuBar.vue';
+import MessageRender from '../components/MessageRender.vue';
 import SySelector from '../components/SySelector.vue';
 import SyTag from '../components/SyTag.vue';
 import HistoryView from './HistoryView.vue';
+import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 
 declare const window: Window;
 
 export default defineComponent({
   components: {
-    SyMenuBar, SySelector, SyTag, HistoryView
+    SyMenuBar, MessageRender, SySelector, SyTag, HistoryView
   },
   computed: {
     themeClass() {
@@ -110,7 +112,7 @@ export default defineComponent({
       { id: 'showHistory', tooltip: '查看历史会话', icon: 'history.svg' },
       { id: 'settings', tooltip: '设置', icon:'settings.svg' },
     ]);
-    const session = ref<ChatSession | null>(null);
+    const selectedSession = ref<Session | null>(null);
     const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
@@ -154,10 +156,9 @@ export default defineComponent({
     const defaultInputContainerHeight = defaultReferenceHeight + textAreaBorder + textAreaPadding + textAreaLineHeight + defaultFunctionContainerHeight;
     const containerHeight = ref(defaultInputContainerHeight);
     const textareaRef = ref<HTMLTextAreaElement | null>(null);
-    // let abortController: AbortController | null = null;
-    const sessionMessages = ref<any[]>([]);
     let aiStreamMessageBeginFlag = false;
     let aiStreamMessage: any;
+    const isAIStreamTransfer = ref<boolean>(false)
     
     const handleMenuClick = (id: string) => {
       switch (id) {
@@ -172,6 +173,20 @@ export default defineComponent({
           // vscode.postMessage({ type: 'settings' });
           break;
       }
+    }
+
+    const getSelectedSession = (session: any): Session | null => {
+      const result = {
+        sessionId: session.sessionId,
+        lastModifiedTimestamp: session.lastModifiedTimestamp,
+        name: session.name,
+        history: session.history.map((msg: any) => reactive({ ...msg }))
+      }
+      const history = result.history;
+      if (history.length > 0 && history[0].role === 'system') {
+        result.history = history.slice(1);
+      }
+      return result;
     }
 
     const selectModel = () => {
@@ -274,7 +289,7 @@ export default defineComponent({
     const adjustTextareaHeight = async() => {
       if (!textareaRef.value) return;
       const target = textareaRef.value;
-      target.value = messageInput.value;
+      // target.value = messageInput.value;
       const scrollHeight = getScrollHeight(target);
       const contentHeight = Math.min(scrollHeight, maxTextAreaHeight);
       target.style.height = `${contentHeight}px`;
@@ -398,35 +413,59 @@ export default defineComponent({
       vscode.postMessage({ type: 'createSession' });
     };
 
-    // 发送消息
-    const sendMessage = () => {
-      if (!messageInput.value.trim()) {
-        return;
+    const getRoleIconPath = (role: string) => {
+      try {
+          let iconPath = '';
+          let relativePath = isDark.value ? 'dark' : 'light';
+          switch (role) {
+            case 'user':
+              iconPath = 'user.svg';
+              break;
+            case 'assistant':
+              iconPath = 'assistant.svg';
+              break;
+          }
+          return new URL(`${iconRoot}${relativePath}/${iconPath}`, currentModuleUrl).href;
+      } catch (error) {
+          console.error('图标加载失败:', role, error);
+          return '';
       }
-      
-      vscode.postMessage({
-        type: 'sendMessage',
-        data: {
-          content: messageInput.value
-        }
-        // references: references
-      });
-      
-      messageInput.value = '';
-      // references.value = [];
+    }
 
-      if (textareaRef.value) {
-        textareaRef.value.style.height = 'auto';
-        containerHeight.value = defaultInputContainerHeight;
+    const sendMessage = () => {
+      if (isAIStreamTransfer.value == false) {
+        if (!messageInput.value.trim()) {
+          return;
+        }
+        isAIStreamTransfer.value = true;
+        vscode.postMessage({
+          type: 'sendMessage',
+          data: {
+            content: messageInput.value
+          }
+          // references: references
+        });
+        messageInput.value = '';
+        // references.value = [];
+
+        if (textareaRef.value) {
+          textareaRef.value.style.height = 'auto';
+          containerHeight.value = defaultInputContainerHeight;
+        }
+      } else {
+        isAIStreamTransfer.value = false;
+        vscode.postMessage({
+          type: 'pauseAIStreamTransfer'
+        });
       }
     };
 
-    // 更新标题
-    const updateTitle = () => {
-      if (session.value) {
+    const setSessionName = () => {
+      if (selectedSession.value) {
         vscode.postMessage({
-          type: 'updateTitle',
-          title: session.value.title
+          type: 'setSessionName',
+          sessionId: selectedSession.value.sessionId,
+          sessionName: selectedSession.value.name
         });
       }
     };
@@ -455,9 +494,13 @@ export default defineComponent({
         return isDark.value;
     };
 
-    const handleAIStreamStart = () => { 
-      aiStreamMessage = {role: "assistant", content: "正在等待回复..."};
-      sessionMessages.value.push(aiStreamMessage);
+    const handleAIStreamStart = (data: any) => {
+      selectedSession.value = getSelectedSession(data.selectedSession);
+      aiStreamMessage = reactive({
+        role: "assistant",
+        content: "正在等待回复..."
+      });
+      selectedSession.value?.history.push(aiStreamMessage);
       scrollToBottom();
       aiStreamMessageBeginFlag = true;
     };
@@ -468,11 +511,13 @@ export default defineComponent({
           aiStreamMessageBeginFlag = false;
         }
         aiStreamMessage.content += chunk;
+        await nextTick();
       }
     };
 
-    const handleAIStreamEnd = () => {
-      
+    const handleAIStreamEnd = (data: any) => {
+      selectedSession.value = getSelectedSession(data.selectedSession);
+      isAIStreamTransfer.value = false;
     };
 
     const scrollToBottom = () => {
@@ -537,7 +582,7 @@ export default defineComponent({
             switch (type) {
               case 'initSession':
                   isDark.value = data.isDark;
-                  session.value = data.currentSession;
+                  selectedSession.value = getSelectedSession(data.selectedSession);
                   selectedModel.value = data.selectedModel.name;
                   modelOptions.value = getModels(data.modelInfos);
                   referenceOptions.value = getReferenceOptions(data.referenceOptions)
@@ -562,10 +607,10 @@ export default defineComponent({
                   // references.value.push(message.reference);
                   break;
               case 'aiStreamStart':
-                  handleAIStreamStart();
+                  handleAIStreamStart(data);
                   break;
               case 'aiStreamEnd':
-                  handleAIStreamEnd();
+                  handleAIStreamEnd(data);
                   break;
               }
         });
@@ -583,7 +628,7 @@ export default defineComponent({
       isDark,
       titleBarText,
       menuItems,
-      session,
+      selectedSession,
       referenceSelector,
       modelSelector,
       isInHistoryView,
@@ -601,10 +646,12 @@ export default defineComponent({
       getRefIcon,
       formatTime,
       createSession,
+      getRoleIconPath,
+      isAIStreamTransfer,
       sendMessage,
       addReference,
       removeReference,
-      updateTitle,
+      setSessionName,
       loadSession,
       deleteSession,
       showHistory,
@@ -621,8 +668,7 @@ export default defineComponent({
       selectedModel,
       selectModel,
       handleModelSelectorClose,
-      handleModelSelect,
-      sessionMessages
+      handleModelSelect
     };
   }
 });
@@ -717,25 +763,28 @@ export default defineComponent({
   display: flex;
   margin-bottom: 15px;
 }
-
 .message.user {
   flex-direction: row-reverse;
 }
-
+.message.assistant {
+  flex-direction: row;
+}
+.message.system {
+  flex-direction: row;
+}
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background-color: var(--vscode-activityBarBadge-background);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 10px;
+  overflow: hidden;
 }
 
 .content {
-  max-width: 70%;
-  padding: 8px 12px;
+  padding: 8px 8px;
   border-radius: 5px;
   background-color: var(--vscode-input-background);
 }
@@ -743,11 +792,6 @@ export default defineComponent({
 .message.user .content {
   background-color: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
-}
-
-.text {
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .references {
@@ -930,22 +974,19 @@ export default defineComponent({
   border-radius: 30%;
   margin: 0 0 0 5px;
 }
-.vscode-light .message-send {
+.vscode-light .message-send.ai-stream-finish {
   background-image: url('@assets/icons/light/send.svg');
 }
-.vscode-dark .message-send {
+.vscode-dark .message-send.ai-stream-finish {
   background-image: url('@assets/icons/dark/send.svg');
 }
-/* @media (prefers-color-scheme: light) {
-  .message-send {
-    background-image: url('@assets/icons/light/send.svg');
-  }
+
+.vscode-light .message-send.ai-stream-transfering {
+  background-image: url('@assets/icons/light/pause.svg');
 }
-@media (prefers-color-scheme: dark) {
-  .message-send {
-    background-image: url('@assets/icons/dark/send.svg');
-  }
-} */
+.vscode-dark .message-send.ai-stream-transfering {
+  background-image: url('@assets/icons/dark/pause.svg');
+}
 .model-selector {
   bottom: 100%;
   right: 0;

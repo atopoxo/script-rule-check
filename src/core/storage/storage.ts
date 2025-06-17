@@ -8,31 +8,7 @@ import * as fs from 'fs';
 import { Mutex } from 'async-mutex';
 import { Cache, ToolTip } from '../ai_model/base/ai_types';
 import { getJsonParser } from '../json/json_parser';
-
-interface Message {
-    role: string;
-    content: string;
-}
-
-interface Session {
-    timestamp: number;
-    name: string;
-    have_chat_context: number;
-    messages_history: Message[];
-    cache: Cache;
-}
-
-interface AIInstance {
-    sessions: Record<string, Session>;
-    selected_session_id: string;
-    default_session_id: string;
-    model_id?: string;
-}
-
-interface UserInfo {
-    ai_config: Record<string, any>;
-    ai_instance: Record<string, AIInstance>;
-}
+import { Message, Session, AIInstance, UserInfo } from '../ai_model/base/ai_types'
 
 const PROJECT_INFO = "你是一个帮助人类解决问题的AI智能体\n";
 
@@ -64,7 +40,7 @@ export class Storage {
         if (!userInfo) {
             return null;
         }
-        const aiConfigs = userInfo.ai_config;
+        const aiConfigs = userInfo.aiConfig;
         if (configName in aiConfigs) {
             return aiConfigs[configName];
         }
@@ -78,13 +54,13 @@ export class Storage {
     public async setAIInstanceModelID(userId: string, instanceName: string, modelID: string) {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            aiInstance.model_id = modelID;
+            aiInstance.modelId = modelID;
         }
     }
 
     public async getAIInstanceModelID(userId: string, instanceName: string): Promise<string | undefined> {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
-        return (aiInstance && aiInstance.model_id) ? aiInstance.model_id : undefined;
+        return (aiInstance && aiInstance.modelId) ? aiInstance.modelId : undefined;
     }
 
     public async createUserInfo(userId: string, timestamp: number) {
@@ -134,34 +110,95 @@ export class Storage {
         return userInfo;
     }
 
-    public async addAIInstanceSession(userId: string, instanceName: string, sessionId: string, name: string, timestamp: number) {
+    public async addAIInstanceSession(userId: string, instanceName: string): Promise<Session | undefined> {
+        let session = undefined;
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            await this.addSession(aiInstance, sessionId, null, name, timestamp);
+            const sessionId = crypto.randomUUID();
+            session = await this.createAIInstanceSession(sessionId, "当前对话", Date.now());
+            await this.setAIInstanceSession(aiInstance, sessionId, session);
+            await this.setAIInstanceSelectedSession(userId, instanceName, sessionId);
         }
         const userInfo = await this.getUserInfo(userId);
         if (userInfo) {
             await this.saveUserInfo(userId, userInfo);
+        }
+        return session;
+    }
+
+    public async removeAIInstanceSession(userId: string, instanceName: string, sessionId: string): Promise<Session | undefined> {
+        let session = undefined;
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        if (aiInstance) {
+            await this.destroyAIInstanceSession(aiInstance, sessionId);
+            session = await this.getAIInstanceSelectedSession(userId, instanceName);
+            if (!session) {
+                session = await this.addAIInstanceSession(userId, instanceName);
+            }
+        }
+        const userInfo = await this.getUserInfo(userId);
+        if (userInfo) {
+            await this.saveUserInfo(userId, userInfo);
+        }
+        return session;
+    }
+
+    public async getAIInstanceSessionsSnapshot(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "name"]): Promise<Record<string, any>[]> {
+        const result: Record<string, any>[] = [];
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        if (!aiInstance) {
+            return result;
+        }
+        for (const [sessionId, sessionInfo] of Object.entries(aiInstance.sessions)) {
+            const info: Record<string, any> = {};
+            if (attributes.includes("id")) {
+                info["id"] = sessionId;
+            }
+            if (attributes.includes("selected")) {
+                info["selected"] = (sessionId === aiInstance.selectedSessionId);
+            }
+            for (const [key, value] of Object.entries(sessionInfo)) {
+                if (attributes.includes(key)) {
+                    info[key] = value;
+                }
+            }
+            result.push(info);
+        }
+        return result;
+    }
+
+    public async setAIInstanceSelectedSession(userId: string, instanceName: string, sessionId: string) {
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        if (aiInstance) {
+            aiInstance.selectedSessionId = sessionId;
         }
     }
 
-    public async removeAIInstanceSession(userId: string, instanceName: string, sessionId: string, name: string, timestamp: number) {
+    public async getAIInstanceSelectedSession(userId: string, instanceName: string): Promise<Session | undefined> {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            await this.removeSession(aiInstance, sessionId);
+            return this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
         }
-        const userInfo = await this.getUserInfo(userId);
-        if (userInfo) {
-            await this.saveUserInfo(userId, userInfo);
+        return undefined;
+    }
+
+    public async setAIInstanceSessionName(userId: string, instanceName: string, sessionId: string, name: string): Promise<Session | undefined> {
+        let session = undefined;
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        if (aiInstance) {
+            session = await this.getAIInstanceSession(aiInstance, sessionId);
+            if (session) {
+                session.name = name;
+            }
         }
+        return session;
     }
 
     public async removeAIInstanceMessages(userId: string, instanceName: string) {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            const selectedSessionId = aiInstance.selected_session_id;
-            const sessionInfo = await this.getSession(aiInstance, selectedSessionId);
-            sessionInfo.messages_history = [];
+            const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
+            sessionInfo.history = [];
             // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
             const userInfo = await this.getUserInfo(userId);
             if (userInfo) {
@@ -173,8 +210,7 @@ export class Storage {
     public async removeAIInstanceCache(userId: string, instanceName: string) {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            const selectedSessionId = aiInstance.selected_session_id;
-            const sessionInfo = await this.getSession(aiInstance, selectedSessionId);
+            const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
             sessionInfo.cache = this.getDefaultCache();
             // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
             const userInfo = await this.getUserInfo(userId);
@@ -205,13 +241,13 @@ export class Storage {
         }
     }
 
-    public async getAIInstanceMessages(userId: string, instanceName: string, deepCopy: boolean = false): Promise<Message[] | null> {
+    public async getAIInstanceMessages(userId: string, instanceName: string, deepCopy: boolean = false): Promise<Message[] | undefined> {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (!aiInstance) {
-            return null;
+            return undefined;
         }
-        const sessionInfo = await this.getSession(aiInstance);
-        return deepCopy ? this.jsonParser.parse(this.jsonParser.toJsonStr(sessionInfo.messages_history)) : sessionInfo.messages_history;
+        const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
+        return deepCopy ? this.jsonParser.parse(this.jsonParser.toJsonStr(sessionInfo.history)) : sessionInfo.history;
     }
 
     public async getAIInstanceCache(userId: string, instanceName: string): Promise<Cache> {
@@ -219,56 +255,25 @@ export class Storage {
         if (!aiInstance) {
             return this.getDefaultCache();
         }
-        const sessionInfo = await this.getSession(aiInstance);
+        const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
         return sessionInfo.cache;
     }
 
-    public async getAIInstanceSessions(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "name"]): Promise<Record<string, any>[]> {
-        const result: Record<string, any>[] = [];
+    public async getAIRound(userId: string, instanceName: string): Promise<number> {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (!aiInstance) {
-            return result;
-        }
-        for (const [sessionId, sessionInfo] of Object.entries(aiInstance.sessions)) {
-            const info: Record<string, any> = {};
-            if (attributes.includes("id")) {
-                info["id"] = sessionId;
-            }
-            if (attributes.includes("selected")) {
-                info["selected"] = (sessionId === aiInstance.selected_session_id);
-            }
-            for (const [key, value] of Object.entries(sessionInfo)) {
-                if (attributes.includes(key)) {
-                    info[key] = value;
-                }
-            }
-            result.push(info);
-        }
-        return result;
-    }
-
-    public async selectAIInstanceSession(userId: string, instanceName: string, sessionId: string) {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (aiInstance) {
-            aiInstance.selected_session_id = sessionId;
-        }
-    }
-
-    public async getAIChatContext(userId: string): Promise<number> {
-        const aiInstance = await this.getAIIInstance(userId, 'chat');
         if (!aiInstance) {
             return 1;
         }
-        const sessionInfo = await this.getSession(aiInstance);
-        return sessionInfo.have_chat_context;
+        const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
+        return sessionInfo.round;
     }
 
-    public async addAIChatContext(userId: string) {
-        const aiInstance = await this.getAIIInstance(userId, 'chat');
+    public async addAIRound(userId: string, instanceName: string) {
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            const sessionInfo = await this.getSession(aiInstance);
-            sessionInfo.have_chat_context += 1;
-            // await this.saveSession(userId, 'chat', aiInstance.selected_session_id, sessionInfo);
+            const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
+            sessionInfo.round += 1;
+            // await this.saveSession(userId, 'chat', aiInstance.selectedSessionId, sessionInfo);
             const userInfo = await this.getUserInfo(userId);
             if (userInfo) {
                 await this.saveUserInfo(userId, userInfo);
@@ -478,36 +483,42 @@ export class Storage {
         if (!userInfo) {
             return null;
         }
-        const aiInstances = userInfo.ai_instance;
+        const aiInstances = userInfo.aiInstance;
         return aiInstances[instanceName] || null;
     }
 
     private newUserDict(timestamp: number): UserInfo {
         const sessionId = crypto.randomUUID();
-        const chatDict: AIInstance = {
+        const chatInstance: AIInstance = {
             sessions: {
-                [sessionId]: this.newChatDict("默认对话", timestamp)
+                [sessionId]: this.createAIInstanceSession(sessionId, "默认对话", timestamp)
             },
-            selected_session_id: sessionId,
-            default_session_id: sessionId
+            selectedSessionId: sessionId
         };
         
         return {
-            ai_config: {},
-            ai_instance: {
-                'chat': chatDict
-            }
+            aiConfig: {},
+            aiInstance: {'chat': chatInstance}
         };
     }
 
-    private newChatDict(name: string, timestamp: number): Session {
+    private createAIInstanceSession(sessionId: string, name: string, timestamp: number): Session {
         return {
-            timestamp,
-            name,
-            have_chat_context: 0,
-            messages_history: [{ role: "system", content: PROJECT_INFO }],
+            sessionId: sessionId,
+            lastModifiedTimestamp: timestamp,
+            name: name,
+            round: 0,
+            history: [this.createAIIInstanceMessage(timestamp)],
             cache: this.getDefaultCache()
         };
+    }
+
+    private createAIIInstanceMessage(timestamp: number): Message {
+        return { 
+            role: "system", 
+            content: PROJECT_INFO ,
+            timestamp: timestamp
+        }
     }
 
     private getDefaultCache(): Cache {
@@ -521,18 +532,15 @@ export class Storage {
         };
     }
 
-    private async getSession(aiInstance: AIInstance, sessionId?: string): Promise<Session> {
-        const selectedSessionId = sessionId || aiInstance.selected_session_id;
-        return aiInstance.sessions[selectedSessionId];
+    private async getAIInstanceSession(aiInstance: AIInstance, sessionId: string): Promise<Session> {
+        return aiInstance.sessions[sessionId];
     }
 
-    private async addSession(aiInstance: AIInstance, sessionId: string, sessionData: Session | null, name: string, time: number) {
-        aiInstance.selected_session_id = sessionId;
-        aiInstance.sessions[sessionId] = sessionData || this.newChatDict(name, time);
+    private async setAIInstanceSession(aiInstance: AIInstance, sessionId: string, sessionData: Session) {
+        aiInstance.sessions[sessionId] = sessionData;
     }
 
-    private async removeSession(aiInstance: AIInstance, sessionId?: string) {
-        const finalSessionId = sessionId || aiInstance.selected_session_id;
-        delete aiInstance.sessions[finalSessionId];
+    private async destroyAIInstanceSession(aiInstance: AIInstance, sessionId: string) {
+        delete aiInstance.sessions[sessionId];
     }
 }

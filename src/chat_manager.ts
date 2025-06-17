@@ -1,35 +1,12 @@
 import * as vscode from 'vscode';
 import { Message, InputData } from './core/ai_model/base/ai_types';
 import { Storage } from './core/storage/storage';
+import { Session } from './core/ai_model/base/ai_types';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
-
-export interface ReferenceItem {
-    type: 'code' | 'file' | 'folder';
-    path: string;
-    name: string;
-    content?: string;
-    range?: vscode.Range;
-}
-
-export interface ChatMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-    timestamp: number;
-    references?: ReferenceItem[];
-}
-
-export interface ChatSession {
-    id: string;
-    title: string;
-    messages: ChatMessage[];
-    createdAt: number;
-    lastActive: number;
-}
 
 export class ChatManager {
     private static instance: ChatManager;
     private context: vscode.ExtensionContext;
-    private currentSession: ChatSession | null = null;
     private aiModelMgr: AIModelMgr;
     private userID: string = "";
     private storage: Storage;
@@ -42,7 +19,7 @@ export class ChatManager {
         this.defaultModelID = defaultModelID;
         this.storage = storage;
         this.aiModelMgr = aiModelMgr;
-        this.ready = this.storage.setAIInstanceModelID(userID, "chat", defaultModelID).then(() => {
+        this.ready = this.aiModelMgr.setSelectedModel(defaultModelID, userID).then(() => {
         }).catch(err => {
             throw err;
         });
@@ -59,91 +36,33 @@ export class ChatManager {
         return ChatManager.instance;
     }
 
-    public async createSession(): Promise<ChatSession> {
-        const currentTime = Date.now();
-        const sessionId = currentTime.toString();
-        const newSession: ChatSession = {
-            id: sessionId,
-            title: `新会话 ${new Date().toLocaleTimeString()}`,
-            messages: [],
-            createdAt: currentTime,
-            lastActive: currentTime
-        };
-        
-        this.currentSession = newSession;
-        await this.saveSession(newSession);
-        return newSession;
+    public async getSelectedSession(instanceName: string): Promise<Session | undefined> {
+        return await this.storage.getAIInstanceSelectedSession(this.userID, instanceName);
     }
 
-    public getCurrentSession(): ChatSession | null {
-        return this.currentSession;
+    public async selectSession(instanceName: string, sessionId: string): Promise<Session | undefined> {
+        await this.storage.setAIInstanceSelectedSession(this.userID, instanceName, sessionId);
+        return await this.storage.getAIInstanceSelectedSession(this.userID, instanceName);
     }
 
-    public async loadSession(sessionId: string): Promise<ChatSession | null> {
-        const sessions = await this.getAllSessions();
-        const session = sessions.find(s => s.id === sessionId);
-        if (session) {
-            this.currentSession = session;
-            return session;
-        }
-        return null;
+    public async addSession(instanceName: string): Promise<Session | undefined> {
+        return await this.storage.addAIInstanceSession(this.userID, instanceName);
     }
 
-    public async deleteSession(sessionId: string): Promise<void> {
-        const sessions = await this.getAllSessions();
-        const filtered = sessions.filter(s => s.id !== sessionId);
-        await this.context.globalState.update('chatSessions', filtered);
-        
-        if (this.currentSession?.id === sessionId) {
-            this.currentSession = null;
-        }
+    public async removeSession(instanceName: string, sessionId: string): Promise<Session | undefined> {
+        return await this.storage.removeAIInstanceSession(this.userID, instanceName, sessionId);
     }
 
-    public async getAllSessions(): Promise<ChatSession[]> {
-        return this.context.globalState.get<ChatSession[]>('chatSessions') || [];
+    public async getAllSessionsSnapshot(instanceName: string): Promise<any[]> {
+        return this.storage.getAIInstanceSessionsSnapshot(this.userID, instanceName);
     }
 
-    public async saveSession(session: ChatSession): Promise<void> {
-        const sessions = await this.getAllSessions();
-        const existingIndex = sessions.findIndex(s => s.id === session.id);
-        
-        if (existingIndex >= 0) {
-            sessions[existingIndex] = session;
-        } else {
-            sessions.push(session);
-        }
-        
-        await this.context.globalState.update('chatSessions', sessions);
-    }
-
-    public async addMessageToSession(message: ChatMessage): Promise<void> {
-        if (!this.currentSession) {
-            await this.createSession();
-        }
-        
-        if (this.currentSession) {
-            this.currentSession.messages.push(message);
-            this.currentSession.lastActive = Date.now();
-            await this.saveSession(this.currentSession);
-        }
-    }
-
-    public async updateSessionTitle(sessionId: string, title: string): Promise<void> {
-        const sessions = await this.getAllSessions();
-        const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-        
-        if (sessionIndex >= 0) {
-            sessions[sessionIndex].title = title;
-            await this.context.globalState.update('chatSessions', sessions);
-            
-            if (this.currentSession?.id === sessionId) {
-                this.currentSession.title = title;
-            }
-        }
+    public async setSessionName(instanceName: string, sessionId: string, sessionName: string): Promise<Session | undefined> {
+        return await this.storage.setAIInstanceSessionName(this.userID, instanceName, sessionId, sessionName);
     }
 
     public async chatStream(query: string, useKnowledge: boolean, toolsOn: boolean) {
-        const history = await this.get_messages(query, this.userID);
+        const history = await this.getMessages(query, this.userID);
         let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
         modelID = this.getValidModelID(modelID);
 
@@ -158,12 +77,12 @@ export class ChatManager {
         return this.aiModelMgr.chatStream(modelID, data);
     }
 
-    private async get_messages(query: string, userID: string): Promise<Message[]> {
-        const message: Message = { role: 'user', content: query };
+    private async getMessages(query: string, userID: string): Promise<Message[]> {
+        const message: Message = { role: 'user', content: query, timestamp: Date.now() };
         await this.storage.updateUserInfo(userID, message);
         const history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
-        await this.storage.addAIChatContext(userID);
-        let haveChatContext = await this.storage.getAIChatContext(userID);
+        await this.storage.addAIRound(userID, 'chat');
+        let haveChatContext = await this.storage.getAIRound(userID, 'chat');
         const num = Math.min(history.length, haveChatContext);
         
         let validNum = 0;
@@ -195,16 +114,15 @@ export class ChatManager {
             second: '2-digit',
             hour12: false
         }).replace(/\//g, '-');
-        const system_tips: Message = {role: "system", content: `\n当前时间为：${send_time}\n`};
-
+        const systemTips: Message = {role: "system", content: `\n当前时间为：${send_time}\n`, timestamp: Date.now()};
         if (messages.length > 0) {
             if (messages[0].role !== user) {
-                messages[0].content += system_tips.content;
+                messages[0].content += systemTips.content;
             } else {
-                messages.unshift(system_tips);
+                messages.unshift(systemTips);
             }
         } else {
-            messages.push(system_tips);
+            messages.push(systemTips);
         }
     }
 

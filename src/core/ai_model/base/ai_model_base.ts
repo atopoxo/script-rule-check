@@ -103,7 +103,7 @@ export abstract class AIModelBase {
                 cache.backup = copy(messages[messages.length - 1].content);
                 messages[messages.length - 1].content += toolTips.tools_usage;
             } else {
-                messages.push({ role: "user", content: toolTips.tools_usage });
+                messages.push({ role: "user", content: toolTips.tools_usage, timestamp: Date.now() });
             }
         } else {
             if (cache.backup) {
@@ -319,19 +319,19 @@ export abstract class AIModelBase {
 
     private async saveMessages(needSave: boolean, response: string, history: Message[], userId: string | undefined, messageReplace: boolean) {
         if (needSave && userId) {
-            const message: Message = { role: this.assistant, content: response };
+            const message: Message = { role: this.assistant, content: response, timestamp: Date.now() };
             if (messageReplace && history.length > 0) {
                 history[history.length - 1] = message;
             } else {
                 history.push(message);
             }
-            await this.storage.updateUserInfo(userId, message, messageReplace);
+            await this.storage.updateUserInfo(userId, message, undefined, messageReplace=messageReplace);
         }
     }
 
     private async saveCache(needSave: boolean, cache: any, userId: string | undefined) {
         if (needSave && userId) {
-            await this.storage.updateUserInfo(userId, cache);
+            await this.storage.updateUserInfo(userId, undefined, cache);
         }
     }
 
