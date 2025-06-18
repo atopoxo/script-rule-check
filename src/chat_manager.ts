@@ -61,14 +61,15 @@ export class ChatManager {
         return await this.storage.setAIInstanceSessionName(this.userID, instanceName, sessionId, sessionName);
     }
 
-    public async chatStream(query: string, useKnowledge: boolean, toolsOn: boolean) {
-        const history = await this.getMessages(query, this.userID);
+    public async chatStream(useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number) {
+        const history = await this.getMessages(this.userID, query, index);
         let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
         modelID = this.getValidModelID(modelID);
 
         const data: InputData = {
             userID: this.userID,
-            message: history,
+            history: history,
+            index: index,
             toolsOn: toolsOn,
             useKnowledge: useKnowledge,
             modelConfig: this.aiModelMgr.getModelConfig(modelID),
@@ -77,13 +78,19 @@ export class ChatManager {
         return this.aiModelMgr.chatStream(modelID, data);
     }
 
-    private async getMessages(query: string, userID: string): Promise<Message[]> {
-        const message: Message = { role: 'user', content: query, timestamp: Date.now() };
-        await this.storage.updateUserInfo(userID, message);
-        const history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
-        await this.storage.addAIRound(userID, 'chat');
-        let haveChatContext = await this.storage.getAIRound(userID, 'chat');
-        const num = Math.min(history.length, haveChatContext);
+    private async getMessages(userID: string, query?: string, index?: number): Promise<Message[]> {
+        let message: Message;
+        let history: Message[];
+        if (index !== undefined) {
+            history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
+        } else {
+            message = { role: 'user', content: query as string, timestamp: Date.now() };
+            await this.storage.updateUserInfo(userID, message);
+            history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
+            await this.storage.addAIRound(userID, 'chat');
+        }
+        let round = await this.storage.getAIRound(userID, 'chat');
+        const num = Math.min(history.length, round);
         
         let validNum = 0;
         let validStart = 0;
@@ -105,7 +112,7 @@ export class ChatManager {
     }
 
     private insertDatetime(messages: Message[], user: string): void {
-        const send_time = new Date().toLocaleString('zh-CN', {
+        const sendTime = new Date().toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -114,10 +121,10 @@ export class ChatManager {
             second: '2-digit',
             hour12: false
         }).replace(/\//g, '-');
-        const systemTips: Message = {role: "system", content: `\n当前时间为：${send_time}\n`, timestamp: Date.now()};
+        const systemTips: Message = {role: "system", content: `\n当前时间为：${sendTime}\n`, timestamp: Date.now()};
         if (messages.length > 0) {
             if (messages[0].role !== user) {
-                messages[0].content += systemTips.content;
+                messages[0].content = systemTips.content;
             } else {
                 messages.unshift(systemTips);
             }

@@ -33,7 +33,7 @@ export abstract class AIModelBase {
         this.knowledgeMgr = knowledgeMgr;
     }
 
-    async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192): Promise<any> {
+    async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
         throw new Error("Method not implemented.");
     }
 
@@ -45,7 +45,8 @@ export abstract class AIModelBase {
         const needSave = true;
         const toolsOn = inputData.toolsOn || false;
         const userId = inputData.userID;
-        const messages = inputData.message;
+        const messages = inputData.history;
+        const index = inputData.index ? inputData.index : messages.length - 1;
         const useKnowledge = inputData.useKnowledge || false;
         const modelConfig = inputData.modelConfig;
         const modelName = modelConfig.modelName;
@@ -54,18 +55,19 @@ export abstract class AIModelBase {
         let messageReplace = false;
         let hasTask = true;
         let streamContent = "";
+        let currentIndex = index;
 
         while (hasTask) {
             try {
-                this.handleKnowledge(useKnowledge, messages, cache);
+                this.handleKnowledge(useKnowledge, messages, cache, currentIndex);
                 if (toolsOn) {
-                    this.checkToolTips(messages, cache, true);
+                    currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    for await (const _ of this.streamGenerator(modelName!, messages, maxTokens, contentMap)) {}
-                    this.checkToolTips(messages, cache, false);
+                    for await (const _ of this.streamGenerator(modelName!, messages, maxTokens, contentMap, currentIndex)) {}
+                    currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     yield* this.reportToolInfos(tools, contentMap.conclusion_content);
-                    const returnToAi = await this.handleToolCalls(tools, messages, cache);
+                    const returnToAi = await this.handleToolCalls(tools, messages, cache, currentIndex);
                     if (!returnToAi) {
                         streamContent = `最终结论如下：${cache.returns.ai.ai_conclusion}`;
                         yield streamContent;
@@ -73,7 +75,7 @@ export abstract class AIModelBase {
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                yield* this.streamGenerator(modelName!, messages, maxTokens, contentMap);
+                yield* this.streamGenerator(modelName!, messages, maxTokens, contentMap, currentIndex);
                 streamContent = contentMap.think_content + contentMap.conclusion_content;
                 cache.returns.ai.ai_conclusion = contentMap.conclusion_content;
                 hasTask = cache.tool_calls.length > 0;
@@ -82,7 +84,7 @@ export abstract class AIModelBase {
                 yield streamContent;
                 console.error(ex as Error);
             } finally {
-                await this.saveMessages(needSave, streamContent, messages, userId, messageReplace);
+                await this.saveMessages(needSave, streamContent, messages, userId, messageReplace, currentIndex);
                 messageReplace = true;
             }
         }
@@ -91,7 +93,8 @@ export abstract class AIModelBase {
         await this.saveCache(needSave, cache, userId);
     }
 
-    private checkToolTips(messages: Message[], cache: any, begin: boolean): void {
+    private checkToolTips(messages: Message[], cache: any, begin: boolean, index: number): number {
+        let returnIndex = index;
         if (begin) {
             const preToolTips = cache.tools_describe;
             const toolTips = this.toolsMgr.getAIUsageTips(preToolTips, cache.tool_calls);
@@ -100,24 +103,29 @@ export abstract class AIModelBase {
             if (!preToolTips) {
                 cache.tools_describe = toolTips.tools_describe;
                 messages[0].content += toolTips.tools_describe;
-                cache.backup = copy(messages[messages.length - 1].content);
-                messages[messages.length - 1].content += toolTips.tools_usage;
+                cache.backup = copy(messages[index].content);
+                messages[index].content += toolTips.tools_usage;
             } else {
-                messages.push({ role: "user", content: toolTips.tools_usage, timestamp: Date.now() });
+                const message = { role: "user", content: toolTips.tools_usage, timestamp: Date.now() };
+                returnIndex = index + 2;
+                if (returnIndex < messages.length) {
+                    messages.splice(returnIndex, 0, message);
+                } else {
+                    messages.push(message);
+                }
             }
         } else {
             if (cache.backup) {
-                messages[messages.length - 1].content = cache.backup;
+                messages[index].content = cache.backup;
                 cache.backup = undefined;
             } else {
-                if (messages[messages.length - 1].role !== "user") {
+                if (messages[returnIndex].role === "user") {
                     messages.pop();
-                }
-                if (messages[messages.length - 1].role === "user") {
-                    messages.pop();
+                    returnIndex -= 2;
                 }
             }
         }
+        return returnIndex;
     }
 
     private *reportToolInfos(tools: any[][], content: string): Generator<string, void, unknown> {
@@ -128,8 +136,8 @@ export abstract class AIModelBase {
         }
     }
 
-    private async *streamGenerator(moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap): AsyncGenerator<string, void, unknown> {
-        const response = await this.getResponse(moduleName, messages, true, maxTokens);
+    private async *streamGenerator(moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number): AsyncGenerator<string, void, unknown> {
+        const response = await this.getResponse(moduleName, messages, true, maxTokens, index);
         for await (const chunk of response) {
             const delta = this.getDelta(chunk);
             yield* this.handleStreamNormalCalls(delta, contentMap);
@@ -137,14 +145,13 @@ export abstract class AIModelBase {
         yield* this.handleStreamNormalCalls(undefined, contentMap);
     }
 
-    private handleToolCalls(tools: ToolCall[][], messages: Message[], cache: any): string | null {
+    private handleToolCalls(tools: ToolCall[][], messages: Message[], cache: any, index: number): string | null {
         let currentTools: ToolCall[] = [];
         const toolSet = new Set<string>();
         
         if (tools.length === 0) {
             tools = cache.tool_calls;
         }
-
         let invalidFormat = false;
         for (const toolList of tools) {
             if (!Array.isArray(toolList)) {
@@ -218,15 +225,15 @@ export abstract class AIModelBase {
         if (toolsMessages.return_to_ai) {
             let flag = false;
             for (const end of this.sentence_divisions) {
-                if (messages[messages.length - 1].content.endsWith(end)) {
+                if (messages[index].content.endsWith(end)) {
                     flag = true;
                     break;
                 }
             }
             if (!flag) {
-                messages[messages.length - 1].content += "\n";
+                messages[index].content += "\n";
             }
-            messages[messages.length - 1].content += `${this.additional_tips.begin}${toolsMessages.return_to_ai}${this.additional_tips.end}`;
+            messages[index].content += `${this.additional_tips.begin}${toolsMessages.return_to_ai}${this.additional_tips.end}`;
         }
 
         cache.tool_calls = tools;
@@ -260,12 +267,12 @@ export abstract class AIModelBase {
         }
     }
 
-    private handleKnowledge(useKnowledge: boolean, messages: Message[], cache: any): void {
+    private handleKnowledge(useKnowledge: boolean, messages: Message[], cache: any, index: number): void {
         if (useKnowledge && !cache.knowledge && this.knowledgeMgr) {
-            const searchContent = this.knowledgeMgr.search(messages[messages.length - 1].content);
+            const searchContent = this.knowledgeMgr.search(messages[index].content);
             if (searchContent) {
                 cache.knowledge = `${this.additional_tips.begin}${searchContent}${this.additional_tips.end}`;
-                messages[messages.length - 1].content += cache.knowledge;
+                messages[index].content += cache.knowledge;
             }
         }
     }
@@ -317,15 +324,20 @@ export abstract class AIModelBase {
         yield deltaContent;
     }
 
-    private async saveMessages(needSave: boolean, response: string, history: Message[], userId: string | undefined, messageReplace: boolean) {
+    private async saveMessages(needSave: boolean, response: string, history: Message[], userId: string | undefined, messageReplace: boolean, index: number) {
         if (needSave && userId) {
+            const aiMessageIndex = index + 1;
             const message: Message = { role: this.assistant, content: response, timestamp: Date.now() };
             if (messageReplace && history.length > 0) {
-                history[history.length - 1] = message;
+                history[aiMessageIndex] = message;
             } else {
-                history.push(message);
+                if (aiMessageIndex < history.length) {
+                    history[aiMessageIndex] = message;
+                } else {
+                    history.push(message);
+                }
             }
-            await this.storage.updateUserInfo(userId, message, undefined, messageReplace=messageReplace);
+            await this.storage.updateUserInfo(userId, message, undefined, messageReplace=messageReplace, aiMessageIndex);
         }
     }
 

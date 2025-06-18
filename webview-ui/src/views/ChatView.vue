@@ -6,11 +6,14 @@
       </div>
       <div class="messages-container">
         <div v-for="(msg, index) in selectedSession.history" :key="index" :class="`message ${msg.role}`">
-          <div v-if="msg.role === 'user' || msg.role === 'assistant'" class="avatar">
-            <img :src=getRoleIconPath(msg.role) />
+          <div v-if="msg.role === 'user' || msg.role === 'assistant'" class="role-block">
+            <div class="avatar">
+              <img :src=getRoleIconPath(msg.role) />
+            </div>
+            <div class="role-name" v-if="msg.role === 'assistant'">AI 助手</div>
           </div>
           <div class="content">
-            <message-render :content="msg.content"></message-render>
+            <message-render :isDark="isDark" :content="msg.content"></message-render>
             <!-- 引用展示 -->
             <div v-if="msg.references && msg.references.length > 0" class="references">
               <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
@@ -18,6 +21,11 @@
                 <span>{{ ref.name }}</span>
               </div>
             </div>
+          </div>
+          <div v-if="msg.role === 'assistant'" class="feed-back">
+            <button class="icon-button regenerate-button" @click="regenerate(index)">
+              <img :src="getfeedbackIconPath('regenerate')" />
+            </button>
           </div>
         </div>
       </div>
@@ -181,10 +189,6 @@ export default defineComponent({
         lastModifiedTimestamp: session.lastModifiedTimestamp,
         name: session.name,
         history: session.history.map((msg: any) => reactive({ ...msg }))
-      }
-      const history = result.history;
-      if (history.length > 0 && history[0].role === 'system') {
-        result.history = history.slice(1);
       }
       return result;
     }
@@ -397,7 +401,22 @@ export default defineComponent({
     //   });
     //   return groups;
     // });
-    // 获取引用图标
+
+    const getfeedbackIconPath = (type: string) => { 
+      try {
+          let iconPath = '';
+          let relativePath = isDark.value ? 'dark' : 'light';
+          switch (type) {
+            case 'regenerate':
+              iconPath = 'refresh.svg';
+              break;
+          }
+          return new URL(`${iconRoot}${relativePath}/${iconPath}`, currentModuleUrl).href;
+      } catch (error) {
+          console.error('图标加载失败:', type, error);
+          return '';
+      }
+    };
     const getRefIcon = (type: string) => {
       return type === 'code' ? 'codicon-symbol-method' : 
              type === 'file' ? 'codicon-file' : 'codicon-folder';
@@ -460,6 +479,13 @@ export default defineComponent({
       }
     };
 
+    const regenerate = (index: number) => {
+      vscode.postMessage({
+        type: 'regenerate',
+        data: { index: index - 1}
+      })
+    }
+
     const setSessionName = () => {
       if (selectedSession.value) {
         vscode.postMessage({
@@ -496,11 +522,16 @@ export default defineComponent({
 
     const handleAIStreamStart = (data: any) => {
       selectedSession.value = getSelectedSession(data.selectedSession);
-      aiStreamMessage = reactive({
-        role: "assistant",
-        content: "正在等待回复..."
-      });
-      selectedSession.value?.history.push(aiStreamMessage);
+      if (data.messageIndex === -1) {
+        aiStreamMessage = reactive({
+          role: "assistant",
+          content: "正在等待回复..."
+        });
+        selectedSession.value?.history.push(aiStreamMessage);
+      } else {
+        aiStreamMessage = selectedSession.value?.history[data.messageIndex];
+        aiStreamMessage.content = "正在等待回复...";
+      }
       scrollToBottom();
       aiStreamMessageBeginFlag = true;
     };
@@ -647,8 +678,10 @@ export default defineComponent({
       formatTime,
       createSession,
       getRoleIconPath,
+      getfeedbackIconPath,
       isAIStreamTransfer,
       sendMessage,
+      regenerate,
       addReference,
       removeReference,
       setSessionName,
@@ -758,19 +791,25 @@ export default defineComponent({
   overflow-y: auto;
   padding: 10px;
 }
-
 .message {
   display: flex;
+  flex-direction: column;
   margin-bottom: 15px;
 }
 .message.user {
-  flex-direction: row-reverse;
+  align-items: flex-end;
 }
 .message.assistant {
-  flex-direction: row;
+  align-items: flex-start;
 }
 .message.system {
+  align-items: center;
+}
+.role-block {
+  display: flex;
   flex-direction: row;
+  align-items: center;
+  margin: 0px 0px 4px 0px;
 }
 .avatar {
   width: 26px;
@@ -779,36 +818,46 @@ export default defineComponent({
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 10px;
   overflow: hidden;
 }
-
+.role-name {
+  font-size: 14px;
+  font-weight: bold;
+  margin-left: 3px;
+}
 .content {
   padding: 8px 8px;
   border-radius: 5px;
   background-color: var(--vscode-input-background);
 }
-
 .message.user .content {
-  background-color: var(--vscode-button-background);
+  background-color: var(--vscode-list-inactiveSelectionBackground);
   color: var(--vscode-button-foreground);
 }
-
 .references {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--vscode-sideBarSectionHeader-border);
   font-size: 12px;
 }
-
 .reference {
   display: flex;
   align-items: center;
   margin-top: 4px;
 }
-
 .reference i {
   margin-right: 5px;
+}
+.feed-back {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  margin: 6px 0 0 0;
+}
+.feed-back .regenerate-button {
+  width: 26px;
+  height: 26px;
+  margin: 0 0;
 }
 
 .input-container {

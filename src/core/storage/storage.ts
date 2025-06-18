@@ -220,14 +220,18 @@ export class Storage {
         }
     }
 
-    public async updateUserInfo(userId: string, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false) {
+    public async updateUserInfo(userId: string, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false, index: number = -1) {
         if (message) {
             const messages = await this.getAIInstanceMessages(userId, "chat");
             if (messages) {
                 if (messageReplace && messages.length > 0) {
-                    messages[messages.length - 1] = message;
+                    messages[index] = message;
                 } else {
-                    messages.push(message);
+                    if (index == -1 || index >= messages.length) {
+                        messages.push(message);
+                    } else {
+                        messages[index] = message;
+                    }
                 }
             }
         }
@@ -514,9 +518,18 @@ export class Storage {
     }
 
     private createAIIInstanceMessage(timestamp: number): Message {
+        const sendTime = new Date(timestamp).toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '-');
         return { 
             role: "system", 
-            content: PROJECT_INFO ,
+            content: `\n当前时间为：${sendTime}\n` ,
             timestamp: timestamp
         }
     }

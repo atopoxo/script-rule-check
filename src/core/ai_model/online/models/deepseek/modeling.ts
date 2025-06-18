@@ -17,10 +17,10 @@ export class DeepSeek extends AIModelOnlineBase {
         return super.chatStream(data);
     }
 
-    async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
+    async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
         return await this.client.chat.completions.create({
             model: moduleName,
-            messages: messages,
+            messages: messages.slice(0, index + 1),
             max_tokens: maxTokens,
             stream: stream,
         });

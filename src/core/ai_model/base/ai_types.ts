@@ -65,8 +65,9 @@ export interface UserInfo {
 }
 
 export interface InputData {
-    message: Message[];
+    history: Message[];
     cache: Cache;
+    index?: number;
     userID?: string;
     toolsOn?: boolean;
     useKnowledge?: boolean;

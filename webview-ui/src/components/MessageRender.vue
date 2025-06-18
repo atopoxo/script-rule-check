@@ -1,10 +1,10 @@
 <!-- MessageRenderer.vue -->
 <template>
-  <div class="text" v-html="htmlContent"></div>
+  <div class="text" v-html="htmlContent" ref="contentRef"></div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect } from 'vue';
+import { defineComponent, ref, watchEffect, onMounted, onUnmounted } from 'vue';
 import MarkdownIt from 'markdown-it';
 import MarkdownItMathjax from 'markdown-it-mathjax';
 import markdownItContainer from 'markdown-it-container';
@@ -12,35 +12,49 @@ import hljs from 'highlight.js';
 
 export default defineComponent({
   props: {
+    isDark: {
+        type: Boolean,
+        default: false
+    },
     content: {
       type: String,
       required: true
     }
   },
   setup(props) {
-    // const htmlContent = computed(() => md2html(props.content));
     const htmlContent = ref('');
+    const contentRef = ref<HTMLElement | null>(null);
     
     const md2html = (content: string) => {
 		let text = String(content)
         text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
+        const codeStyleBegin = `<pre class="hljs"><code>`;
+        const codeStyleEnd = `</code></pre>`;
         let md = MarkdownIt({
             html: true,
             highlight: function (str: string, lang: string) {
+                let highlightedText = '';
                 try{
                     if (lang && hljs.getLanguage(lang)) {
                         try {
-                            return '<pre class="hljs"><code>' +
-                                hljs.highlight(str, {language: lang, ignoreIllegals:true}).value +
-                                '</code></pre>';
+                            highlightedText = codeStyleBegin + hljs.highlight(str, {language: lang, ignoreIllegals:true}).value + codeStyleEnd;
                         } catch (ex) {
-                            console.log(ex)
+                            highlightedText = codeStyleBegin + md.utils.escapeHtml(str) + codeStyleEnd;
                         }
                     } else {
-                        return hljs.highlightAuto(str).value;
+                        highlightedText = hljs.highlightAuto(str).value;
                     }
                 } catch (e) {
-                    return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+                    highlightedText = codeStyleBegin + md.utils.escapeHtml(str) + codeStyleEnd;
+                } finally { 
+                    const codeWithStyle = `${highlightedText}`;
+                    const toolbar = `
+                        <div class="code-toolbar">
+                            <div class="language">${lang || 'plaintext'}</div>
+                            <button class="copy-code-button" title="复制代码">复制</button>
+                        </div>
+                        `;
+                    return `<div class="code-block-wrapper">${toolbar}${codeWithStyle}</div>`;
                 }
             }
         })
@@ -80,16 +94,188 @@ export default defineComponent({
         // text = text.replace(/<code>/g, '<pre class="code-block"><code>').replace(/<\/code>/g, '</code></pre>');
 	};
 
+    const handleCopyClick = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        const button = target.closest('.copy-code-button');
+        if (!button) {
+            return;
+        }
+        
+        const wrapper = button.closest('.code-block-wrapper');
+        if (!wrapper) {
+            return;
+        }
+        
+        const pre = wrapper.querySelector('pre.hljs');
+        if (!pre) {
+            return;
+        }
+
+        const codeText = pre.textContent || '';
+
+        if (!document.hasFocus()) {
+            window.focus();
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(codeText).then(() => {
+                showFeedback(button, '✓ 已复制');
+            }).catch(err => {
+                console.error('Clipboard API失败:', err);
+                fallbackCopy(codeText, button);
+            });
+        } else {
+            fallbackCopy(codeText, button);
+        }
+    };
+
+    const fallbackCopy = (text: string, button: Element) => {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'absolute';
+        textArea.style.left = '-9999px';
+        textArea.style.top = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        textArea.setSelectionRange(0, textArea.value.length);
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showFeedback(button, '✓ 已复制');
+            } else {
+                showFeedback(button, '✗ 复制失败', true);
+            }
+        } catch (e) {
+            console.error('execCommand失败:', e);
+            showFeedback(button, '✗ 复制失败', true);
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    };
+
+    const showFeedback = (button: Element, message: string, isError = false) => {
+        const feedbackEl = document.createElement('span');
+        feedbackEl.textContent = message;
+        feedbackEl.className = isError ? 'copy-feedback error' : 'copy-feedback';
+        
+        button.replaceWith(feedbackEl);
+        setTimeout(() => {
+            feedbackEl.replaceWith(button);
+        }, 1000);
+    };
+
+    const themeInit = async () => {
+        let link: any;
+        try {
+            const oldThemeId = props.isDark ? 'github' : 'github-dark';
+            const oldLink = document.getElementById(oldThemeId);
+            if (oldLink && document.head.contains(oldLink)) {
+                document.head.removeChild(oldLink);
+            }
+            const themeId = props.isDark ? 'github-dark': 'github';
+            if (!document.getElementById(themeId)) {
+                link = document.createElement('link');
+                link.id = themeId;
+                link.rel = 'stylesheet';
+                link.href = `https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/${themeId}.min.css`;
+                link.dataset.theme = props.isDark ? "dark" : "light";
+                document.head.appendChild(link);
+            }
+        } catch (error) {
+            console.error("主题加载失败", error);
+            if (document.head.contains(link)) {
+                document.head.removeChild(link);
+            }
+        }
+    };
+
     watchEffect(() => {
-      htmlContent.value = md2html(props.content);
+        themeInit();
+        htmlContent.value = md2html(props.content);
     });
 
-    return { htmlContent };
+    onMounted(() => {
+      if (contentRef.value) {
+        contentRef.value.addEventListener('click', handleCopyClick);
+      }
+    });
+
+    onUnmounted(() => {
+      if (contentRef.value) {
+        contentRef.value.removeEventListener('click', handleCopyClick);
+      }
+    });
+
+    return { htmlContent, contentRef };
   }
 });
 </script>
 
+<style>
+.code-block-wrapper {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--line-01);
+    border-radius: 5px;
+    overflow: hidden;
+}
+.code-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--line-01);
+    border-radius: 5px 5px 0 0;
+    margin: 2px 0 !important;
+}
+.language {
+    color: var(--vscode-foreground);
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 1;
+}
+.copy-code-button {
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--vscode-foreground);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    transition: all 0.2s ease;
+}
+.copy-code-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+.copy-feedback {
+    font-size: 10px;
+    color: #4caf50;
+    padding: 2px 8px;
+}
+
+.copy-feedback.error {
+    color: #f44336;
+}
+</style>
 <style scoped>
+:global(:root) {
+    --line-01: var(--vscode-commandCenter-inactiveBorder);
+}
+:deep(.hljs) {
+    background: var(--vscode-textCodeBlock-background) !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    /* border-radius: 0px 0px 5px 5px !important;
+    border-bottom: 1px solid var(--line-01);
+    border-left: 1px solid var(--line-01);
+    border-right: 1px solid var(--line-01); */
+}
+:deep(pre code) {
+    background: transparent !important;
+    color: inherit !important;
+}
 .text {
   backdrop-filter: blur(10px);
   /* white-space: pre-wrap; */

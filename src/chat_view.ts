@@ -97,10 +97,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     await this.selectWorkspace();
                     break;
                 case 'sendMessage':
-                    await this.sendMessage(data.content, data.references);
+                    await this.sendMessage(data.content, data.references, data.index);
                     break;
                 case 'pauseAIStreamTransfer':
                     this.pauseAIStreamTransfer();
+                    break;
+                case 'regenerate':
+                    await this.sendMessage(data.content, data.references, data.index);
                     break;
                 case 'showHistory':
                     this.showHistory();
@@ -218,7 +221,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('selectWorkspace', result);
     }
 
-    private async sendMessage(query: string, references: any[]) {
+    private async sendMessage(query?: string, references?: any[], index?: number) {
         const currentSession = this.chatManager.getSelectedSession('chat');
         if (!currentSession) {
             return;
@@ -227,10 +230,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (this.view && this.isWebviewReady && !this.aiStreamTransfering) {
                 this.aiStreamTransfering = true;
                 const port = this.view.webview;
-                const streamGenerator = await this.chatManager.chatStream(query, false, false);
+                const streamGenerator = await this.chatManager.chatStream(false, false, query, index);
                 port.postMessage({
                     type: 'aiStreamStart',
-                    data: {selectedSession: await this.chatManager.getSelectedSession('chat')}
+                    data: {selectedSession: await this.chatManager.getSelectedSession('chat'), messageIndex: index ? index + 1: -1}
                 });
                 for await (const chunk of streamGenerator) {
                     if (!this.aiStreamTransfering) {
@@ -433,13 +436,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private getHtmlForWebview(webview: vscode.Webview) {
-        const theme = vscode.window.activeColorTheme;
-        const isDark = theme.kind === vscode.ColorThemeKind.Dark;
-        const highlightTheme = isDark ? 'github-dark' : 'github';
-        const highlightCss = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'media', `${highlightTheme}.min.css`)
-        );
-        
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static', 'main.js')
         );
@@ -459,7 +455,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <link rel="icon" type="image/svg+xml" href="./vite.svg" />
-                <link rel="stylesheet" href="${highlightCss}">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>大模型聊天窗口</title>
                 ${isDevelopment 
@@ -468,47 +463,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     : `<script type="module" crossorigin src="${scriptUri}"></script>
                        <link rel="stylesheet" crossorigin href="${styleUri}">`
                 }
-                <style>
-                    /* 重置代码块样式 */
-                    .hljs {
-                        background: var(--vscode-textCodeBlock-background) !important;
-                        padding: 1em;
-                        border-radius: 4px;
-                    }
-                    
-                    /* 防止 VS Code 覆盖代码颜色 */
-                    .hljs * {
-                        color: inherit !important;
-                        background: inherit !important;
-                    }
-                    
-                    /* 保持其他元素使用 VS Code 主题 */
-                    body {
-                        background: var(--vscode-editor-background);
-                        color: var(--vscode-editor-foreground);
-                        font-family: var(--vscode-font-family);
-                        padding: 0 16px;
-                    }
-                </style>
             </head>
             <body>
                 <div id="app"></div>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.6.0/highlight.min.js"></script>
-                <script>
-                    // 重新应用高亮确保颜色正确
-                    document.addEventListener('DOMContentLoaded', () => {
-                        hljs.highlightAll();
-                        
-                        // 监听主题变化
-                        const vscode = acquireVsCodeApi();
-                        window.addEventListener('message', event => {
-                            if (event.data.command === 'themeChanged') {
-                                // 重新加载页面或动态切换样式
-                                location.reload();
-                            }
-                        });
-                    });
-                </script>
             </body>
         </html>`;
     }
