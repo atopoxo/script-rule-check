@@ -13,8 +13,8 @@ export class DeepSeek extends AIModelOnlineBase {
         });
     }
 
-    chatStream(data: any): any {
-        return super.chatStream(data);
+    public chatStream(signal: AbortSignal, data: any): any {
+        return super.chatStream(signal, data);
     }
 
     async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {

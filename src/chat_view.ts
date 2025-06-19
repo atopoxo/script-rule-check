@@ -105,8 +105,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'regenerate':
                     await this.sendMessage(data.content, data.references, data.index);
                     break;
-                case 'showHistory':
-                    this.showHistory();
+                case 'removeMessage':
+                    await this.removeMessage(data.index);
+                    break;
+                case 'showSessionsSnapshot':
+                    this.showSessionsSnapshot();
                     break;
                 case 'selectSession':
                     await this.selectSession(data.sessionId);
@@ -116,9 +119,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'removeSession':
                     await this.removeSession(data.sessionId);
-                    break;
-                case 'backToChat':
-                    this.backToChat();
                     break;
                 case 'addReference':
                     await this.addReference();
@@ -171,15 +171,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private async selectSession(sessionId: string) {
         const selectedSession = await this.chatManager.selectSession('chat',sessionId);
-        this.isInHistoryView = false;
         this.updateWebview('selectSession', {selectedSession: selectedSession});
     }
 
     private async addSession() {
         const selectedSession = await this.chatManager.addSession('chat');
         const sessionsSnapshot = await this.chatManager.getAllSessionsSnapshot('chat');
-        this.isInHistoryView = false;
-        this.updateWebview('addSession', {selectedSession: selectedSession, sessionsSnapshot: sessionsSnapshot});
+        this.updateWebview('addSession', {selectedSession: selectedSession});
     }
 
     private async removeSession(sessionId: string) {
@@ -226,18 +224,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (!currentSession) {
             return;
         }
+        let streamGenerator: any = undefined;
         try {
             if (this.view && this.isWebviewReady && !this.aiStreamTransfering) {
                 this.aiStreamTransfering = true;
                 const port = this.view.webview;
-                const streamGenerator = await this.chatManager.chatStream(false, false, query, index);
+                const abortController = new AbortController();
+                streamGenerator = await this.chatManager.chatStream(abortController.signal, false, false, query, index);
                 port.postMessage({
                     type: 'aiStreamStart',
                     data: {selectedSession: await this.chatManager.getSelectedSession('chat'), messageIndex: index ? index + 1: -1}
                 });
                 for await (const chunk of streamGenerator) {
                     if (!this.aiStreamTransfering) {
-                        break;
+                        abortController.abort();
                     }
                     port.postMessage({
                         type: 'aiStreamChunk',
@@ -260,14 +260,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.aiStreamTransfering = false;
     }
 
-    public showHistory() {
-        this.isInHistoryView = true;
-        this.updateWebview('showHistory', {});
+    private async removeMessage(index: number) {
+        const removeIndexList: number[] = [index, index + 1];
+        const data = {selectedSession: await this.chatManager.removeMessages('chat', removeIndexList)};
+        this.updateWebview('removeMessage', data);
     }
 
-    private backToChat() {
-        this.isInHistoryView = false;
-        this.updateWebview('backToChat', {});
+    public async showSessionsSnapshot() {
+        const selectedSession = await this.chatManager.getSelectedSession('chat');
+        const sessionsSnapshot = await this.chatManager.getAllSessionsSnapshot('chat');
+        this.updateWebview('showSessionsSnapshot', {selectedSession: selectedSession, sessionsSnapshot: sessionsSnapshot});
     }
 
     public async addReference() {

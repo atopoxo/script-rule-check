@@ -13,18 +13,19 @@
             </div>
             <div class="detail-content">
                 <div v-for="(group, index) in groupedSessions" :key="index" class="date-section">
-                    <div class="date-header">{{ group.date }}</div>
+                    <div class="date-header">{{ group.tag }}</div>
                     <div class="sessions-list">
                         <div v-for="item in group.records" :key="item.id" class="session-item"
                             @mouseenter="handleItemHover(item.id)"
                             @mouseleave="handleItemLeave(item.id)"
-                            @click="loadSession(item.id)"
+                            @click="select(item.id)"
                         >
                             <div class="item-content-left">
+                                <div v-if="item.selected === true" class="item-check">√</div>
                                 <div class="item-icon" v-if="item.icon">
                                     <img :src="getIconPath(item.icon)"/>
                                 </div>
-                                <div class="item-name">{{ item.title }}</div>
+                                <div class="item-name">{{ item.name }}</div>
                             </div>
                             <div class="item-content-right">
                                 <div class="item-tag" v-if="item.tag"
@@ -33,7 +34,7 @@
                                         'border': item.tag.border ? '1px solid  var(--vscode-toolbar-hoverBackground)' : 'none'
                                     }"
                                 >{{ item.tag.text }}</div>
-                                <button v-if="showRemoveButton(item.id)" class="icon-button delete" @click.stop="deleteSession(item.id)"></button>
+                                <button v-if="showRemoveButton(item.id)" class="icon-button remove" @click.stop="remove(item.id)"></button>
                             </div>
                         </div>
                     </div>
@@ -64,7 +65,7 @@ export default defineComponent({
         }
     },
   
-    emits: ['back', 'loadSession', 'removeSession'],
+    emits: ['back', 'select', 'remove'],
 
     setup(props, { emit }) {
         const returnIconPath = ref<string>('return.svg');
@@ -84,12 +85,12 @@ export default defineComponent({
             emit('back');
         };
 
-        const loadSession = (id: string) => {
-            emit('loadSession', id);
+        const select = (id: string) => {
+            emit('select', id);
         }
 
-        const deleteSession = (id: string) => {
-            emit('removeSession', id);
+        const remove = (id: string) => {
+            emit('remove', id);
         }
 
         const handleItemHover = (id: string) => {
@@ -126,8 +127,8 @@ export default defineComponent({
             returnIconPath,
             getIconPath,
             back,
-            loadSession,
-            deleteSession,
+            select,
+            remove,
             handleItemHover,
             handleItemLeave,
             showRemoveButton
@@ -290,7 +291,7 @@ export default defineComponent({
     display: flex;
     align-items: center;
 }
-.item-content-right .icon-button.delete {
+.item-content-right .icon-button.remove {
     background-image: url('@assets/icons/dark/delete.svg');
     background-repeat: no-repeat;
     background-position: center;

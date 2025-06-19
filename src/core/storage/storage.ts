@@ -143,7 +143,7 @@ export class Storage {
         return session;
     }
 
-    public async getAIInstanceSessionsSnapshot(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "name"]): Promise<Record<string, any>[]> {
+    public async getAIInstanceSessionsSnapshot(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "lastModifiedTimestamp", "name"]): Promise<Record<string, any>[]> {
         const result: Record<string, any>[] = [];
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (!aiInstance) {
@@ -194,17 +194,24 @@ export class Storage {
         return session;
     }
 
-    public async removeAIInstanceMessages(userId: string, instanceName: string) {
+    public async removeAIInstanceMessages(userId: string, instanceName: string, removeIndexList?: number[]): Promise<Session | undefined>  {
+        let sessionInfo: any = undefined;
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-            sessionInfo.history = [];
+            sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId) as Session;
+            if (removeIndexList) {
+                sessionInfo.history = sessionInfo.history.filter((_: any, index: number) => !removeIndexList.includes(index));
+            } else {
+                sessionInfo.history = [];
+            }
+            sessionInfo.lastModifiedTimestamp = Date.now();
             // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
             const userInfo = await this.getUserInfo(userId);
             if (userInfo) {
                 await this.saveUserInfo(userId, userInfo);
             }
         }
+        return sessionInfo;
     }
 
     public async removeAIInstanceCache(userId: string, instanceName: string) {
@@ -220,19 +227,23 @@ export class Storage {
         }
     }
 
-    public async updateUserInfo(userId: string, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false, index: number = -1) {
+    public async updateUserInfo(userId: string, instanceName: string, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false, index: number = -1) {
         if (message) {
-            const messages = await this.getAIInstanceMessages(userId, "chat");
-            if (messages) {
-                if (messageReplace && messages.length > 0) {
-                    messages[index] = message;
-                } else {
-                    if (index == -1 || index >= messages.length) {
-                        messages.push(message);
-                    } else {
+            const session = await this.getAIInstanceSelectedSession(userId, instanceName);
+            if (session) {
+                const messages = session?.history;
+                if (messages) {
+                    if (messageReplace && messages.length > 0) {
                         messages[index] = message;
+                    } else {
+                        if (index == -1 || index >= messages.length) {
+                            messages.push(message);
+                        } else {
+                            messages[index] = message;
+                        }
                     }
                 }
+                session.lastModifiedTimestamp = Date.now();
             }
         }
         if (cache) {

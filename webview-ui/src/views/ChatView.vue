@@ -12,19 +12,38 @@
             </div>
             <div class="role-name" v-if="msg.role === 'assistant'">AI 助手</div>
           </div>
-          <div class="content">
-            <message-render :isDark="isDark" :content="msg.content"></message-render>
-            <!-- 引用展示 -->
-            <div v-if="msg.references && msg.references.length > 0" class="references">
-              <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
-                <i :class="`codicon ${getRefIcon(ref.type)}`"></i>
-                <span>{{ ref.name }}</span>
+          <div class="content-block">
+            <div class="content">
+              <message-render :isDark="isDark" :content="msg.content"></message-render>
+              <!-- 引用展示 -->
+              <div v-if="msg.references && msg.references.length > 0" class="references">
+                <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
+                  <i :class="`codicon ${getRefIcon(ref.type)}`"></i>
+                  <span>{{ ref.name }}</span>
+                </div>
               </div>
             </div>
+            <div v-if="msg.role === 'user'" class="feedback user">
+              <button v-if="modifiedIndex" class="icon-button" @click="cancelModify()">
+                <img :src="getfeedbackIconPath('cancel')" />
+              </button>
+              <button v-else class="icon-button" @click="modify(index)">
+                <img :src="getfeedbackIconPath('modify')" />
+              </button>
+              <button class="icon-button" @click="copy(msg.content, $event)">
+                <img :src="getfeedbackIconPath('copy')" />
+              </button>
+              <button class="icon-button" @click="removeMessage(index)">
+                <img :src="getfeedbackIconPath('remove')" />
+              </button>
+            </div>
           </div>
-          <div v-if="msg.role === 'assistant'" class="feed-back">
-            <button class="icon-button regenerate-button" @click="regenerate(index)">
+          <div v-if="msg.role === 'assistant'" class="feedback">
+            <button class="icon-button" @click="regenerate(index)">
               <img :src="getfeedbackIconPath('regenerate')" />
+            </button>
+            <button class="icon-button" @click="copy(msg.content, $event)">
+              <img :src="getfeedbackIconPath('copy')" />
             </button>
           </div>
         </div>
@@ -85,23 +104,23 @@
       </div>
     </div>
     <div v-else-if="isInHistoryView" class="history-container">
-      <history-view :isDark="isDark" :groupedSessions="historySessions"></history-view>
+      <history-view :isDark="isDark" :groupedSessions="historySessions" 
+        @back="backToChat()"
+        @select="selectSession"
+        @remove="removeSession"></history-view>
     </div>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, watch, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue';
-import type { Session, SessionRecordList, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
-import type { Window }  from '../types/GlobalTypes';
+import type { Session, SessionRecordList, SessionRecord, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
 import SyMenuBar from '../components/SyMenuBar.vue';
 import MessageRender from '../components/MessageRender.vue';
 import SySelector from '../components/SySelector.vue';
 import SyTag from '../components/SyTag.vue';
 import HistoryView from './HistoryView.vue';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
-
-declare const window: Window;
 
 export default defineComponent({
   components: {
@@ -116,8 +135,8 @@ export default defineComponent({
     const vscode = (window as any).acquireVsCodeApi();
     const titleBarText = ref('大模型聊天');
     const menuItems = ref<MenuItem[]>([
-      { id: 'newSession', tooltip: '创建新会话', icon: 'create-session.svg' },
-      { id: 'showHistory', tooltip: '查看历史会话', icon: 'history.svg' },
+      { id: 'addSession', tooltip: '创建新会话', icon: 'create-session.svg' },
+      { id: 'showSessionsSnapshot', tooltip: '查看历史会话', icon: 'history.svg' },
       { id: 'settings', tooltip: '设置', icon:'settings.svg' },
     ]);
     const selectedSession = ref<Session | null>(null);
@@ -125,22 +144,7 @@ export default defineComponent({
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
     const sessionTagFontSize = "11px";
-    const historySessions = ref<SessionRecordList[]>([
-      {
-        date: '2025-06-06',
-        records: [
-          { id: "1", title: "聊天一", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] },
-          { id: "2", title: "聊天二", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] }
-        ]
-      },
-      {
-        date: '2025-06-05',
-        records: [
-          { id: "3", title: "聊天三", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] },
-          { id: "4", title: "聊天四", icon: "talk.svg", tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }, messages: [] }
-        ]
-      }
-    ]);
+    const historySessions = ref<SessionRecordList[]>([]);
     const showReferenceSelector = ref(false);
     const referenceItems = ref<SelectorItem[]>([]);
     const isDark = ref<boolean>(false);
@@ -167,15 +171,15 @@ export default defineComponent({
     let aiStreamMessageBeginFlag = false;
     let aiStreamMessage: any;
     const isAIStreamTransfer = ref<boolean>(false)
+    const modifiedIndex = ref<number | undefined>(undefined);
     
     const handleMenuClick = (id: string) => {
       switch (id) {
-        case 'newSession':
-          // vscode.postMessage({ type: 'newSession' });
+        case 'addSession':
+          vscode.postMessage({ type: 'addSession' });
           break;
-        case 'showHistory':
-          isInHistoryView.value = isInHistoryView.value ? false : true;
-          // vscode.postMessage({ type: 'showHistory' });
+        case 'showSessionsSnapshot':
+          vscode.postMessage({ type: 'showSessionsSnapshot' });
           break;
         case 'settings':
           // vscode.postMessage({ type: 'settings' });
@@ -191,6 +195,60 @@ export default defineComponent({
         history: session.history.map((msg: any) => reactive({ ...msg }))
       }
       return result;
+    }
+
+    const getHistorySessions = (sessions: Session[]): SessionRecordList[] => {
+      const currentTimestamp = new Date();
+      const todayStart = new Date(currentTimestamp);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayStartTime = todayStart.getTime();
+      const yesterdayStart = new Date(todayStart);
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+      const yesterdayStartTime = yesterdayStart.getTime();
+      const oneWeekAgoStart = new Date(todayStart);
+      oneWeekAgoStart.setDate(oneWeekAgoStart.getDate() - 7);
+      const oneWeekAgoStartTime = oneWeekAgoStart.getTime();
+      const oneMonthAgoStart = new Date(todayStart);
+      oneMonthAgoStart.setMonth(oneMonthAgoStart.getMonth() - 1);
+      const oneMonthAgoStartTime = oneMonthAgoStart.getTime();
+      const categorized: SessionRecordList[] = [];
+      sessions.forEach(session => {
+        const timestamp = session.lastModifiedTimestamp;
+        if (timestamp >= todayStartTime) {
+          createChatSessionSnapshot(categorized, "今天", todayStartTime, session);
+        } else if (timestamp >= yesterdayStartTime) {
+          createChatSessionSnapshot(categorized, "昨天", yesterdayStartTime, session);
+        } else if (timestamp >= oneWeekAgoStartTime) {
+          createChatSessionSnapshot(categorized, "一周内", oneWeekAgoStartTime, session);
+        } else if (timestamp >= oneMonthAgoStartTime) {
+          createChatSessionSnapshot(categorized, "一个月内", oneMonthAgoStartTime, session);
+        } else {
+          createChatSessionSnapshot(categorized, "更早的时候", oneMonthAgoStartTime + 1, session);
+        }
+      });
+      return categorized;
+    }
+
+    const createChatSessionSnapshot = (categorized: SessionRecordList[], tag: string, tagTime: number, session: any) => {
+      const item: SessionRecord = {
+          id: session.id,
+          selected: session.selected,
+          lastModifiedTimestamp: session.lastModifiedTimestamp,
+          name: session.name,
+          icon: "talk.svg",
+          tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }
+        };
+      for (let i = 0; i < categorized.length; i++) {
+        if (categorized[i].tag === tag) {
+          categorized[i].records.push(item);
+          return;
+        }
+      }
+      categorized.push({ 
+        tag: tag,
+        timestamp: tagTime,
+        records: [item]
+      });
     }
 
     const selectModel = () => {
@@ -410,6 +468,18 @@ export default defineComponent({
             case 'regenerate':
               iconPath = 'refresh.svg';
               break;
+            case 'copy':
+              iconPath = 'copy.svg';
+              break;
+            case 'modify':
+              iconPath = 'modify.svg';
+              break;
+            case 'cancel':
+              iconPath = 'cancel-modify.svg';
+              break;
+            case 'remove':
+              iconPath = 'remove.svg';
+              break;
           }
           return new URL(`${iconRoot}${relativePath}/${iconPath}`, currentModuleUrl).href;
       } catch (error) {
@@ -460,10 +530,12 @@ export default defineComponent({
         vscode.postMessage({
           type: 'sendMessage',
           data: {
-            content: messageInput.value
+            content: messageInput.value,
+            index: modifiedIndex.value
           }
           // references: references
         });
+        modifiedIndex.value = undefined;
         messageInput.value = '';
         // references.value = [];
 
@@ -484,7 +556,72 @@ export default defineComponent({
         type: 'regenerate',
         data: { index: index - 1}
       })
+    };
+
+    const modify = (index: number) => {
+      messageInput.value = selectedSession.value?.history[index]?.content as string;
+      modifiedIndex.value = index;
+    };
+
+    const cancelModify = () => {
+      modifiedIndex.value = undefined;
+    };
+
+    const copy = (content: string, event: MouseEvent) => {
+      const button = event.target as HTMLElement;
+      if (!button) {
+          return;
+      }
+
+      if (!document.hasFocus()) {
+          window.focus();
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(content).then(() => {
+              showFeedback(button, '✓');
+          }).catch(err => {
+              console.error('Clipboard API失败:', err);
+              fallbackCopy(content, button);
+          });
+      } else {
+          fallbackCopy(content, button);
+      }
     }
+
+    const fallbackCopy = (text: string, button: Element) => {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'absolute';
+        textArea.style.left = '-9999px';
+        textArea.style.top = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        textArea.setSelectionRange(0, textArea.value.length);
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showFeedback(button, '✓ 已复制');
+            } else {
+                showFeedback(button, '✗ 复制失败', true);
+            }
+        } catch (e) {
+            console.error('execCommand失败:', e);
+            showFeedback(button, '✗ 复制失败', true);
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    };
+
+    const showFeedback = (button: Element, message: string, isError = false) => {
+        const feedbackEl = document.createElement('span');
+        feedbackEl.textContent = message;
+        feedbackEl.className = isError ? 'feedback-copy error' : 'feedback-copy';
+        
+        button.replaceWith(feedbackEl);
+        setTimeout(() => {
+            feedbackEl.replaceWith(button);
+        }, 10000);
+    };
 
     const setSessionName = () => {
       if (selectedSession.value) {
@@ -496,24 +633,29 @@ export default defineComponent({
       }
     };
 
-    // 加载会话
-    const loadSession = (sessionId: string) => {
-      vscode.postMessage({ type: 'loadSession', sessionId });
+    const removeMessage = (index: number) => { 
+      vscode.postMessage({
+        type: 'removeMessage',
+        data: { index: index}
+      });
     };
 
-    // 删除会话
-    const deleteSession = (sessionId: string) => {
-      vscode.postMessage({ type: 'deleteSession', sessionId });
+    const selectSession = (sessionId: string) => {
+      vscode.postMessage({ 
+        type: 'selectSession', 
+        data: {sessionId: sessionId }
+      });
     };
 
-    // 显示历史
-    const showHistory = () => {
-      vscode.postMessage({ type: 'showHistory' });
+    const removeSession = (sessionId: string) => {
+      vscode.postMessage({ 
+        type: 'removeSession', 
+        data: {sessionId: sessionId }
+      });
     };
 
-    // 返回聊天
     const backToChat = () => {
-      vscode.postMessage({ type: 'backToChat' });
+      isInHistoryView.value = false;
     };
 
     const isDarkTheme = () => {
@@ -643,7 +785,27 @@ export default defineComponent({
               case 'aiStreamEnd':
                   handleAIStreamEnd(data);
                   break;
-              }
+              case 'removeMessage':
+                  selectedSession.value = getSelectedSession(data.selectedSession);
+                  break;
+              case 'showSessionsSnapshot':
+                  selectedSession.value = getSelectedSession(data.selectedSession);
+                  historySessions.value = getHistorySessions(data.sessionsSnapshot);
+                  isInHistoryView.value = true;
+                  break;
+              case 'addSession':
+                  selectedSession.value = getSelectedSession(data.selectedSession);
+                  isInHistoryView.value = false;
+                  break;
+              case 'selectSession':
+                  selectedSession.value = getSelectedSession(data.selectedSession);
+                  isInHistoryView.value = false;
+                  break;
+              case 'removeSession':
+                  selectedSession.value = getSelectedSession(data.selectedSession);
+                  historySessions.value = getHistorySessions(data.sessionsSnapshot);
+                  break;
+            }
         });
         vscode.postMessage({ type: 'ready' });
     });
@@ -679,15 +841,19 @@ export default defineComponent({
       createSession,
       getRoleIconPath,
       getfeedbackIconPath,
+      modifiedIndex,
       isAIStreamTransfer,
       sendMessage,
       regenerate,
+      modify,
+      cancelModify,
+      copy,
+      removeMessage,
       addReference,
       removeReference,
       setSessionName,
-      loadSession,
-      deleteSession,
-      showHistory,
+      selectSession,
+      removeSession,
       backToChat,
       showReferenceSelector,
       referenceOptions,
@@ -709,6 +875,11 @@ export default defineComponent({
 
 <style scoped>
 
+:global(:root) {
+  --input-content-bg: linear-gradient(var(--vscode-editor-background), var(--vscode-editor-background));
+  --input-active-bg: linear-gradient(90deg, #FF7979 15%, #EEA8FF 50%, #E5DCFF 85%);
+  --input-bg: linear-gradient(90deg, rgba(255, 121, 121, 0.70) 15%, rgba(238, 168, 255, 0.70) 50%, rgba(229, 220, 255, 0.70) 85%);
+}
 #app {
   height: 100%;
   display: flex;
@@ -825,7 +996,13 @@ export default defineComponent({
   font-weight: bold;
   margin-left: 3px;
 }
+.content-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
 .content {
+  position: relative;
   padding: 8px 8px;
   border-radius: 5px;
   background-color: var(--vscode-input-background);
@@ -848,16 +1025,34 @@ export default defineComponent({
 .reference i {
   margin-right: 5px;
 }
-.feed-back {
+.feedback.user:hover {
+  opacity: 1;
+}
+.content:hover + .feedback.user {
+  opacity: 1;
+}
+.feedback {
   display: flex;
   flex-direction: row;
   justify-content: flex-start;
   margin: 6px 0 0 0;
 }
-.feed-back .regenerate-button {
-  width: 26px;
-  height: 26px;
+.feedback.user {
+  opacity: 0;
+}
+.feedback button {
+  width: 24px;
+  height: 24px;
   margin: 0 0;
+  padding: 3px 3px;
+  opacity: 0.6;
+}
+.feedback-copy {
+    font-size: 14px;
+    color: #4caf50;
+}
+.feedback-copy.error {
+    color: #f44336;
 }
 
 .input-container {
@@ -867,19 +1062,20 @@ export default defineComponent({
   margin: 1.5% 1.5% 2% 1.5%;
   /* border-top: 1px solid var(--vscode-sideBarSectionHeader-border); */
   /* background-color: var(--vscode-editor-background); */
-  border: solid 2px transparent;
-  border-radius: 10px;
-  background-image: linear-gradient(var(--vscode-editor-background), var(--vscode-editor-background)), linear-gradient(to right, #643f42, #636067);
+  border: solid 1px transparent;
+  border-radius: 5px;
+  background-image: var(--input-content-bg), var(--input-bg);
   background-origin: border-box;
   background-clip: content-box, border-box;
   transition: height 0.2s ease;
   resize: vertical;
+  opacity: 0.9;
 }
 .input-container:focus-within {
-  box-shadow: 0 0 15px rgba(101, 67, 66, 0.8);
+  box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
 }
 .input-container:hover {
-  box-shadow: 0 0 15px rgba(101, 67, 66, 0.8);
+  box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
 }
 .references-bar {
   display: flex;

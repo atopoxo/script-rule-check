@@ -88,10 +88,10 @@ export class AIModelMgr {
         this.modelconfigs.set(id, config);
     }
 
-    async chatStream(modelID: string, inputData: any): Promise<any> {
+    public async chatStream(signal: AbortSignal, modelID: string, inputData: any): Promise<any> {
         const modelConfig = this.getModelConfig(modelID);
         const model = await this.getModel(modelConfig);
-        return model.chatStream(inputData);
+        return model.chatStream(signal, inputData);
     }
 
     async getModel(modelConfig: any): Promise<AIModelBase> {

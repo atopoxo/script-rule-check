@@ -69,6 +69,7 @@ export interface InputData {
     cache: Cache;
     index?: number;
     userID?: string;
+    instanceName?: string;
     toolsOn?: boolean;
     useKnowledge?: boolean;
     modelConfig?: any;

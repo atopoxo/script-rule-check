@@ -245,15 +245,6 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 chatViewProvider.showReferenceOptions(undefined);
             }
         }),
-        vscode.commands.registerCommand('extension.chat.showHistory', () => {
-            chatViewProvider.showHistory();
-        }),
-        vscode.commands.registerCommand('extension.chat.sendMessage', async () => {
-            // 发送消息实现
-        }),
-        vscode.commands.registerCommand('extension.chat.cancelResponse', () => {
-            // 取消响应实现
-        }),
         vscode.commands.registerCommand('extension.chat.addReference', async () => {
             await chatViewProvider.addReference();
         }),

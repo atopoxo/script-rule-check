@@ -205,7 +205,7 @@ export default defineComponent({
         contentRef.value.removeEventListener('click', handleCopyClick);
       }
     });
-
+    
     return { htmlContent, contentRef };
   }
 });

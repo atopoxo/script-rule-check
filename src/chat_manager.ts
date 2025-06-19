@@ -61,13 +61,18 @@ export class ChatManager {
         return await this.storage.setAIInstanceSessionName(this.userID, instanceName, sessionId, sessionName);
     }
 
-    public async chatStream(useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number) {
+    public async removeMessages(instanceName: string, removeIndexList: number[]): Promise<Session | undefined> {
+        return await this.storage.removeAIInstanceMessages(this.userID, instanceName, removeIndexList);
+    }
+
+    public async chatStream(signal: AbortSignal, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number) {
         const history = await this.getMessages(this.userID, query, index);
         let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
         modelID = this.getValidModelID(modelID);
 
         const data: InputData = {
             userID: this.userID,
+            instanceName: 'chat',
             history: history,
             index: index,
             toolsOn: toolsOn,
@@ -75,17 +80,21 @@ export class ChatManager {
             modelConfig: this.aiModelMgr.getModelConfig(modelID),
             cache: await this.storage.getAIInstanceCache(this.userID, 'chat')
         };
-        return this.aiModelMgr.chatStream(modelID, data);
+        return this.aiModelMgr.chatStream(signal, modelID, data);
     }
 
     private async getMessages(userID: string, query?: string, index?: number): Promise<Message[]> {
         let message: Message;
         let history: Message[];
-        if (index !== undefined) {
+        if (index != undefined) {
+            if (query) {
+                message = { role: 'user', content: query as string, timestamp: Date.now() };
+                await this.storage.updateUserInfo(userID, "chat", message, undefined, true, index);
+            }
             history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
         } else {
             message = { role: 'user', content: query as string, timestamp: Date.now() };
-            await this.storage.updateUserInfo(userID, message);
+            await this.storage.updateUserInfo(userID, "chat", message);
             history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
             await this.storage.addAIRound(userID, 'chat');
         }

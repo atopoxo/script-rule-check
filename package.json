@@ -167,22 +167,8 @@
         "title": "修改模型配置"
       },
       {
-        "command": "extension.chat.showHistory",
-        "title": "查看历史会话",
-        "icon": "$(history)"
-      },
-      {
         "command": "extension.chat.deleteHistorySession",
         "title": "删除历史记录"
-      },
-      {
-        "command": "extension.chat.sendMessage",
-        "title": "发送消息"
-      },
-      {
-        "command": "extension.chat.cancelResponse",
-        "title": "取消响应",
-        "icon": "$(close)"
       },
       {
         "command": "extension.chat.addReference",
@@ -248,11 +234,6 @@
           "command": "extension.setDisplayFlatMode",
           "when": "view == ruleCheckResults",
           "group": "navigation@5"
-        },
-        {
-          "command": "extension.chat.showHistory",
-          "when": "view == chatView",
-          "group": "navigation@2"
         }
       ],
       "view/item/context": [],

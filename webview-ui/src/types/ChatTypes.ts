@@ -52,14 +52,16 @@ export interface MenuItem {
 
 export interface SessionRecord {
   id: string;
-  title: string;
+  selected: boolean;
+  lastModifiedTimestamp: number;
+  name: string;
   icon?: string;
   tag?: SelectorItemTag;
-  messages: Message[];
 }
 
 export interface SessionRecordList {
-  date: string;
+  tag: string;
+  timestamp: number;
   records: SessionRecord[];
 }
 

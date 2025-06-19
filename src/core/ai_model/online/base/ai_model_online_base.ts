@@ -6,12 +6,13 @@ export class AIModelOnlineBase extends AIModelBase {
         this.mode = "online";
     }
 
-    chatStream(extra_data: any): AsyncGenerator<any, void, unknown> {
+    public chatStream(signal: AbortSignal, data: any): AsyncGenerator<any, void, unknown> {
         const self = this;
 
         async function* generate(): AsyncGenerator<any, void, unknown> {
             try {
-                yield* self.streamGeneratorFramework(extra_data);
+                yield* self.streamGeneratorFramework(signal, data);
+
             } catch (ex: any) {
                 const error = ex instanceof Error ? ex.message : String(ex);
                 console.error(error);
