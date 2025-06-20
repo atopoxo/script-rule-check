@@ -16,6 +16,10 @@ export default defineComponent({
         type: Boolean,
         default: false
     },
+    styleTransform: {
+        type: Boolean,
+        default: true
+    },
     content: {
       type: String,
       required: true
@@ -25,6 +29,20 @@ export default defineComponent({
     const htmlContent = ref('');
     const contentRef = ref<HTMLElement | null>(null);
     
+    const replaceOutsideCode = (source: string, pattern: RegExp, replacement: string) => {
+        const codeBlockRegex = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
+        let lastIndex = 0;
+        let result = '';
+        
+        source.replace(codeBlockRegex, (match, offset) => {
+            result += source.slice(lastIndex, offset).replace(pattern, replacement);
+            result += match;
+            lastIndex = offset + match.length;
+            return match;
+        });
+        result += source.slice(lastIndex).replace(pattern, replacement);
+        return result;
+    };
     const md2html = (content: string) => {
 		let text = String(content)
         text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
@@ -32,6 +50,7 @@ export default defineComponent({
         const codeStyleEnd = `</code></pre>`;
         let md = MarkdownIt({
             html: true,
+            breaks: true,
             highlight: function (str: string, lang: string) {
                 let highlightedText = '';
                 try{
@@ -79,9 +98,14 @@ export default defineComponent({
             }
         })
         .use(MarkdownItMathjax());
-        text = text.replace(/<think>/g, '::: think\n').replace(/<\/think>/g, '\n:::\n');
-        text = text.replace(/<conclusion>/g, '::: conclusion\n').replace(/<\/conclusion>/g, '\n:::\n');
+        text = replaceOutsideCode(text, /<think>/g, '::: think\n');
+        text = replaceOutsideCode(text, /<\/think>/g, '\n:::\n');
+        text = replaceOutsideCode(text, /<conclusion>/g, '::: conclusion\n');
+        text = replaceOutsideCode(text, /<\/conclusion>/g, '\n:::\n');
         text = text.replace(/\r\n/g, '\n');
+        text = text.replace(/^(\s+)/gm, (match) => {
+            return match.replace(/ /g, '\u00A0').replace(/\t/g, '\u00A0\u00A0\u00A0\u00A0');
+        });
         // text = text.replace(/\n\n/g, '\n<br>\n');
         try {
           let html = md.render(text);
@@ -93,6 +117,19 @@ export default defineComponent({
         }
         // text = text.replace(/<code>/g, '<pre class="code-block"><code>').replace(/<\/code>/g, '</code></pre>');
 	};
+
+    const content2html = (content: string) => {
+        let escaped = content
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+        escaped = escaped.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        escaped = escaped.replace(/ /g, '&nbsp;').replace(/\t/g, '&emsp;');
+        escaped = escaped.replace(/\n/g, '<br>');
+        return escaped;
+    }
 
     const handleCopyClick = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
@@ -167,12 +204,13 @@ export default defineComponent({
     const themeInit = async () => {
         let link: any;
         try {
-            const oldThemeId = props.isDark ? 'github' : 'github-dark';
+            //https://highlightjs.org/demo
+            const oldThemeId = props.isDark ? 'atom-one-light' : 'atom-one-dark';
             const oldLink = document.getElementById(oldThemeId);
             if (oldLink && document.head.contains(oldLink)) {
                 document.head.removeChild(oldLink);
             }
-            const themeId = props.isDark ? 'github-dark': 'github';
+            const themeId = props.isDark ? 'atom-one-dark': 'atom-one-light';
             if (!document.getElementById(themeId)) {
                 link = document.createElement('link');
                 link.id = themeId;
@@ -191,7 +229,11 @@ export default defineComponent({
 
     watchEffect(() => {
         themeInit();
-        htmlContent.value = md2html(props.content);
+        if (props.styleTransform) {
+            htmlContent.value = md2html(props.content);
+        } else {
+            htmlContent.value = content2html(props.content);
+        }
     });
 
     onMounted(() => {
@@ -264,7 +306,7 @@ export default defineComponent({
     --line-01: var(--vscode-commandCenter-inactiveBorder);
 }
 :deep(.hljs) {
-    background: var(--vscode-textCodeBlock-background) !important;
+    background: transparent !important;
     padding: 10px !important;
     margin: 0 !important;
     /* border-radius: 0px 0px 5px 5px !important;
@@ -281,5 +323,6 @@ export default defineComponent({
   /* white-space: pre-wrap; */
   word-wrap: break-word;
   word-break: normal;
+  background-color: transparent;
 }
 </style>

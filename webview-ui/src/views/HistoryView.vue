@@ -275,6 +275,7 @@ export default defineComponent({
     font-size: 14px;
     line-height: 1.4;
     margin-left: 4px;
+    white-space: nowrap;
 }
 .item-tag {
     opacity: 1;
@@ -286,6 +287,7 @@ export default defineComponent({
 .item-content-left {
     display: flex;
     align-items: center;
+    overflow: hidden;
 }
 .item-content-right {
     display: flex;

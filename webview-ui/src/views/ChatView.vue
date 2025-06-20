@@ -14,7 +14,7 @@
           </div>
           <div class="content-block">
             <div class="content">
-              <message-render :isDark="isDark" :content="msg.content"></message-render>
+              <message-render :isDark="isDark" :styleTransform="msg.role === 'assistant'" :content="msg.content"></message-render>
               <!-- 引用展示 -->
               <div v-if="msg.references && msg.references.length > 0" class="references">
                 <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
@@ -60,7 +60,7 @@
           v-model="messageInput" 
           :placeholder="placeholderText"
           ref="textareaRef"
-          @input="adjustTextareaHeight"
+          @input="throttledAdjustHeight"
           @keydown="handleKeyDown"
         ></textarea>
         <div class="input-functions">
@@ -114,6 +114,7 @@
 
 <script lang="ts">
 import { defineComponent, watch, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue';
+// import { throttle } from 'lodash-es';
 import type { Session, SessionRecordList, SessionRecord, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
 import SyMenuBar from '../components/SyMenuBar.vue';
 import MessageRender from '../components/MessageRender.vue';
@@ -339,7 +340,18 @@ export default defineComponent({
       if (event.key === 'Enter') {
         if (event.ctrlKey || event.metaKey) {
           event.preventDefault();
-          messageInput.value += '\n';
+          const textarea = textareaRef.value as HTMLTextAreaElement;
+          if (!textarea) {
+            return;
+          }
+          const startPos = textarea.selectionStart;
+          const endPos = textarea.selectionEnd;
+          const value = textarea.value;
+          const newValue = value.substring(0, startPos) + '\n' + value.substring(endPos);
+          textarea.value = newValue;
+          messageInput.value = newValue;
+          const newPos = startPos + 1;
+          textarea.setSelectionRange(newPos, newPos);
           adjustTextareaHeight();
         } else if (!event.shiftKey) {
           event.preventDefault();
@@ -348,93 +360,128 @@ export default defineComponent({
       }
     };
 
-    const adjustTextareaHeight = async() => {
-      if (!textareaRef.value) return;
+    const textareaStyles = ref({
+      fontSize: 0,
+      fontFamily: 'inherit',
+      lineHeight: textAreaLineHeight,
+      paddingTop: 0,
+      paddingBottom: 0,
+      paddingLeft: 0,
+      paddingRight: 0,
+      borderTopWidth: 0,
+      borderBottomWidth: 0,
+      boxSizing: 'content-box'
+    });
+
+    const throttle = (func: Function, limit: number) => {
+      let lastFunc: ReturnType<typeof setTimeout>;
+      let lastRan: number;
+      return function(this: any, ...args: any[]) {
+        const context = this;
+        if (!lastRan) {
+          func.apply(context, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(() => {
+            if (Date.now() - lastRan >= limit) {
+              func.apply(context, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      }
+    }
+
+    const adjustTextareaHeight = throttle(async() => {
+      if (!textareaRef.value) {
+        return;
+      }
       const target = textareaRef.value;
-      // target.value = messageInput.value;
-      const scrollHeight = getScrollHeight(target);
-      const contentHeight = Math.min(scrollHeight, maxTextAreaHeight);
+      if (textareaStyles.value.fontSize == 0) {
+        const style = getComputedStyle(target);
+        textareaStyles.value = {
+          fontSize: parseInt(style.fontSize) || 16,
+          fontFamily: style.fontFamily,
+          lineHeight: parseInt(style.lineHeight) || 20,
+          paddingTop: parseInt(style.paddingTop) || 0,
+          paddingBottom: parseInt(style.paddingBottom) || 0,
+          paddingLeft: parseInt(style.paddingLeft) || 0,
+          paddingRight: parseInt(style.paddingRight) || 0,
+          borderTopWidth: parseInt(style.borderTopWidth) || 0,
+          borderBottomWidth: parseInt(style.borderBottomWidth) || 0,
+          boxSizing: style.boxSizing
+        };
+      }
+      const contentHeight = calculateContentHeight(target.value, target.clientWidth);
       target.style.height = `${contentHeight}px`;
-      target.style.overflowY = scrollHeight > maxTextAreaHeight ? 'auto' : 'hidden';
+      target.style.overflowY = contentHeight >= maxTextAreaHeight ? 'auto' : 'hidden';
       containerHeight.value = referenceBarHeight.value + textAreaBorder + contentHeight + defaultFunctionContainerHeight;
-    };
+    }, 100);
 
-    function getScrollHeight(target: HTMLTextAreaElement) {
-      const hiddenTextarea = document.createElement('textarea');
-      hiddenTextarea.setAttribute('style', `
-        position: absolute;
-        visibility: hidden;
-        height: 0;
-        overflow: hidden;
-        ${getComputedStyleText(target)}  // ✅ 使用自定义方法
-      `);
-      hiddenTextarea.value = target.value;
+    const throttledAdjustHeight = throttle(adjustTextareaHeight, 100);
 
-      document.body.appendChild(hiddenTextarea);
-      const style = getComputedStyle(hiddenTextarea);
-      const lineHeight = parseInt(style.lineHeight) || 20;
-      const paddingTop = parseInt(style.paddingTop) || 0;
-      const paddingBottom = parseInt(style.paddingBottom) || 0;
-      const paddingLeft = parseInt(style.paddingLeft) || 0;
-      const paddingRight = parseInt(style.paddingRight) || 0;
-      const borderTop = parseInt(style.borderTopWidth) || 0;
-      const borderBottom = parseInt(style.borderBottomWidth) || 0;
-      const fontSize = parseInt(style.fontSize) || 16;
-      const fontFamily = style.fontFamily;
-      const textareaWidth = target.clientWidth;
-      const availableWidth = textareaWidth - paddingLeft - paddingRight;
-
+    const calculateContentHeight = (text: string, availableWidth: number) => {
+      const {
+        fontSize,
+        fontFamily,
+        lineHeight,
+        paddingTop,
+        paddingBottom,
+        paddingLeft,
+        paddingRight,
+        borderTopWidth,
+        borderBottomWidth,
+        boxSizing
+      } = textareaStyles.value;
+      const textareaWidth = availableWidth - paddingLeft - paddingRight;
+      let canvas: HTMLCanvasElement | null = document.createElement('canvas');
+      let ctx: CanvasRenderingContext2D | null = canvas.getContext('2d')!;
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      const explicitLines = text.split(/\r?\n|\r/);
       let totalLines = 0;
-      const explicitLines = target.value.split(/\r?\n|\r/);
+      let currentLineWidth = 0;
+
       explicitLines.forEach(line => {
         if (line.length === 0) {
           totalLines += 1;
           return;
         }
-        let currentLineWidth = 0;
-        let lineCountForThisLine = 1;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          const charWidth = getCharWidth(char, fontSize, fontFamily);
-          if (currentLineWidth + charWidth > availableWidth) {
-            lineCountForThisLine++;
-            currentLineWidth = charWidth;
+        let words = line.split(/(\s+)/);
+        for (let i = 0; i < words.length; i++) {
+          const word = words[i];
+          let wordWidth = 0;
+          if (ctx) {
+            wordWidth = ctx.measureText(word).width;
           } else {
-            currentLineWidth += charWidth;
+            wordWidth = word.length * fontSize * 0.6;
+          }
+          if (currentLineWidth + wordWidth > textareaWidth) {
+            const chars = word.split('');
+            for (const char of chars) {
+              const charWidth = ctx ? ctx.measureText(char).width : fontSize * 0.6;
+              if (currentLineWidth + charWidth > textareaWidth) {
+                totalLines++;
+                currentLineWidth = charWidth;
+              } else {
+                currentLineWidth += charWidth;
+              }
+            }
+          } else {
+            currentLineWidth += wordWidth;
           }
         }
-        totalLines += lineCountForThisLine;
       });
+      if (currentLineWidth > 0) {
+        totalLines++;
+      }
       let contentHeight = totalLines * lineHeight;
-      if (style.boxSizing === 'border-box') {
-        contentHeight += paddingTop + paddingBottom + borderTop + borderBottom;
+      if (boxSizing === 'border-box') {
+        contentHeight += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
       } else {
         contentHeight += paddingTop + paddingBottom;
       }
-      document.body.removeChild(hiddenTextarea);
-      return contentHeight;
-    }
-
-    function getComputedStyleText(element: HTMLElement): string {
-      const computedStyle = window.getComputedStyle(element);
-      const essentialProps = [
-        'font-family', 'font-size', 'font-weight', 'font-style',
-        'line-height', 'letter-spacing', 'word-spacing',
-        'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-        'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-        'box-sizing'
-      ];
-      
-      return essentialProps.map(prop => 
-        `${prop}:${computedStyle.getPropertyValue(prop)}`
-      ).join(';');
-    }
-
-    function getCharWidth(char: string, fontSize: number, fontFamily: string): number {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      ctx.font = `${fontSize}px ${fontFamily}`;
-      return ctx.measureText(char).width;
+      return Math.min(contentHeight, maxTextAreaHeight);
     }
 
     const addReference = () => {
@@ -835,6 +882,7 @@ export default defineComponent({
       containerHeight,
       handleMenuClick,
       handleKeyDown,
+      throttledAdjustHeight,
       adjustTextareaHeight,
       getRefIcon,
       formatTime,
@@ -1005,7 +1053,7 @@ export default defineComponent({
   position: relative;
   padding: 8px 8px;
   border-radius: 5px;
-  background-color: var(--vscode-input-background);
+  background-color: transparent;
 }
 .message.user .content {
   background-color: var(--vscode-list-inactiveSelectionBackground);
@@ -1095,6 +1143,8 @@ export default defineComponent({
   min-height: 19px !important;
   max-height: none;
   overflow-y: hidden;
+  box-sizing: border-box;
+  transition: height 0.2s ease;
 }
 .input-container textarea:focus {
   outline: none;
