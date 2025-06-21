@@ -4,7 +4,7 @@ const copy = require('lodash/cloneDeep');
 import { getJsonParser } from '../../json/json_parser';
 import { ToolsMgr } from '../../tools/tools_mgr';
 import type { ToolCall } from '../../tools/tools_mgr';
-import type { ContentMap, Delta, InputData, Message } from './ai_types';
+import type { ContentMap, Delta, InputData, Session, Message } from './ai_types';
 
 export abstract class AIModelBase {
     protected jsonParser = getJsonParser();
@@ -46,6 +46,8 @@ export abstract class AIModelBase {
         const toolsOn = inputData.toolsOn || false;
         const userId = inputData.userID;
         const instanceName = inputData.instanceName;
+        const session = inputData.session as Session;
+        const sessionId = session.sessionId;
         const messages = inputData.history;
         const index = inputData.index ? inputData.index : messages.length - 1;
         const useKnowledge = inputData.useKnowledge || false;
@@ -64,7 +66,7 @@ export abstract class AIModelBase {
                 if (toolsOn) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    for await (const _ of this.streamGenerator(signal, modelName!, messages, maxTokens, contentMap, currentIndex)) {}
+                    for await (const _ of this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace)) {}
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     yield* this.reportToolInfos(tools, contentMap.conclusion_content);
@@ -76,7 +78,7 @@ export abstract class AIModelBase {
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                yield* this.streamGenerator(signal, modelName!, messages, maxTokens, contentMap, currentIndex);
+                yield* this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
                 streamContent = contentMap.think_content + contentMap.conclusion_content;
                 cache.returns.ai.ai_conclusion = contentMap.conclusion_content;
                 hasTask = cache.tool_calls.length > 0;
@@ -85,13 +87,13 @@ export abstract class AIModelBase {
                 yield streamContent;
                 console.error(ex as Error);
             } finally {
-                await this.saveMessages(needSave, streamContent, messages, userId, instanceName, messageReplace, currentIndex);
+                await this.saveMessages(needSave, streamContent, messages, userId, instanceName, sessionId, messageReplace, currentIndex);
                 messageReplace = true;
             }
         }
         cache.tools_describe = { tools_usage: "", tools_describe: "" };;
         cache.knowledge = "";
-        await this.saveCache(needSave, cache, userId, instanceName);
+        await this.saveCache(needSave, cache, userId, instanceName, sessionId);
     }
 
     private checkToolTips(messages: Message[], cache: any, begin: boolean, index: number): number {
@@ -137,7 +139,7 @@ export abstract class AIModelBase {
         }
     }
 
-    private async *streamGenerator(signal: AbortSignal, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number): AsyncGenerator<string, void, unknown> {
+    private async *streamGenerator(signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean): AsyncGenerator<string, void, unknown> {
         const response = await this.getResponse(moduleName, messages, true, maxTokens, index);
         for await (const chunk of response) {
             if (signal.aborted) {
@@ -145,6 +147,12 @@ export abstract class AIModelBase {
             }
             const delta = this.getDelta(chunk);
             yield* this.handleStreamNormalCalls(delta, contentMap);
+            if (session.forceSave) {
+                const streamContent = contentMap.think_content + contentMap.conclusion_content;
+                await this.saveSessionMessages(true, streamContent, messages, userId, session, messageReplace, index);
+                session.forceSave = false;
+                session.refresh = true;
+            }
         }
         yield* this.handleStreamNormalCalls(undefined, contentMap);
     }
@@ -328,11 +336,11 @@ export abstract class AIModelBase {
         yield deltaContent;
     }
 
-    private async saveMessages(needSave: boolean, response: string, history: Message[], userId: string | undefined, instanceName: string | undefined, messageReplace: boolean, index: number) {
+    private async saveMessages(needSave: boolean, response: string, history: Message[], userId: string | undefined, instanceName: string | undefined, sessionId: string | undefined, messageReplace: boolean, index: number) {
         if (needSave && userId && instanceName) {
             const aiMessageIndex = index + 1;
             const message: Message = { role: this.assistant, content: response, timestamp: Date.now() };
-            if (messageReplace && history.length > 0) {
+            if (messageReplace && aiMessageIndex < history.length) {
                 history[aiMessageIndex] = message;
             } else {
                 if (aiMessageIndex < history.length) {
@@ -341,13 +349,30 @@ export abstract class AIModelBase {
                     history.push(message);
                 }
             }
-            await this.storage.updateUserInfo(userId, instanceName, message, undefined, messageReplace=messageReplace, aiMessageIndex);
+            await this.storage.updateUserInfo(userId, instanceName, sessionId, message, undefined, messageReplace=messageReplace, aiMessageIndex);
         }
     }
 
-    private async saveCache(needSave: boolean, cache: any, userId: string | undefined, instanceName: string | undefined) {
+    private async saveCache(needSave: boolean, cache: any, userId: string | undefined, instanceName: string | undefined, sessionId: string | undefined) {
         if (needSave && userId && instanceName) {
-            await this.storage.updateUserInfo(userId, instanceName, undefined, cache);
+            await this.storage.updateUserInfo(userId, instanceName, sessionId, undefined, cache);
+        }
+    }
+
+    private async saveSessionMessages(needSave: boolean, response: string, history: Message[], userId: string | undefined, session: Session | undefined, messageReplace: boolean, index: number) {
+        if (needSave && userId && session) {
+            const aiMessageIndex = index + 1;
+            const message: Message = { role: this.assistant, content: response, timestamp: Date.now() };
+            if (messageReplace && aiMessageIndex < history.length) {
+                history[aiMessageIndex] = message;
+            } else {
+                if (aiMessageIndex < history.length) {
+                    history[aiMessageIndex] = message;
+                } else {
+                    history.push(message);
+                }
+            }
+            await this.storage.updateUserInfoBySession(userId, session, message, undefined, messageReplace=messageReplace, aiMessageIndex);
         }
     }
 

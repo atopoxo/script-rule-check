@@ -1,14 +1,28 @@
 <!-- MessageRenderer.vue -->
 <template>
-  <div class="text" v-html="htmlContent" ref="contentRef"></div>
+  <div v-if="contentType === 'html'" class="html-content" v-html="contentValue" ref="contentRef"></div>
+  <div v-if="contentType === 'text' && textEditable === false" class="text-content" 
+    :style="{
+        maxWidth: maxWidth + 'px',
+        height: nonEditHeight + 'px',
+        overflowX: textOverflowX,
+        overflowY: textOverflowY
+    }"  
+    ref="contentRef">{{ contentValue }}</div>
+  <div v-if="contentType === 'text' && textEditable === true" class="textarea-container" :style="{ height: containerHeight + 'px' }">
+    <textarea class="textarea-content" :style="`width: ${maxWidth}px;`"
+        :value="contentValue"
+        ref="contentRef"
+        @input="handleInput"
+        @compositionstart="handleCompositionStart"
+        @compositionend="handleCompositionEnd"
+        @keydown="handleKeyDown"></textarea>
+    </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect, onMounted, onUnmounted } from 'vue';
-import MarkdownIt from 'markdown-it';
-import MarkdownItMathjax from 'markdown-it-mathjax';
-import markdownItContainer from 'markdown-it-container';
-import hljs from 'highlight.js';
+import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick } from 'vue';
+import { throttle, md2html } from '../functions/BaseFunctions';
 
 export default defineComponent({
   props: {
@@ -16,120 +30,32 @@ export default defineComponent({
         type: Boolean,
         default: false
     },
-    styleTransform: {
+    contentType: {
+        type: String,
+        default: "html"
+    },
+    textEditable: {
         type: Boolean,
-        default: true
+        default: false
+    },
+    maxWidth: {
+        type: Number,
+        default: 0
     },
     content: {
       type: String,
       required: true
     }
   },
-  setup(props) {
-    const htmlContent = ref('');
-    const contentRef = ref<HTMLElement | null>(null);
-    
-    const replaceOutsideCode = (source: string, pattern: RegExp, replacement: string) => {
-        const codeBlockRegex = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
-        let lastIndex = 0;
-        let result = '';
-        
-        source.replace(codeBlockRegex, (match, offset) => {
-            result += source.slice(lastIndex, offset).replace(pattern, replacement);
-            result += match;
-            lastIndex = offset + match.length;
-            return match;
-        });
-        result += source.slice(lastIndex).replace(pattern, replacement);
-        return result;
-    };
-    const md2html = (content: string) => {
-		let text = String(content)
-        text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
-        const codeStyleBegin = `<pre class="hljs"><code>`;
-        const codeStyleEnd = `</code></pre>`;
-        let md = MarkdownIt({
-            html: true,
-            breaks: true,
-            highlight: function (str: string, lang: string) {
-                let highlightedText = '';
-                try{
-                    if (lang && hljs.getLanguage(lang)) {
-                        try {
-                            highlightedText = codeStyleBegin + hljs.highlight(str, {language: lang, ignoreIllegals:true}).value + codeStyleEnd;
-                        } catch (ex) {
-                            highlightedText = codeStyleBegin + md.utils.escapeHtml(str) + codeStyleEnd;
-                        }
-                    } else {
-                        highlightedText = hljs.highlightAuto(str).value;
-                    }
-                } catch (e) {
-                    highlightedText = codeStyleBegin + md.utils.escapeHtml(str) + codeStyleEnd;
-                } finally { 
-                    const codeWithStyle = `${highlightedText}`;
-                    const toolbar = `
-                        <div class="code-toolbar">
-                            <div class="language">${lang || 'plaintext'}</div>
-                            <button class="copy-code-button" title="复制代码">复制</button>
-                        </div>
-                        `;
-                    return `<div class="code-block-wrapper">${toolbar}${codeWithStyle}</div>`;
-                }
-            }
-        })
-        .use(markdownItContainer, 'think', {
-            validate: function(params: any) {
-                return params.trim() === 'think'
-            },
-            render: function(tokens: any, idx: any) {
-                return tokens[idx].nesting === 1 
-                    ? '<div class="think-block">\n' 
-                    : '</div>\n';
-            }
-        })
-        .use(markdownItContainer, 'conclusion', {
-            validate: function(params: any) {
-                return params.trim() === 'conclusion'
-            },
-            render: function(tokens: any, idx: any) {
-                return tokens[idx].nesting === 1 
-                    ? '<div class="conclusion-block">\n' 
-                    : '</div>\n';
-            }
-        })
-        .use(MarkdownItMathjax());
-        text = replaceOutsideCode(text, /<think>/g, '::: think\n');
-        text = replaceOutsideCode(text, /<\/think>/g, '\n:::\n');
-        text = replaceOutsideCode(text, /<conclusion>/g, '::: conclusion\n');
-        text = replaceOutsideCode(text, /<\/conclusion>/g, '\n:::\n');
-        text = text.replace(/\r\n/g, '\n');
-        text = text.replace(/^(\s+)/gm, (match) => {
-            return match.replace(/ /g, '\u00A0').replace(/\t/g, '\u00A0\u00A0\u00A0\u00A0');
-        });
-        // text = text.replace(/\n\n/g, '\n<br>\n');
-        try {
-          let html = md.render(text);
-          html = html.replace(/<p>/g, '<p style="margin:0;">');
-          return html;
-        } catch (e) {
-          console.error('Markdown渲染失败:', e);
-          return text; // 降级返回原始文本
-        }
-        // text = text.replace(/<code>/g, '<pre class="code-block"><code>').replace(/<\/code>/g, '</code></pre>');
-	};
 
-    const content2html = (content: string) => {
-        let escaped = content
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;")
-        escaped = escaped.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        escaped = escaped.replace(/ /g, '&nbsp;').replace(/\t/g, '&emsp;');
-        escaped = escaped.replace(/\n/g, '<br>');
-        return escaped;
-    }
+  emits: ['finish-edit'],
+  setup(props,  { emit }) {
+    const contentValue = ref('');
+    const contentRef = ref<HTMLElement | null>(null);
+    const contentType = ref('html');
+    const textEditable = ref(false);
+    const textEditPadding = ref(16);
+    const maxWidth = ref(0);
 
     const handleCopyClick = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
@@ -227,12 +153,218 @@ export default defineComponent({
         }
     };
 
-    watchEffect(() => {
-        themeInit();
-        if (props.styleTransform) {
-            htmlContent.value = md2html(props.content);
+    type OverflowType = 'visible' | 'hidden' | 'scroll' | 'auto' | 'inherit';
+    const nonEditHeight = ref(0);
+    const textOverflowX = ref<OverflowType>('auto');
+    const textOverflowY = ref<OverflowType>('auto');
+    const calculateNonEditHeight = () => {
+      if (!contentRef.value || props.contentType !== 'text' || props.textEditable) {
+        return;
+      }
+      
+      const element = contentRef.value as HTMLElement;
+      element.style.height = 'auto';
+      const contentHeight = element.scrollHeight;
+      nonEditHeight.value = contentHeight;
+      element.style.height = '';
+
+      textOverflowX.value = element.scrollWidth > props.maxWidth ? 'auto' : 'hidden';
+      textOverflowY.value = 'hidden';
+    };
+
+    const textAreaBorder = 1;
+    const textAreaPadding = 8;
+    const textAreaLineHeight = 19;
+    const maxTextLines = 16;
+    const textareaStyles = ref({
+      fontSize: 0,
+      fontFamily: 'inherit',
+      lineHeight: textAreaLineHeight,
+      paddingTop: textAreaPadding,
+      paddingBottom: textAreaPadding,
+      paddingLeft: textAreaPadding,
+      paddingRight: textAreaPadding,
+      borderTopWidth: textAreaBorder,
+      borderBottomWidth: textAreaBorder,
+      borderLeftWidth: textAreaBorder,
+      borderRightWidth: textAreaBorder,
+      boxSizing: 'content-box'
+    });
+    const maxTextAreaHeight = textAreaLineHeight * maxTextLines;
+    const isComposing = ref(false);
+    const pendingInput = ref('');
+    const defaultInputContainerHeight = textareaStyles.value.borderTopWidth + textareaStyles.value.borderBottomWidth +
+        textareaStyles.value.paddingTop + textareaStyles.value.paddingBottom +
+        textAreaLineHeight;
+    const containerHeight = ref(defaultInputContainerHeight);
+
+    const handleInput = (event: Event) => {
+        const target = event.target as HTMLTextAreaElement;
+        const value = target.value;
+        
+        if (isComposing.value) {
+            pendingInput.value = value;
         } else {
-            htmlContent.value = content2html(props.content);
+            contentValue.value = value;
+            throttledAdjustHeight();
+        }
+    };
+
+    const handleCompositionStart = () => {
+      isComposing.value = true;
+    };
+
+    const handleCompositionEnd = (event: CompositionEvent) => {
+      isComposing.value = false;
+      contentValue.value = (event.target as HTMLTextAreaElement).value;
+      throttledAdjustHeight();
+    };
+
+    const adjustTextareaHeight = throttle(async() => {
+      if (!contentRef.value) {
+        return;
+      }
+      const target = contentRef.value as HTMLTextAreaElement;
+      if (textareaStyles.value.fontSize == 0) {
+        const style = getComputedStyle(target);
+        textareaStyles.value = {
+          fontSize: parseInt(style.fontSize) || 16,
+          fontFamily: style.fontFamily,
+          lineHeight: parseInt(style.lineHeight) || 20,
+          paddingTop: parseInt(style.paddingTop) || 0,
+          paddingBottom: parseInt(style.paddingBottom) || 0,
+          paddingLeft: parseInt(style.paddingLeft) || 0,
+          paddingRight: parseInt(style.paddingRight) || 0,
+          borderTopWidth: parseInt(style.borderTopWidth) || 0,
+          borderBottomWidth: parseInt(style.borderBottomWidth) || 0,
+          borderLeftWidth: parseInt(style.borderLeftWidth) || 0,
+          borderRightWidth: parseInt(style.borderRightWidth) || 0,
+          boxSizing: style.boxSizing
+        };
+      }
+      const contentHeight = calculateContentHeight(target.value, target.clientWidth);
+      target.style.height = `${contentHeight}px`;
+      target.style.overflowY = contentHeight >= maxTextAreaHeight ? 'auto' : 'hidden';
+      const textareaHeight = textareaStyles.value.borderTopWidth + textareaStyles.value.paddingTop + contentHeight + textareaStyles.value.paddingBottom + textareaStyles.value.borderBottomWidth;
+      containerHeight.value =  textareaHeight;
+    }, 100);
+
+    const throttledAdjustHeight = throttle(adjustTextareaHeight, 100);
+
+    const calculateContentHeight = (text: string, availableWidth: number) => {
+      const {
+        fontSize,
+        fontFamily,
+        lineHeight,
+        paddingTop,
+        paddingBottom,
+        paddingLeft,
+        paddingRight,
+        borderTopWidth,
+        borderBottomWidth,
+        boxSizing
+      } = textareaStyles.value;
+      const textareaWidth = availableWidth - paddingLeft - paddingRight;
+      let canvas: HTMLCanvasElement | null = document.createElement('canvas');
+      let ctx: CanvasRenderingContext2D | null = canvas.getContext('2d')!;
+      ctx.font = `${fontSize}px ${fontFamily}`;
+      const explicitLines = text.split(/\r?\n|\r/);
+      let totalLines = 0;
+      let currentLineWidth = 0;
+
+      explicitLines.forEach(line => {
+        if (line.length === 0) {
+          totalLines += 1;
+          return;
+        }
+        let words = line.split(/(\s+)/);
+        for (let i = 0; i < words.length; i++) {
+          const word = words[i];
+          let wordWidth = 0;
+          if (ctx) {
+            wordWidth = ctx.measureText(word).width;
+          } else {
+            wordWidth = word.length * fontSize * 0.6;
+          }
+          if (currentLineWidth + wordWidth > textareaWidth) {
+            if (currentLineWidth > 0) {
+                totalLines++;
+                currentLineWidth = wordWidth;
+            } else {
+                const chars = word.split('');
+                for (const char of chars) {
+                    const charWidth = ctx ? ctx.measureText(char).width : fontSize * 0.6;
+                    if (currentLineWidth + charWidth > textareaWidth) {
+                        totalLines++;
+                        currentLineWidth = charWidth;
+                    } else {
+                        currentLineWidth += charWidth;
+                    }
+                }
+            }
+          } else {
+            currentLineWidth += wordWidth;
+          }
+        }
+        if (currentLineWidth > 0) {
+            totalLines++;
+        }
+      });
+      let contentHeight = totalLines * lineHeight;
+      if (boxSizing === 'border-box') {
+        contentHeight += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
+      } else {
+        contentHeight += paddingTop + paddingBottom;
+      }
+      return Math.min(contentHeight, maxTextAreaHeight);
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          const textarea = contentRef.value as HTMLTextAreaElement;
+          if (!textarea) {
+            return;
+          }
+          const startPos = textarea.selectionStart;
+          const endPos = textarea.selectionEnd;
+          const value = textarea.value;
+          const newValue = value.substring(0, startPos) + '\n' + value.substring(endPos);
+          textarea.value = newValue;
+          contentValue.value = newValue;
+          const newPos = startPos + 1;
+          textarea.setSelectionRange(newPos, newPos);
+          adjustTextareaHeight();
+        } else if (!event.shiftKey) {
+          event.preventDefault();
+          finishEdit(contentValue.value);
+        }
+      }
+    };
+
+    const finishEdit = (value: string) => {
+        emit('finish-edit', value);
+    }
+
+    watchEffect(async () => {
+        themeInit();
+        contentType.value = props.contentType;
+        textEditable.value = props.textEditable;
+        if (props.contentType === 'html') {
+            contentValue.value = md2html(props.content);
+        } else if (props.contentType === 'text') {
+            contentValue.value = props.content;
+            if (textEditable.value) {
+                maxWidth.value = props.maxWidth - textareaStyles.value.paddingLeft - textareaStyles.value.paddingRight -
+                textareaStyles.value.borderLeftWidth - textareaStyles.value.borderRightWidth;
+                await nextTick();
+                adjustTextareaHeight();
+            } else {
+                maxWidth.value = props.maxWidth - 16;
+                await nextTick();
+                calculateNonEditHeight();
+            }
         }
     });
 
@@ -248,7 +380,22 @@ export default defineComponent({
       }
     });
     
-    return { htmlContent, contentRef };
+    return { 
+        contentValue, 
+        contentRef, 
+        contentType, 
+        textEditable,
+        nonEditHeight,
+        textOverflowX,
+        textOverflowY,
+        handleKeyDown,
+        handleInput,
+        handleCompositionStart,
+        handleCompositionEnd,
+        textEditPadding,
+        maxWidth,
+        containerHeight,
+    };
   }
 });
 </script>
@@ -318,11 +465,65 @@ export default defineComponent({
     background: transparent !important;
     color: inherit !important;
 }
-.text {
+.html-content {
   backdrop-filter: blur(10px);
   /* white-space: pre-wrap; */
   word-wrap: break-word;
   word-break: normal;
   background-color: transparent;
+  padding: 8px 8px;
+  border-radius: 5px;
+}
+.text-content {
+    backdrop-filter: blur(10px);
+    /* white-space: pre-wrap; */
+    word-wrap: break-word;
+    word-break: normal;
+    background-color: transparent;
+    padding: 8px;
+    border-radius: 5px;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    transition: height 0.3s ease;
+}
+.textarea-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border: solid 1px transparent;
+    border-radius: 5px;
+    background-image: var(--input-content-bg), var(--input-bg);
+    background-origin: border-box;
+    background-clip: content-box, border-box;
+    transition: height 0.2s ease;
+    resize: vertical;
+    opacity: 0.9;
+}
+.textarea-content {
+    flex: 1;
+    background-color: transparent;
+    color: var(--vscode-input-foreground);
+    border: 1px solid transparent;
+    padding: 8px;
+    border-radius: 5px;
+    resize: none;
+    line-height: 19px;
+    min-height: 19px !important;
+    max-height: none;
+    width: calc(100% - 16px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    box-sizing: border-box;
+    transition: height 0.2s ease;
+}
+.textarea-content:focus {
+  outline: none;
+}
+.textarea-container:focus-within {
+  box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
+}
+.textarea-container:hover {
+  box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
 }
 </style>

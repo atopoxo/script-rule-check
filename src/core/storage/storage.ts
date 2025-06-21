@@ -10,7 +10,7 @@ import { Cache, ToolTip } from '../ai_model/base/ai_types';
 import { getJsonParser } from '../json/json_parser';
 import { Message, Session, AIInstance, UserInfo } from '../ai_model/base/ai_types'
 
-const PROJECT_INFO = "你是一个帮助人类解决问题的AI智能体\n";
+const MAX_SESSION_NAME_LENGTH = 60;
 
 @singleton()
 export class Storage {
@@ -115,14 +115,11 @@ export class Storage {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
             const sessionId = crypto.randomUUID();
-            session = await this.createAIInstanceSession(sessionId, "当前对话", Date.now());
+            session = await this.createAIInstanceSession(sessionId, Date.now());
             await this.setAIInstanceSession(aiInstance, sessionId, session);
             await this.setAIInstanceSelectedSession(userId, instanceName, sessionId);
         }
-        const userInfo = await this.getUserInfo(userId);
-        if (userInfo) {
-            await this.saveUserInfo(userId, userInfo);
-        }
+        await this.saveUserInfoWrapper(userId);
         return session;
     }
 
@@ -131,19 +128,16 @@ export class Storage {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
             await this.destroyAIInstanceSession(aiInstance, sessionId);
-            session = await this.getAIInstanceSelectedSession(userId, instanceName);
+            session = await this.getAIInstanceSession(userId, instanceName);
             if (!session) {
                 session = await this.addAIInstanceSession(userId, instanceName);
             }
-        }
-        const userInfo = await this.getUserInfo(userId);
-        if (userInfo) {
-            await this.saveUserInfo(userId, userInfo);
+            await this.saveUserInfoWrapper(userId);
         }
         return session;
     }
 
-    public async getAIInstanceSessionsSnapshot(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "lastModifiedTimestamp", "name"]): Promise<Record<string, any>[]> {
+    public async getAIInstanceSessionsSnapshot(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "lastModifiedTimestamp", "name", "isAIStreamTransfer"]): Promise<Record<string, any>[]> {
         const result: Record<string, any>[] = [];
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (!aiInstance) {
@@ -164,6 +158,7 @@ export class Storage {
             }
             result.push(info);
         }
+        result.sort((a, b) => b.lastModifiedTimestamp - a.lastModifiedTimestamp);
         return result;
     }
 
@@ -171,129 +166,141 @@ export class Storage {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
             aiInstance.selectedSessionId = sessionId;
+            await this.saveUserInfoWrapper(userId);
         }
-    }
-
-    public async getAIInstanceSelectedSession(userId: string, instanceName: string): Promise<Session | undefined> {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (aiInstance) {
-            return this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-        }
-        return undefined;
     }
 
     public async setAIInstanceSessionName(userId: string, instanceName: string, sessionId: string, name: string): Promise<Session | undefined> {
-        let session = undefined;
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (aiInstance) {
-            session = await this.getAIInstanceSession(aiInstance, sessionId);
-            if (session) {
-                session.name = name;
-            }
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (session) {
+            session.name = name;
+            await this.saveUserInfoWrapper(userId);
         }
         return session;
     }
 
-    public async removeAIInstanceMessages(userId: string, instanceName: string, removeIndexList?: number[]): Promise<Session | undefined>  {
-        let sessionInfo: any = undefined;
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (aiInstance) {
-            sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId) as Session;
-            if (removeIndexList) {
-                sessionInfo.history = sessionInfo.history.filter((_: any, index: number) => !removeIndexList.includes(index));
-            } else {
-                sessionInfo.history = [];
-            }
-            sessionInfo.lastModifiedTimestamp = Date.now();
-            // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
-            const userInfo = await this.getUserInfo(userId);
-            if (userInfo) {
-                await this.saveUserInfo(userId, userInfo);
-            }
+    public async removeAIInstanceMessages(userId: string, instanceName: string, sessionId?: string, removeIndexList?: number[]): Promise<Session | undefined>  {
+        const timestamp = Date.now();
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (!session) {
+            return undefined;
         }
-        return sessionInfo;
+        if (removeIndexList) {
+            session.history = session.history.filter((_: any, index: number) => !removeIndexList.includes(index));
+        } else {
+            session.history = [];
+        }
+        if (session.history.length <= 0) {
+            this.createAIIInstanceMessage(timestamp);
+        }
+        session.name = this.getSessionName(session.history);
+        session.lastModifiedTimestamp = timestamp;
+        // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
+        await this.saveUserInfoWrapper(userId);
+        return session;
     }
 
     public async removeAIInstanceCache(userId: string, instanceName: string) {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (aiInstance) {
-            const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-            sessionInfo.cache = this.getDefaultCache();
-            // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
-            const userInfo = await this.getUserInfo(userId);
-            if (userInfo) {
-                await this.saveUserInfo(userId, userInfo);
-            }
+        const session = await this.getAIInstanceSession(userId, instanceName);
+        if (!session) {
+            return;
         }
+        session.cache = this.getDefaultCache();
+        // await this.saveSession(userId, instanceName, selectedSessionId, sessionInfo);
+        await this.saveUserInfoWrapper(userId);
     }
 
-    public async updateUserInfo(userId: string, instanceName: string, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false, index: number = -1) {
+    public async updateUserInfo(userId: string, instanceName: string, sessionId?: string, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false, index: number = -1) {
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (!session) {
+            return;
+        }
         if (message) {
-            const session = await this.getAIInstanceSelectedSession(userId, instanceName);
-            if (session) {
-                const messages = session?.history;
-                if (messages) {
-                    if (messageReplace && messages.length > 0) {
-                        messages[index] = message;
+            const messages = session?.history;
+            if (messages) {
+                if (messageReplace && messages.length > 0) {
+                    messages[index] = message;
+                } else {
+                    if (index == -1 || index >= messages.length) {
+                        messages.push(message);
                     } else {
-                        if (index == -1 || index >= messages.length) {
-                            messages.push(message);
-                        } else {
-                            messages[index] = message;
-                        }
+                        messages[index] = message;
                     }
                 }
-                session.lastModifiedTimestamp = Date.now();
             }
+            session.lastModifiedTimestamp = Date.now();
+            session.name = this.getMessageName(message);
         }
         if (cache) {
-            const currentCache = await this.getAIInstanceCache(userId, "chat");
-            Object.assign(currentCache, cache);
+            Object.assign(session.cache, cache);
         }
-        const userInfo = await this.getUserInfo(userId);
-        if (userInfo) {
-            await this.saveUserInfo(userId, userInfo);
-        }
+        await this.saveUserInfoWrapper(userId);
     }
 
-    public async getAIInstanceMessages(userId: string, instanceName: string, deepCopy: boolean = false): Promise<Message[] | undefined> {
+    public async updateUserInfoBySession(userId: string, session: Session, message?: Message, cache?: Partial<Cache>, messageReplace: boolean = false, index: number = -1) {
+        if (message) {
+            const messages = session?.history;
+            if (messages) {
+                if (messageReplace && messages.length > 0) {
+                    messages[index] = message;
+                } else {
+                    if (index == -1 || index >= messages.length) {
+                        messages.push(message);
+                    } else {
+                        messages[index] = message;
+                    }
+                }
+            }
+            session.lastModifiedTimestamp = Date.now();
+            session.name = this.getMessageName(message);
+        }
+        if (cache) {
+            Object.assign(session.cache, cache);
+        }
+        await this.saveUserInfoWrapper(userId);
+    }
+
+    public async getAIInstanceMessages(userId: string, instanceName: string, sessionId?: string, deepCopy: boolean = false): Promise<Message[] | undefined> {
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (!session) {
+            return undefined;
+        }
+        return deepCopy ? this.jsonParser.parse(this.jsonParser.toJsonStr(session.history)) : session.history;
+    }
+
+    public async getAIInstanceCache(userId: string, instanceName: string): Promise<Cache> {
+        const session = await this.getAIInstanceSession(userId, instanceName);
+        if (!session) {
+            return this.getDefaultCache();
+        }
+        return session.cache;
+    }
+
+    public async getAIRound(userId: string, instanceName: string, sessionId?: string): Promise<number> {
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (!session) {
+            return 1;
+        }
+        return session.round;
+    }
+
+    public async addAIRound(userId: string, instanceName: string, sessionId?: string) {
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (!session) {
+            return;
+        }
+        session.round += 1;
+        // await this.saveSession(userId, 'chat', sessionId, sessionInfo);
+        await this.saveUserInfoWrapper(userId);
+    }
+
+    public async getAIInstanceSession(userId: string, instanceName: string, sessionId?: string): Promise<Session | undefined> {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (!aiInstance) {
             return undefined;
         }
-        const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-        return deepCopy ? this.jsonParser.parse(this.jsonParser.toJsonStr(sessionInfo.history)) : sessionInfo.history;
-    }
-
-    public async getAIInstanceCache(userId: string, instanceName: string): Promise<Cache> {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (!aiInstance) {
-            return this.getDefaultCache();
-        }
-        const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-        return sessionInfo.cache;
-    }
-
-    public async getAIRound(userId: string, instanceName: string): Promise<number> {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (!aiInstance) {
-            return 1;
-        }
-        const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-        return sessionInfo.round;
-    }
-
-    public async addAIRound(userId: string, instanceName: string) {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
-        if (aiInstance) {
-            const sessionInfo = await this.getAIInstanceSession(aiInstance, aiInstance.selectedSessionId);
-            sessionInfo.round += 1;
-            // await this.saveSession(userId, 'chat', aiInstance.selectedSessionId, sessionInfo);
-            const userInfo = await this.getUserInfo(userId);
-            if (userInfo) {
-                await this.saveUserInfo(userId, userInfo);
-            }
-        }
+        sessionId = sessionId || aiInstance.selectedSessionId;
+        return aiInstance.sessions[sessionId];
     }
 
     private async initDatabases() {
@@ -435,6 +442,13 @@ export class Storage {
         return null;
     }
 
+    private async saveUserInfoWrapper(userId: string) {
+        const userInfo = await this.getUserInfo(userId);
+        if (userInfo) {
+            await this.saveUserInfo(userId, userInfo);
+        }
+    }
+
     private async saveUserInfo(userId: string, data: UserInfo) {
         const serialized = this.jsonParser.toJsonStr(data);
         if (this.remoteDBConnected && this.remoteDB) {
@@ -506,7 +520,7 @@ export class Storage {
         const sessionId = crypto.randomUUID();
         const chatInstance: AIInstance = {
             sessions: {
-                [sessionId]: this.createAIInstanceSession(sessionId, "默认对话", timestamp)
+                [sessionId]: this.createAIInstanceSession(sessionId, timestamp)
             },
             selectedSessionId: sessionId
         };
@@ -517,30 +531,26 @@ export class Storage {
         };
     }
 
-    private createAIInstanceSession(sessionId: string, name: string, timestamp: number): Session {
+    private createAIInstanceSession(sessionId: string, timestamp: number): Session {
+        const message = this.createAIIInstanceMessage(timestamp);
+        const displayName = this.getMessageName(message);
         return {
             sessionId: sessionId,
             lastModifiedTimestamp: timestamp,
-            name: name,
+            name: displayName,
             round: 0,
-            history: [this.createAIIInstanceMessage(timestamp)],
-            cache: this.getDefaultCache()
+            history: [message],
+            cache: this.getDefaultCache(),
+            isAIStreamTransfer: false,
+            forceSave: false,
+            refresh: false
         };
     }
 
     private createAIIInstanceMessage(timestamp: number): Message {
-        const sendTime = new Date(timestamp).toLocaleString('zh-CN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).replace(/\//g, '-');
         return { 
             role: "system", 
-            content: `\n当前时间为：${sendTime}\n` ,
+            content: this.getTimeText(timestamp) ,
             timestamp: timestamp
         }
     }
@@ -556,15 +566,47 @@ export class Storage {
         };
     }
 
-    private async getAIInstanceSession(aiInstance: AIInstance, sessionId: string): Promise<Session> {
-        return aiInstance.sessions[sessionId];
-    }
-
     private async setAIInstanceSession(aiInstance: AIInstance, sessionId: string, sessionData: Session) {
         aiInstance.sessions[sessionId] = sessionData;
     }
 
     private async destroyAIInstanceSession(aiInstance: AIInstance, sessionId: string) {
         delete aiInstance.sessions[sessionId];
+    }
+
+    private getSessionName(history: Message[]): string {
+        if (history.length <= 0) {
+            return '';
+        }
+        let latestMessage = history[0];
+        for (let i = 1; i < history.length; i++) {
+            const currentMessage = history[i];
+            if (currentMessage.timestamp >= latestMessage.timestamp) {
+                latestMessage = currentMessage;
+            }
+        }
+        return this.getMessageName(latestMessage);
+    }
+    private getTimeText(timestamp: number): string {
+        const sendTime = new Date(timestamp).toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '-');
+        return `\n当前时间为：${sendTime}\n`
+    }
+
+    private getMessageName(message: Message): string {
+        let displayName = message.content;
+        if (displayName.length > MAX_SESSION_NAME_LENGTH) {
+            displayName = displayName.substring(0, MAX_SESSION_NAME_LENGTH - 3) + '...';
+        }
+        displayName = displayName.replace(/<think>/g, '').replace(/<\/think>/g, '');
+        displayName = displayName.replace(/<conclusion>/g, '').replace(/<\/conclusion>/g, '');
+        return displayName;
     }
 }

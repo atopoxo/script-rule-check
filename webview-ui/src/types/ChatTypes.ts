@@ -20,6 +20,7 @@ export interface Session {
   lastModifiedTimestamp: number;
   name: string;
   history: Message[];
+  isAIStreamTransfer: boolean;
 }
 
 declare global {
@@ -55,6 +56,7 @@ export interface SessionRecord {
   selected: boolean;
   lastModifiedTimestamp: number;
   name: string;
+  isAIStreamTransfer: boolean;
   icon?: string;
   tag?: SelectorItemTag;
 }

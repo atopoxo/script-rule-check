@@ -23,8 +23,3 @@ declare module 'highlight.js' {
   import MarkdownIt from 'highlight.js/lib';
   export default MarkdownIt;
 }
-
-// declare module 'lodash-es' {
-//   import throttle from 'lodash-es';
-//   export default throttle;
-// }

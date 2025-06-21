@@ -34,7 +34,11 @@
                                         'border': item.tag.border ? '1px solid  var(--vscode-toolbar-hoverBackground)' : 'none'
                                     }"
                                 >{{ item.tag.text }}</div>
-                                <button v-if="showRemoveButton(item.id)" class="icon-button remove" @click.stop="remove(item.id)"></button>
+                                <button v-if="showRemoveButton(item.id)" class="icon-button remove"
+                                    :disabled="item.isAIStreamTransfer"
+                                    @click.stop="remove(item.id)">
+                                    <img :src="getIconPath('delete.svg', item.isAIStreamTransfer)" />
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -72,8 +76,11 @@ export default defineComponent({
         const themeIconRelativePath = ref<string>('');
         const removeButtonVisible = ref<Map<string, boolean>>(new Map());
 
-        const getIconPath = (iconPath: string) => {
+        const getIconPath = (iconPath: string, isAIStreamTransfer?: boolean) => {
             try {
+                if (isAIStreamTransfer == true) {
+                    iconPath = "delete-disable.svg"
+                }
                 return new URL(`${iconRoot}${themeIconRelativePath.value}/${iconPath}`, currentModuleUrl).href;
             } catch (error) {
                 console.error('图标加载失败:', iconPath, error);
@@ -294,7 +301,6 @@ export default defineComponent({
     align-items: center;
 }
 .item-content-right .icon-button.remove {
-    background-image: url('@assets/icons/dark/delete.svg');
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;

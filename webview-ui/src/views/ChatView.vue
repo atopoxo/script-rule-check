@@ -4,7 +4,7 @@
       <div class="title-bar">
         <sy-menu-bar :isDark="isDark" :title="titleBarText" :items="menuItems" @click="handleMenuClick"></sy-menu-bar>
       </div>
-      <div class="messages-container">
+      <div class="messages-container" ref="messagesContainerRef">
         <div v-for="(msg, index) in selectedSession.history" :key="index" :class="`message ${msg.role}`">
           <div v-if="msg.role === 'user' || msg.role === 'assistant'" class="role-block">
             <div class="avatar">
@@ -14,7 +14,12 @@
           </div>
           <div class="content-block">
             <div class="content">
-              <message-render :isDark="isDark" :styleTransform="msg.role === 'assistant'" :content="msg.content"></message-render>
+              <message-render :isDark="isDark" 
+                :contentType="msg.role === 'user' ? 'text': 'html'"
+                :maxWidth="contentBlockWidth"
+                :textEditable="modifiedIndex != undefined"
+                :content="msg.content"
+                @finish-edit="finishEdit"></message-render>
               <!-- 引用展示 -->
               <div v-if="msg.references && msg.references.length > 0" class="references">
                 <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
@@ -27,19 +32,19 @@
               <button v-if="modifiedIndex" class="icon-button" @click="cancelModify()">
                 <img :src="getfeedbackIconPath('cancel')" />
               </button>
-              <button v-else class="icon-button" @click="modify(index)">
+              <button v-if="!selectedSession.isAIStreamTransfer && !modifiedIndex" class="icon-button" @click="modify(index)">
                 <img :src="getfeedbackIconPath('modify')" />
               </button>
               <button class="icon-button" @click="copy(msg.content, $event)">
                 <img :src="getfeedbackIconPath('copy')" />
               </button>
-              <button class="icon-button" @click="removeMessage(index)">
+              <button v-if="!selectedSession.isAIStreamTransfer" class="icon-button" @click="removeMessage(index)">
                 <img :src="getfeedbackIconPath('remove')" />
               </button>
             </div>
           </div>
           <div v-if="msg.role === 'assistant'" class="feedback">
-            <button class="icon-button" @click="regenerate(index)">
+            <button v-if="!selectedSession.isAIStreamTransfer" class="icon-button" @click="regenerate(index)">
               <img :src="getfeedbackIconPath('regenerate')" />
             </button>
             <button class="icon-button" @click="copy(msg.content, $event)">
@@ -57,10 +62,12 @@
           </div>
         </div>
         <textarea 
-          v-model="messageInput" 
+          :value="messageInput" 
           :placeholder="placeholderText"
           ref="textareaRef"
-          @input="throttledAdjustHeight"
+          @input="handleInput"
+          @compositionstart="handleCompositionStart"
+          @compositionend="handleCompositionEnd"
           @keydown="handleKeyDown"
         ></textarea>
         <div class="input-functions">
@@ -95,8 +102,8 @@
             />
             <button class="icon-button message-send" @click="sendMessage"
               :class="{
-                'ai-stream-finish': !isAIStreamTransfer,
-                'ai-stream-transfering': isAIStreamTransfer
+                'ai-stream-finish': !selectedSession.isAIStreamTransfer,
+                'ai-stream-transfering': selectedSession.isAIStreamTransfer
               }"></button>
             <div class="send-tooltip">发送⏎</div>
           </div>
@@ -104,7 +111,7 @@
       </div>
     </div>
     <div v-else-if="isInHistoryView" class="history-container">
-      <history-view :isDark="isDark" :groupedSessions="historySessions" 
+      <history-view :isDark="isDark" :groupedSessions="historySessions"
         @back="backToChat()"
         @select="selectSession"
         @remove="removeSession"></history-view>
@@ -114,7 +121,6 @@
 
 <script lang="ts">
 import { defineComponent, watch, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue';
-// import { throttle } from 'lodash-es';
 import type { Session, SessionRecordList, SessionRecord, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
 import SyMenuBar from '../components/SyMenuBar.vue';
 import MessageRender from '../components/MessageRender.vue';
@@ -122,6 +128,7 @@ import SySelector from '../components/SySelector.vue';
 import SyTag from '../components/SyTag.vue';
 import HistoryView from './HistoryView.vue';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
+import { throttle } from '../functions/BaseFunctions';
 
 export default defineComponent({
   components: {
@@ -140,7 +147,7 @@ export default defineComponent({
       { id: 'showSessionsSnapshot', tooltip: '查看历史会话', icon: 'history.svg' },
       { id: 'settings', tooltip: '设置', icon:'settings.svg' },
     ]);
-    const selectedSession = ref<Session | null>(null);
+    const selectedSession = ref<Session | undefined>(undefined);
     const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
@@ -171,7 +178,6 @@ export default defineComponent({
     const textareaRef = ref<HTMLTextAreaElement | null>(null);
     let aiStreamMessageBeginFlag = false;
     let aiStreamMessage: any;
-    const isAIStreamTransfer = ref<boolean>(false)
     const modifiedIndex = ref<number | undefined>(undefined);
     
     const handleMenuClick = (id: string) => {
@@ -188,14 +194,14 @@ export default defineComponent({
       }
     }
 
-    const getSelectedSession = (session: any): Session | null => {
-      const result = {
-        sessionId: session.sessionId,
-        lastModifiedTimestamp: session.lastModifiedTimestamp,
-        name: session.name,
-        history: session.history.map((msg: any) => reactive({ ...msg }))
-      }
-      return result;
+    const getSelectedSession = (session: any): Session | undefined => {
+        return {
+          sessionId: session.sessionId,
+          lastModifiedTimestamp: session.lastModifiedTimestamp,
+          name: session.name,
+          history: session.history.map((msg: any) => reactive({ ...msg })),
+          isAIStreamTransfer: session.isAIStreamTransfer
+        }
     }
 
     const getHistorySessions = (sessions: Session[]): SessionRecordList[] => {
@@ -236,6 +242,7 @@ export default defineComponent({
           selected: session.selected,
           lastModifiedTimestamp: session.lastModifiedTimestamp,
           name: session.name,
+          isAIStreamTransfer: session.isAIStreamTransfer,
           icon: "talk.svg",
           tag: { text: 'chat', fontSize: sessionTagFontSize, border: true }
         };
@@ -360,6 +367,9 @@ export default defineComponent({
       }
     };
 
+    const isComposing = ref(false);
+    const pendingInput = ref('');
+
     const textareaStyles = ref({
       fontSize: 0,
       fontFamily: 'inherit',
@@ -373,25 +383,27 @@ export default defineComponent({
       boxSizing: 'content-box'
     });
 
-    const throttle = (func: Function, limit: number) => {
-      let lastFunc: ReturnType<typeof setTimeout>;
-      let lastRan: number;
-      return function(this: any, ...args: any[]) {
-        const context = this;
-        if (!lastRan) {
-          func.apply(context, args);
-          lastRan = Date.now();
-        } else {
-          clearTimeout(lastFunc);
-          lastFunc = setTimeout(() => {
-            if (Date.now() - lastRan >= limit) {
-              func.apply(context, args);
-              lastRan = Date.now();
-            }
-          }, limit - (Date.now() - lastRan));
-        }
+    const handleInput = (event: Event) => {
+      const target = event.target as HTMLTextAreaElement;
+      const value = target.value;
+      
+      if (isComposing.value) {
+        pendingInput.value = value;
+      } else {
+        messageInput.value = value;
+        throttledAdjustHeight();
       }
-    }
+    };
+
+    const handleCompositionStart = () => {
+      isComposing.value = true;
+    };
+
+    const handleCompositionEnd = (event: CompositionEvent) => {
+      isComposing.value = false;
+      messageInput.value = (event.target as HTMLTextAreaElement).value;
+      throttledAdjustHeight();
+    };
 
     const adjustTextareaHeight = throttle(async() => {
       if (!textareaRef.value) {
@@ -457,24 +469,29 @@ export default defineComponent({
             wordWidth = word.length * fontSize * 0.6;
           }
           if (currentLineWidth + wordWidth > textareaWidth) {
-            const chars = word.split('');
-            for (const char of chars) {
-              const charWidth = ctx ? ctx.measureText(char).width : fontSize * 0.6;
-              if (currentLineWidth + charWidth > textareaWidth) {
+            if (currentLineWidth > 0) {
                 totalLines++;
-                currentLineWidth = charWidth;
-              } else {
-                currentLineWidth += charWidth;
+                currentLineWidth = wordWidth;
+            } else {
+              const chars = word.split('');
+              for (const char of chars) {
+                const charWidth = ctx ? ctx.measureText(char).width : fontSize * 0.6;
+                if (currentLineWidth + charWidth > textareaWidth) {
+                  totalLines++;
+                  currentLineWidth = charWidth;
+                } else {
+                  currentLineWidth += charWidth;
+                }
               }
             }
           } else {
             currentLineWidth += wordWidth;
           }
         }
+        if (currentLineWidth > 0) {
+            totalLines++;
+        }
       });
-      if (currentLineWidth > 0) {
-        totalLines++;
-      }
       let contentHeight = totalLines * lineHeight;
       if (boxSizing === 'border-box') {
         contentHeight += paddingTop + paddingBottom + borderTopWidth + borderBottomWidth;
@@ -569,14 +586,14 @@ export default defineComponent({
     }
 
     const sendMessage = () => {
-      if (isAIStreamTransfer.value == false) {
+      if (selectedSession.value?.isAIStreamTransfer == false) {
         if (!messageInput.value.trim()) {
           return;
         }
-        isAIStreamTransfer.value = true;
         vscode.postMessage({
           type: 'sendMessage',
           data: {
+            sessionId: selectedSession.value?.sessionId,
             content: messageInput.value,
             index: modifiedIndex.value
           }
@@ -591,9 +608,9 @@ export default defineComponent({
           containerHeight.value = defaultInputContainerHeight;
         }
       } else {
-        isAIStreamTransfer.value = false;
         vscode.postMessage({
-          type: 'pauseAIStreamTransfer'
+          type: 'pauseAIStreamTransfer',
+          data: { sessionId: selectedSession.value?.sessionId}
         });
       }
     };
@@ -606,13 +623,17 @@ export default defineComponent({
     };
 
     const modify = (index: number) => {
-      messageInput.value = selectedSession.value?.history[index]?.content as string;
       modifiedIndex.value = index;
     };
 
     const cancelModify = () => {
       modifiedIndex.value = undefined;
     };
+
+    const finishEdit = (value: string) => {
+      messageInput.value = value;
+      sendMessage();
+    }
 
     const copy = (content: string, event: MouseEvent) => {
       const button = event.target as HTMLElement;
@@ -667,7 +688,7 @@ export default defineComponent({
         button.replaceWith(feedbackEl);
         setTimeout(() => {
             feedbackEl.replaceWith(button);
-        }, 10000);
+        }, 1000);
     };
 
     const setSessionName = () => {
@@ -683,7 +704,7 @@ export default defineComponent({
     const removeMessage = (index: number) => { 
       vscode.postMessage({
         type: 'removeMessage',
-        data: { index: index}
+        data: { sessinId: selectedSession.value?.sessionId, index: index}
       });
     };
 
@@ -717,12 +738,17 @@ export default defineComponent({
           content: "正在等待回复..."
         });
         selectedSession.value?.history.push(aiStreamMessage);
+        aiStreamMessageBeginFlag = true;
       } else {
         aiStreamMessage = selectedSession.value?.history[data.messageIndex];
-        aiStreamMessage.content = "正在等待回复...";
+        if (data.reconnect) {
+          aiStreamMessageBeginFlag = false;
+        } else {
+          aiStreamMessage.content = "正在等待回复...";
+          aiStreamMessageBeginFlag = true;
+        }
       }
       scrollToBottom();
-      aiStreamMessageBeginFlag = true;
     };
     const handleAIStreamChunk = async (chunk: any) => {
       if (chunk) {
@@ -731,13 +757,22 @@ export default defineComponent({
           aiStreamMessageBeginFlag = false;
         }
         aiStreamMessage.content += chunk;
+        scrollToBottom();
         await nextTick();
       }
     };
 
     const handleAIStreamEnd = (data: any) => {
-      selectedSession.value = getSelectedSession(data.selectedSession);
-      isAIStreamTransfer.value = false;
+      if (selectedSession.value?.sessionId == data.currentSession.sessionId) {
+        selectedSession.value = getSelectedSession(data.currentSession);
+      }
+      historySessions.value.forEach((categorized: SessionRecordList) => {
+        categorized.records.forEach((session: SessionRecord) => {
+          if (session.id === data.currentSession.sessionId) {
+            session.isAIStreamTransfer = data.currentSession.isAIStreamTransfer;
+          }
+        })
+      })
     };
 
     const scrollToBottom = () => {
@@ -761,6 +796,28 @@ export default defineComponent({
             });
           }
           referencesBarResizeObserver.observe(newVal);
+        }
+      },
+      { immediate: true } // 首次加载立即触发
+    );
+
+    const contentBlockWidth = ref(0);
+    const messagesContainerRef = ref<HTMLElement | null>(null);
+    let messagesContainerResizeObserver: ResizeObserver | null = null;
+
+    watch(() => messagesContainerRef.value, (newVal, oldVal) => {
+        if (oldVal && messagesContainerResizeObserver) {
+            messagesContainerResizeObserver.unobserve(oldVal);
+        }
+        if (newVal) {
+          if (!messagesContainerResizeObserver) {
+              messagesContainerResizeObserver = new ResizeObserver((entries) => {
+                for (const entry of entries) {
+                    contentBlockWidth.value = entry.contentRect.width;
+                }
+            });
+          }
+          messagesContainerResizeObserver.observe(newVal);
         }
       },
       { immediate: true } // 首次加载立即触发
@@ -833,10 +890,11 @@ export default defineComponent({
                   handleAIStreamEnd(data);
                   break;
               case 'removeMessage':
-                  selectedSession.value = getSelectedSession(data.selectedSession);
+                  if (selectedSession.value?.sessionId == data.selectedSession.sessionId) {
+                    selectedSession.value = getSelectedSession(data.selectedSession);
+                  }
                   break;
               case 'showSessionsSnapshot':
-                  selectedSession.value = getSelectedSession(data.selectedSession);
                   historySessions.value = getHistorySessions(data.sessionsSnapshot);
                   isInHistoryView.value = true;
                   break;
@@ -861,6 +919,9 @@ export default defineComponent({
         if (referencesBarResizeObserver) {
             referencesBarResizeObserver.disconnect();
         }
+        if (messagesContainerResizeObserver) {
+            messagesContainerResizeObserver.disconnect();
+        }
     });
 
     return {
@@ -875,26 +936,29 @@ export default defineComponent({
       historySessions,
       placeholderText,
       messageInput,
+      contentBlockWidth,
       referencesBar,
       referenceItems,
       textareaRef,
       referenceBarHeight,
       containerHeight,
       handleMenuClick,
+      messagesContainerRef,
       handleKeyDown,
-      throttledAdjustHeight,
-      adjustTextareaHeight,
+      handleInput,
+      handleCompositionStart,
+      handleCompositionEnd,
       getRefIcon,
       formatTime,
       createSession,
       getRoleIconPath,
       getfeedbackIconPath,
       modifiedIndex,
-      isAIStreamTransfer,
       sendMessage,
       regenerate,
       modify,
       cancelModify,
+      finishEdit,
       copy,
       removeMessage,
       addReference,
@@ -1051,8 +1115,6 @@ export default defineComponent({
 }
 .content {
   position: relative;
-  padding: 8px 8px;
-  border-radius: 5px;
   background-color: transparent;
 }
 .message.user .content {
@@ -1150,13 +1212,6 @@ export default defineComponent({
   outline: none;
 }
 .input-container textarea {
-  flex: 1;
-  /* background: var(--vscode-input-background); */
-  background-color: transparent;
-  color: var(--vscode-input-foreground);
-  border: 1px solid transparent;
-  padding: 8px;
-  resize: none;
   font-family: inherit;
   margin: 0 5px;
 }

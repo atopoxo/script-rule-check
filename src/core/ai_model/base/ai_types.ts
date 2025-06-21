@@ -51,6 +51,9 @@ export interface Session {
     round: number;
     history: Message[];
     cache: Cache;
+    isAIStreamTransfer: boolean;
+    forceSave: boolean;
+    refresh: boolean;
 }
 
 export interface AIInstance {
@@ -70,6 +73,7 @@ export interface InputData {
     index?: number;
     userID?: string;
     instanceName?: string;
+    session?: Session;
     toolsOn?: boolean;
     useKnowledge?: boolean;
     modelConfig?: any;

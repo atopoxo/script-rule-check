@@ -36,13 +36,13 @@ export class ChatManager {
         return ChatManager.instance;
     }
 
-    public async getSelectedSession(instanceName: string): Promise<Session | undefined> {
-        return await this.storage.getAIInstanceSelectedSession(this.userID, instanceName);
+    public async getSession(instanceName: string, sessionId?: string): Promise<Session | undefined> {
+        return await this.storage.getAIInstanceSession(this.userID, instanceName);
     }
 
     public async selectSession(instanceName: string, sessionId: string): Promise<Session | undefined> {
         await this.storage.setAIInstanceSelectedSession(this.userID, instanceName, sessionId);
-        return await this.storage.getAIInstanceSelectedSession(this.userID, instanceName);
+        return await this.storage.getAIInstanceSession(this.userID, instanceName);
     }
 
     public async addSession(instanceName: string): Promise<Session | undefined> {
@@ -61,18 +61,19 @@ export class ChatManager {
         return await this.storage.setAIInstanceSessionName(this.userID, instanceName, sessionId, sessionName);
     }
 
-    public async removeMessages(instanceName: string, removeIndexList: number[]): Promise<Session | undefined> {
-        return await this.storage.removeAIInstanceMessages(this.userID, instanceName, removeIndexList);
+    public async removeMessages(instanceName: string, removeIndexList: number[], sessionId?: string): Promise<Session | undefined> {
+        return await this.storage.removeAIInstanceMessages(this.userID, instanceName, sessionId, removeIndexList);
     }
 
-    public async chatStream(signal: AbortSignal, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number) {
-        const history = await this.getMessages(this.userID, query, index);
+    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number) {
+        const history = await this.getMessages(this.userID, 'chat', session.sessionId, query, index);
         let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
         modelID = this.getValidModelID(modelID);
 
         const data: InputData = {
             userID: this.userID,
             instanceName: 'chat',
+            session: session,
             history: history,
             index: index,
             toolsOn: toolsOn,
@@ -83,22 +84,22 @@ export class ChatManager {
         return this.aiModelMgr.chatStream(signal, modelID, data);
     }
 
-    private async getMessages(userID: string, query?: string, index?: number): Promise<Message[]> {
+    private async getMessages(userID: string, instanceName: string, sessionId?: string, query?: string, index?: number): Promise<Message[]> {
         let message: Message;
         let history: Message[];
         if (index != undefined) {
             if (query) {
                 message = { role: 'user', content: query as string, timestamp: Date.now() };
-                await this.storage.updateUserInfo(userID, "chat", message, undefined, true, index);
+                await this.storage.updateUserInfo(userID, instanceName, sessionId, message, undefined, true, index);
             }
-            history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
+            history = await this.storage.getAIInstanceMessages(userID, instanceName, sessionId, true ) || [];
         } else {
             message = { role: 'user', content: query as string, timestamp: Date.now() };
-            await this.storage.updateUserInfo(userID, "chat", message);
-            history = await this.storage.getAIInstanceMessages(userID, "chat", true ) || [];
-            await this.storage.addAIRound(userID, 'chat');
+            await this.storage.updateUserInfo(userID, instanceName, sessionId, message);
+            history = await this.storage.getAIInstanceMessages(userID, instanceName, sessionId, true ) || [];
+            await this.storage.addAIRound(userID, instanceName, sessionId);
         }
-        let round = await this.storage.getAIRound(userID, 'chat');
+        let round = await this.storage.getAIRound(userID, instanceName, sessionId);
         const num = Math.min(history.length, round);
         
         let validNum = 0;

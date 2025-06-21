@@ -40,9 +40,7 @@ export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private view: vscode.WebviewView | undefined;
     private _extensionUri: vscode.Uri;
-    private isInHistoryView = false;
     private isWebviewReady = false;
-    private aiStreamTransfering = false;
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -97,16 +95,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     await this.selectWorkspace();
                     break;
                 case 'sendMessage':
-                    await this.sendMessage(data.content, data.references, data.index);
+                    await this.sendMessage(data.sessionId, data.content, data.references, data.index);
                     break;
                 case 'pauseAIStreamTransfer':
-                    this.pauseAIStreamTransfer();
+                    this.pauseAIStreamTransfer(data.sessionId);
                     break;
                 case 'regenerate':
-                    await this.sendMessage(data.content, data.references, data.index);
+                    await this.sendMessage(data.sessionId, data.content, data.references, data.index);
                     break;
                 case 'removeMessage':
-                    await this.removeMessage(data.index);
+                    await this.removeMessage(data.index, data.sessionId);
                     break;
                 case 'showSessionsSnapshot':
                     this.showSessionsSnapshot();
@@ -155,10 +153,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async initSession(theme: vscode.ColorThemeKind) {
-        let selectedSession = await this.chatManager.getSelectedSession('chat');
+        let selectedSession = await this.chatManager.getSession('chat');
         if (!selectedSession) {
             selectedSession = await this.chatManager.addSession('chat') as Session;
         }
+        selectedSession.isAIStreamTransfer = false;
         const data = {
             isDark: theme === vscode.ColorThemeKind.Dark,
             modelInfos: this.aiModelMgr.getModelInfos(),
@@ -170,14 +169,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async selectSession(sessionId: string) {
-        const selectedSession = await this.chatManager.selectSession('chat',sessionId);
+        const selectedSession = await this.chatManager.selectSession('chat', sessionId) as Session;
+        selectedSession.forceSave = true;
         this.updateWebview('selectSession', {selectedSession: selectedSession});
     }
 
     private async addSession() {
-        const selectedSession = await this.chatManager.addSession('chat');
-        const sessionsSnapshot = await this.chatManager.getAllSessionsSnapshot('chat');
-        this.updateWebview('addSession', {selectedSession: selectedSession});
+        const selectedSession = await this.chatManager.addSession('chat') as Session;
+        selectedSession.isAIStreamTransfer = false;
+        this.updateWebview('addSession', {
+            selectedSession: selectedSession
+        });
     }
 
     private async removeSession(sessionId: string) {
@@ -219,57 +221,75 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('selectWorkspace', result);
     }
 
-    private async sendMessage(query?: string, references?: any[], index?: number) {
-        const currentSession = this.chatManager.getSelectedSession('chat');
+    private async sendMessage(sessionId?: string, query?: string, references?: any[], index?: number) {
+        const currentSession = await this.chatManager.getSession('chat', sessionId);
         if (!currentSession) {
             return;
         }
         let streamGenerator: any = undefined;
         try {
-            if (this.view && this.isWebviewReady && !this.aiStreamTransfering) {
-                this.aiStreamTransfering = true;
+            if (this.view && this.isWebviewReady && !currentSession.isAIStreamTransfer) {
                 const port = this.view.webview;
                 const abortController = new AbortController();
-                streamGenerator = await this.chatManager.chatStream(abortController.signal, false, false, query, index);
+                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, false, query, index);
+                currentSession.isAIStreamTransfer = true;
                 port.postMessage({
                     type: 'aiStreamStart',
-                    data: {selectedSession: await this.chatManager.getSelectedSession('chat'), messageIndex: index ? index + 1: -1}
+                    data: {selectedSession: currentSession, messageIndex: index ? index + 1: -1}
                 });
                 for await (const chunk of streamGenerator) {
-                    if (!this.aiStreamTransfering) {
+                    if (!currentSession.isAIStreamTransfer) {
                         abortController.abort();
+                    }
+                    if (currentSession.refresh) {
+                        port.postMessage({
+                            type: 'aiStreamStart',
+                            data: {
+                                selectedSession: currentSession, 
+                                messageIndex: index ? index + 1: currentSession.history.length - 1,
+                                reconnect: true
+                            }
+                        });
+                        currentSession.refresh = false;
                     }
                     port.postMessage({
                         type: 'aiStreamChunk',
                         data: {content: chunk}
                     });
                 }
+                currentSession.isAIStreamTransfer = false;
                 port.postMessage({
                     type: 'aiStreamEnd',
-                    data: {selectedSession: await this.chatManager.getSelectedSession('chat')}
+                    data: {currentSession: currentSession}
                 });
-                this.aiStreamTransfering = false;
             }
         } catch (error: any) {
             console.error('流式输出错误:', error);
-            this.aiStreamTransfering = false;
+            currentSession.isAIStreamTransfer = false;
         }
     }
 
-    private pauseAIStreamTransfer() {
-        this.aiStreamTransfering = false;
+    private async pauseAIStreamTransfer(sessionId: string) {
+        const currentSession = await this.chatManager.getSession('chat', sessionId);
+        if (!currentSession) {
+            return;
+        }
+        currentSession.isAIStreamTransfer = false;
     }
 
-    private async removeMessage(index: number) {
+    private async removeMessage(index: number, sessionId?: string) {
         const removeIndexList: number[] = [index, index + 1];
-        const data = {selectedSession: await this.chatManager.removeMessages('chat', removeIndexList)};
+        const data = {
+            selectedSession: await this.chatManager.removeMessages('chat', removeIndexList, sessionId)
+        };
         this.updateWebview('removeMessage', data);
     }
 
     public async showSessionsSnapshot() {
-        const selectedSession = await this.chatManager.getSelectedSession('chat');
         const sessionsSnapshot = await this.chatManager.getAllSessionsSnapshot('chat');
-        this.updateWebview('showSessionsSnapshot', {selectedSession: selectedSession, sessionsSnapshot: sessionsSnapshot});
+        this.updateWebview('showSessionsSnapshot', {
+            sessionsSnapshot: sessionsSnapshot
+        });
     }
 
     public async addReference() {
