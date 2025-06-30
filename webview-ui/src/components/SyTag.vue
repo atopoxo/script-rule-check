@@ -1,7 +1,7 @@
 <template>
     <div class="reference-tag" @mouseenter="handleItemHover()" @mouseleave="showRemoveButton = false">
-        <span>{{ data.reference?.name }}</span>
-        <button v-if="showRemoveButton" class="delete-reference" @click="remove">
+        <span>{{ data.contextItem?.name }}</span>
+        <button v-if="removeable && showRemoveButton" class="delete-reference" @click="remove">
             <img :src="getIconPath(closeIconPath)"/>
         </button>
     </div>
@@ -23,6 +23,14 @@ export default defineComponent({
         isDark: {
             type: Boolean,
             default: false
+        },
+        index: {
+            type: Number,
+            default: -1
+        },
+        removeable: {
+            type: Boolean,
+            default: true
         },
         data: {
             type: Object as PropType<SelectorItem>,
@@ -46,7 +54,7 @@ export default defineComponent({
         }
 
         const remove = () => {
-            emit('remove', props.data.id);
+            emit('remove', props.data.id, props.index);
         };
 
         const handleItemHover = () => {

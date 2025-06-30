@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import type { ToolCall } from '../../tools/tools_mgr';
 
 export class ModelInfo {
@@ -16,24 +15,41 @@ export class ModelInfo {
     ) {}
 }
 
-export interface ReferenceItem {
-    type: 'code' | 'file' | 'folder';
-    path: string;
+export interface ContextItem {
+    type: string;
     name: string;
+    paths?: string[],
     content?: string;
-    range?: vscode.Range;
+    range?: {
+        start: number, 
+        end: number,
+        startLine?: number, 
+        endLine?: number
+    };
+}
+
+export interface ContextOption {
+    type: string,
+    id: string,
+    name: string,
+    describe: string,
+    icon?: string,
+    contextItem?: ContextItem,
+    children?: ContextOption[]
 }
 
 export interface Message {
     role: string;
     content: string;
     timestamp: number;
-    references?: ReferenceItem[];
+    contextOption?: ContextOption[];
+    contextExpand?: boolean;
 }
 
 export interface Cache {
     tools_describe: ToolTip;
     tool_calls: ToolCall[][];
+    context: string;
     knowledge: string;
     backup: string;
     returns: {
@@ -92,4 +108,9 @@ export interface ToolTip {
 export interface Delta {
     reasoning?: string;
     conclusion?: string;
+}
+
+export interface ContextTreeNode {
+    value: ContextItem | undefined;
+    children: ContextTreeNode[];
 }

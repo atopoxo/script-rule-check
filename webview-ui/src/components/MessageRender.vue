@@ -27,16 +27,28 @@ import { throttle, md2html } from '../functions/BaseFunctions';
 export default defineComponent({
   props: {
     isDark: {
-        type: Boolean,
-        default: false
+      type: Boolean,
+      default: false
+    },
+    index: {
+      type: Number,
+      default: 0
     },
     contentType: {
-        type: String,
-        default: "html"
+      type: String,
+      default: "html"
     },
     textEditable: {
-        type: Boolean,
-        default: false
+      type: Boolean,
+      default: false
+    },
+    textAreaBorder: {
+      type: Number,
+      default: 0
+    },
+    textAreaPadding: {
+      type: Number,
+      default: 0
     },
     maxWidth: {
         type: Number,
@@ -172,22 +184,20 @@ export default defineComponent({
       textOverflowY.value = 'hidden';
     };
 
-    const textAreaBorder = 1;
-    const textAreaPadding = 8;
     const textAreaLineHeight = 19;
     const maxTextLines = 16;
     const textareaStyles = ref({
       fontSize: 0,
       fontFamily: 'inherit',
       lineHeight: textAreaLineHeight,
-      paddingTop: textAreaPadding,
-      paddingBottom: textAreaPadding,
-      paddingLeft: textAreaPadding,
-      paddingRight: textAreaPadding,
-      borderTopWidth: textAreaBorder,
-      borderBottomWidth: textAreaBorder,
-      borderLeftWidth: textAreaBorder,
-      borderRightWidth: textAreaBorder,
+      paddingTop: props.textAreaPadding,
+      paddingBottom: props.textAreaPadding,
+      paddingLeft: props.textAreaPadding,
+      paddingRight: props.textAreaPadding,
+      borderTopWidth: props.textAreaBorder,
+      borderBottomWidth: props.textAreaBorder,
+      borderLeftWidth: props.textAreaBorder,
+      borderRightWidth: props.textAreaBorder,
       boxSizing: 'content-box'
     });
     const maxTextAreaHeight = textAreaLineHeight * maxTextLines;
@@ -338,13 +348,13 @@ export default defineComponent({
           adjustTextareaHeight();
         } else if (!event.shiftKey) {
           event.preventDefault();
-          finishEdit(contentValue.value);
+          finishEdit(contentValue.value, props.index);
         }
       }
     };
 
-    const finishEdit = (value: string) => {
-        emit('finish-edit', value);
+    const finishEdit = (value: string, index: number) => {
+        emit('finish-edit', value, index);
     }
 
     watchEffect(async () => {

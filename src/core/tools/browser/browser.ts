@@ -2,9 +2,9 @@ import { singleton } from "tsyringe";
 import axios, { AxiosResponse } from 'axios';
 import * as he from 'he';
 import * as querystring from 'querystring';
-const chardet = require('chardet');
 import * as iconv from 'iconv-lite';
 import { getJsonParser } from '../../json/json_parser';
+import { getFileContent } from '../../function/base_function';
 
 class BrowserError extends Error {
     constructor(message: string) {
@@ -134,8 +134,7 @@ export class Browser {
     private forceDecode(text: string): string {
         try {
             const buffer = Buffer.from(text);
-            const encoding: BufferEncoding = this.getEncoding(buffer);
-            const content = iconv.decode(buffer, encoding);
+            const content = getFileContent(undefined, buffer);
             return content;
         } catch (error) {
             return text;
@@ -145,10 +144,5 @@ export class Browser {
     private calculateRelevance(item: any): number {
         const snippet = item.snippet || "";
         return Math.min(snippet.length / 200, 1.0);
-    }
-
-    getEncoding(buffer: Buffer): BufferEncoding {
-        const encoding = chardet.detect(buffer) || 'utf-8';
-        return encoding;
     }
 }

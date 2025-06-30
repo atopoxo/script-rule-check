@@ -6,6 +6,7 @@ import { getJsonParser } from '../../json/json_parser';
 import { ModelInfo } from "../base/ai_types";
 import { AIModelBase } from "../base/ai_model_base";
 import { Storage } from '../../storage/storage';
+import { ContextMgr } from '../../context/context_mgr';
 
 @singleton()
 export class AIModelMgr {
@@ -13,7 +14,7 @@ export class AIModelMgr {
     private models = new Map<string, AIModelBase>();
     private modelconfigs = new Map<string, any>();
 
-    constructor(private config: any, private extensionName: string, private storage: Storage) {
+    constructor(private config: any, private extensionName: string, private storage: Storage, private contextMgr: ContextMgr) {
         const modelConfigList = this.getAvailableModels();
         this.setModelConfigs(modelConfigList);
     }
@@ -112,7 +113,7 @@ export class AIModelMgr {
         const modelDir = path.join(path.dirname(__dirname), `${platform}/models`);
         const modelPath = path.join(modelDir, `${name}/modeling`);
         const modelModule = await require(modelPath);
-        const instance = modelModule.getClass(modelConfig, {storage: this.storage});
+        const instance = modelModule.getClass(modelConfig, {storage: this.storage, contextMgr: this.contextMgr});
         if (instance instanceof AIModelBase) {
             this.models.set(id, instance);
         }

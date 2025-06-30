@@ -1,3 +1,6 @@
+const chardet = require('chardet');
+import fs from 'fs';
+import * as iconv from 'iconv-lite';
 function singleton<T extends new (...args: any[]) => any>(cls: T): T {
     const instances = new Map<T, InstanceType<T>>();
 
@@ -57,4 +60,29 @@ function get_class_method(class_name: string, method_name: string, module?: any,
     } catch (ex) {
         throw new Error(`Method resolution failed: ${ex}`);
     }
+}
+
+export function getEncoding(buffer: Buffer): BufferEncoding {
+    const encoding = chardet.detect(buffer) || 'gbk';
+    return encoding;
+}
+
+export function getFileContent(filePath?: string, buffer?: any, encoding?: BufferEncoding, startPos?: number, endPos?: number): string {
+    if (!buffer && filePath) {
+        buffer = fs.readFileSync(filePath);
+    }
+    if (!encoding) {
+        encoding = getEncoding(buffer);
+    }
+    let content = iconv.decode(buffer, encoding);
+    if (startPos || endPos) {
+        if (!startPos) {
+            startPos = 0;
+        }
+        if (!endPos) {
+            endPos = content.length;
+        }
+        content = content.substring(startPos, endPos);
+    }
+    return content;
 }

@@ -7,7 +7,7 @@
             <div class="selector-content">
                 <div v-for="(item, index) in items" :key="index" class="selector-item"
                     :class="{
-                        'selected': isSelected(item)
+                        selected: isSelected(item)
                     }"
                     @click="handleItemClick(item)"
                     @mouseenter="handleItemHover(item)"
@@ -34,8 +34,14 @@
                             </div>
                         </div>
                     </div>
-                    <div v-if="canExpand(item)" class="sub-menu" :style="{ width: width + 'px' }"
+                    <div v-if="canExpand(item)" class="sub-menu"
+                        :style="{
+                            width: width + 'px',
+                            bottom: subMenuPosition === 'bottom' ? '100%' : 'auto',
+                            top: subMenuPosition === 'bottom' ? 'auto' : `${18 + (index + 1) * 36}px`
+                        }"
                         @mouseleave="expandedItem = null"
+                        @click.stop
                     >
                         <div class="selector-header">
                             <h3>{{ item.name }}</h3>
@@ -84,7 +90,7 @@ declare const window: Window;
 
 export default defineComponent({
     name: 'SySelector',
-  
+
     props: {
         width: {
             type: Number,
@@ -106,6 +112,10 @@ export default defineComponent({
             type: Array as PropType<SelectorItem[]>,
             required: true
         },
+        index: {
+            type: Number,
+            default: -1
+        },
         selectedItems: {
             type: Array as PropType<SelectorItem[]>,
             default: () => []
@@ -117,17 +127,21 @@ export default defineComponent({
         showChoice: {
             type: Boolean,
             default: true
+        },
+        subMenuPosition: {
+            type: String,
+            default: 'bottom'
         }
     },
-  
+
     emits: ['close', 'select', 'selectFiles', 'selectWorkspace'],
-  
+
   setup(props, { emit }) {
     const selectedItems = ref<SelectorItem[]>([]);
     const expandedItem = ref<SelectorItem | null>(null);
     const expandIconPath = ref<string>('');
     const choiceIconPath = ref<string>('');
-    
+
     const isSelected = (item: SelectorItem) => {
         if (item.children && item.children.length > 0) {
             let flag = true;
@@ -141,7 +155,7 @@ export default defineComponent({
         }
         return selectedItems.value.some(selected => selected.id === item.id);
     };
-    
+
     const handleItemClick = (item: SelectorItem) => {
         switch (item.type) {
             case "code":
@@ -150,9 +164,6 @@ export default defineComponent({
                     updateSelectedItems(child, true, flag);
                 });
                 updateSelectedItems(item, true, flag);
-                break;
-            case "function":
-                updateSelectedItems(item);
                 break;
             case "files":
                 filesSelect(true);
@@ -198,33 +209,33 @@ export default defineComponent({
     }
 
     const filesSelect = (onlyFiles: boolean) => {
-        emit('selectFiles', onlyFiles);
+        emit('selectFiles', onlyFiles, props.index);
     };
 
     const workspaceSelect = () => {
-        emit('selectWorkspace');
+        emit('selectWorkspace', props.index);
     }
-    
+
     const handleItemHover = (item: SelectorItem) => {
       expandedItem.value = item;
     };
-    
+
     const handleOutsideClick = () => {
       closeSelector(undefined);
     };
-    
+
     const confirmSelection = () => {
       if (selectedItems.value.length > 0) {
-        emit('select', [...selectedItems.value]);
+        emit('select', selectedItems.value, props.index);
       }
     };
-    
+
     const closeSelector = (items: SelectorItem[] | undefined) => {
         let data = undefined;
         if (items) {
-            data = [...items]
+            data = items
         }
-        emit('close', data);
+        emit('close', data, props.index);
     };
 
     const getIconPath = (iconPath: string) => {
@@ -347,6 +358,7 @@ export default defineComponent({
     overflow-y: auto;
     max-height: 600px;
     padding: 0px 10px 10px 10px;
+    cursor:default;
 }
 
 .selector-item {
@@ -377,14 +389,13 @@ export default defineComponent({
 .item-content-left {
     display: flex;
     align-items: center;
-    width: 50%;
+    overflow: hidden;
 }
 .item-content-right {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     white-space: nowrap;
-    width: 50%;
 }
 .item-icon {
     margin-right: 3px;
@@ -424,7 +435,6 @@ export default defineComponent({
 .sub-menu {
     position: absolute;
     left: 0;
-    bottom: 100%;
     background-color: var(--vscode-editor-background);
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);

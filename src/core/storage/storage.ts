@@ -179,6 +179,17 @@ export class Storage {
         return session;
     }
 
+    public async setConextExpand(userId: string, instanceName: string, sessionId: string | undefined, index: number, expand?: boolean): Promise<Session | undefined> {
+        const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
+        if (session) {
+            if (index >= 0 && index < session.history.length) {
+                session.history[index].contextExpand = expand;
+                await this.saveUserInfoWrapper(userId);
+            }
+        }
+        return session;
+    }
+
     public async removeAIInstanceMessages(userId: string, instanceName: string, sessionId?: string, removeIndexList?: number[]): Promise<Session | undefined>  {
         const timestamp = Date.now();
         const session = await this.getAIInstanceSession(userId, instanceName, sessionId);
@@ -550,7 +561,7 @@ export class Storage {
     private createAIIInstanceMessage(timestamp: number): Message {
         return { 
             role: "system", 
-            content: this.getTimeText(timestamp) ,
+            content: this.getTimeText(timestamp),
             timestamp: timestamp
         }
     }
@@ -560,6 +571,7 @@ export class Storage {
         return {
             tools_describe: toolsDescribe,
             tool_calls: [],
+            context: "",
             knowledge: "",
             backup: "",
             returns: { ai: { ai_conclusion: "" } }

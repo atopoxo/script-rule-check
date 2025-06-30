@@ -13,23 +13,59 @@
             <div class="role-name" v-if="msg.role === 'assistant'">AI 助手</div>
           </div>
           <div class="content-block">
+            <div v-if="msg.contextOption && msg.contextOption.length > 0" class="context-wraper">
+              <div class="context-wraper-box">
+                <div v-if="modifiedIndex == index" class="context-wraper-left">
+                  <button class="icon-button item-context" @click="showReferenceOptions(index)">#</button>
+                  <sy-selector v-if="showCurrentContextOptions" :visible="showCurrentContextOptions" class="reference-selector left"
+                    :ref="el => setCurrentContextSelector(el, index)"
+                    title="上下文"
+                    :width="460"
+                    :isDark = isDark
+                    :items="contextOption"
+                    :mutiSelect="true"
+                    :showChoice="true"
+                    :index="index"
+                    :selectedItems="getCurrentContextItems(msg.contextOption)"
+                    subMenuPosition="top"
+                    @close="handleReferenceSelectorClose"
+                    @select="handleReferenceSelect"
+                    @selectFiles="handleReferenceSelectFiles"
+                    @selectWorkspace="handleReferenceSelectWorkspace"
+                  />
+                  <div class="ref-tooltip">选择上下文</div>
+                </div>
+                <div class="context-wraper-right">
+                  <button class="icon-button context-header" @click="expandContext(index, msg.contextExpand)">
+                    <div class="context-header-content"> {{getContextDescription(msg.contextOption)}}</div>
+                    <img :src="getContextIconPath(msg.contextExpand)" />
+                  </button>
+                </div>
+              </div>
+              <div v-if="msg.contextExpand" class="context-bar highlight"
+                :style="{
+                  maxWidth: `${contentBlockWidth - (8 + 8)}px`
+                }">
+                <div v-for="(ref, refIndex) in msg.contextOption" :key="refIndex">
+                  <div v-if="ref.contextItem">
+                    <sy-tag :isDark = isDark :index="index" :removeable="modifiedIndex != undefined" :data = ref @remove="removeReference"></sy-tag>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="content">
-              <message-render :isDark="isDark" 
+              <message-render :isDark="isDark"
+                :index="index"
                 :contentType="msg.role === 'user' ? 'text': 'html'"
+                :textAreaBorder=1
+                :textAreaPadding=8
                 :maxWidth="contentBlockWidth"
                 :textEditable="modifiedIndex != undefined"
                 :content="msg.content"
                 @finish-edit="finishEdit"></message-render>
-              <!-- 引用展示 -->
-              <div v-if="msg.references && msg.references.length > 0" class="references">
-                <div v-for="(ref, refIndex) in msg.references" :key="refIndex" class="reference">
-                  <i :class="`codicon ${getRefIcon(ref.type)}`"></i>
-                  <span>{{ ref.name }}</span>
-                </div>
-              </div>
             </div>
             <div v-if="msg.role === 'user'" class="feedback user">
-              <button v-if="modifiedIndex" class="icon-button" @click="cancelModify()">
+              <button v-if="modifiedIndex" class="icon-button" @click="cancelModify(index)">
                 <img :src="getfeedbackIconPath('cancel')" />
               </button>
               <button v-if="!selectedSession.isAIStreamTransfer && !modifiedIndex" class="icon-button" @click="modify(index)">
@@ -54,9 +90,9 @@
         </div>
       </div>
       <div class="input-container" :style="{ height: containerHeight + 'px' }">
-        <div class="references-bar" ref="referencesBar">
-          <div v-for="(ref, index) in referenceItems" :key="index">
-            <div v-if="ref.reference">
+        <div class="context-bar" ref="contextBar">
+          <div v-for="(ref, index) in contextItems" :key="index">
+            <div v-if="ref.contextItem">
               <sy-tag :isDark = isDark :data = ref @remove="removeReference"></sy-tag>
             </div>
           </div>
@@ -72,15 +108,15 @@
         ></textarea>
         <div class="input-functions">
           <div class="input-functions-left">
-            <button class="icon-button" @click="showReferenceOptions">#</button>
+            <button class="icon-button" @click="showReferenceOptions()">#</button>
             <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector" ref="referenceSelector"
               title="上下文"
               :width="460"
               :isDark = isDark
-              :items="referenceOptions"
+              :items="contextOption"
               :mutiSelect="true"
               :showChoice="true"
-              :selectedItems="referenceItems"
+              :selectedItems="contextItems"
               @close="handleReferenceSelectorClose"
               @select="handleReferenceSelect"
               @selectFiles="handleReferenceSelectFiles"
@@ -92,7 +128,7 @@
             <button class="icon-button model-select" @click="selectModel">{{ selectedModel }}</button>
             <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector" ref="modelSelector"
               title="选择模型"
-              :width="250"
+              :width="300"
               :isDark = isDark
               :items="modelOptions"
               :mutiSelect="false"
@@ -100,7 +136,7 @@
               @close="handleModelSelectorClose"
               @select="handleModelSelect"
             />
-            <button class="icon-button message-send" @click="sendMessage"
+            <button class="icon-button message-send" @click="handleMessage()"
               :class="{
                 'ai-stream-finish': !selectedSession.isAIStreamTransfer,
                 'ai-stream-transfering': selectedSession.isAIStreamTransfer
@@ -120,8 +156,8 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, watch, onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue';
-import type { Session, SessionRecordList, SessionRecord, SelectorItem, MenuItem, ModelInfo, ReferenceOption } from '../types/ChatTypes';
+import { defineComponent, watch, onMounted, onBeforeUnmount, reactive, ref, toRaw, nextTick } from 'vue';
+import type { Session, SessionRecordList, SessionRecord, SelectorItem, MenuItem, ModelInfo, ContextOption } from '../types/ChatTypes';
 import SyMenuBar from '../components/SyMenuBar.vue';
 import MessageRender from '../components/MessageRender.vue';
 import SySelector from '../components/SySelector.vue';
@@ -148,24 +184,27 @@ export default defineComponent({
       { id: 'settings', tooltip: '设置', icon:'settings.svg' },
     ]);
     const selectedSession = ref<Session | undefined>(undefined);
+    const currentContextSelectors = ref<Map<number, InstanceType<typeof SySelector>>>(new Map());
     const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
     const sessionTagFontSize = "11px";
     const historySessions = ref<SessionRecordList[]>([]);
+    const showCurrentContextOptions = ref(false);
     const showReferenceSelector = ref(false);
-    const referenceItems = ref<SelectorItem[]>([]);
+    const contextItems = ref<SelectorItem[]>([]);
+    const currentContext = ref<ContextOption[] | undefined>([]);
     const isDark = ref<boolean>(false);
     const showModelSelector = ref(false);
     const selectedModel = ref('');
     const modelOptions = ref<SelectorItem[]>([]);
-    const referenceOptions = ref<SelectorItem[]>([]);
+    const contextOption = ref<SelectorItem[]>([]);
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const placeholderText = ref(isMac ? '「↑↓」切换历史输入，「⌘+⏎」换行' : '「↑↓」切换历史输入，「Ctrl+⏎」换行');
     const messageInput = ref('');
     const defaultReferenceHeight = 0;
     const referenceBarHeight = ref(defaultReferenceHeight);
-    const referencesBar = ref<HTMLElement | null>(null);
+    const contextBar = ref<HTMLElement | null>(null);
     let referencesBarResizeObserver: ResizeObserver | null = null;
     const maxTextLines = 16;
     const textAreaBorder = 2;
@@ -289,59 +328,166 @@ export default defineComponent({
       }));
     };
 
-    const showReferenceOptions = () => {
+    const showReferenceOptions = (index?: number) => {
       vscode.postMessage({ type: 'showReferenceOptions' });
-      showReferenceSelector.value = showReferenceSelector.value ? false : true;
-    }
-
-    const handleReferenceSelectorClose = (items: any[] | undefined) => {
-      if (items) {
-        referenceItems.value = items;
+      if (index) {
+        showCurrentContextOptions.value = showCurrentContextOptions.value ? false: true;
+      } else {
+        showReferenceSelector.value = showReferenceSelector.value ? false : true;
       }
-      showReferenceSelector.value = false;
     }
-    const handleReferenceSelect = (selected: any[]) => { 
-      referenceItems.value = selected;
+
+    const getCurrentContextItems = (contextItems: ContextOption[]): SelectorItem[] => {
+      const result = getReferenceOptions(contextItems);
+      return result;
+    }
+
+    const setCurrentContextSelector = (el: any, index: number) => {
+      if (el) {
+        currentContextSelectors.value.set(index, el);
+      } else {
+        currentContextSelectors.value.delete(index);
+      }
     };
 
-    const handleReferenceSelectFiles = (onlyFiles: boolean) => {
-      vscode.postMessage({ type: 'selectFiles' , data: {onlyFiles: onlyFiles}});
+    const handleReferenceSelectorClose = (items: SelectorItem[] | undefined, index: number) => {
+      if (index < 0) {
+        if (items) {
+          contextItems.value = items;
+        }
+        showReferenceSelector.value = false;
+      } else {
+        const message = selectedSession.value?.history[index];
+        if (message) {
+          message.contextOption = getReferences(items);
+        }
+        showCurrentContextOptions.value = false;
+      }
+    }
+    const handleReferenceSelect = (selected: SelectorItem[], index: number) => {
+      if (index < 0) {
+        contextItems.value = selected;
+      } else {
+        const message = selectedSession.value?.history[index];
+        if (message) {
+          message.contextOption = getReferences(selected);
+        }
+      }
     };
 
-    const handleReferenceSelectWorkspace = () => {
-      vscode.postMessage({ type: 'selectWorkspace' });
+    const handleReferenceSelectFiles = (onlyFiles: boolean, index: number) => {
+      vscode.postMessage({ type: 'selectFiles' , data: {onlyFiles: onlyFiles, index: index}});
     };
 
-    const getReferenceOptions = (referenceOptions: ReferenceOption[]): SelectorItem[] => {
+    const handleReferenceSelectWorkspace = (index: number) => {
+      vscode.postMessage({ type: 'selectWorkspace', data: {index: index}});
+    };
+
+    const getReferenceOptions = (contextOption: ContextOption[]): SelectorItem[] => {
       const themeFolder = isDarkTheme() ? 'dark' : 'light';
       const selectTagfontSize = "9px";
-      return referenceOptions.map((item) => ({
+      return contextOption.map((item) => ({
         type: item.type,
         id: item.id,
         name: item.name,
         icon: item.icon ? `${themeFolder}/${item.icon}` : undefined,
         tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
-        reference: item.reference,
+        contextItem: item.contextItem,
         children: (item.children && item.children.length > 0) ? getReferenceOptions(item.children) : undefined
       }));
     };
 
-    const updateReferences  = (item: ReferenceOption) => {
+    const getReferences = (selectedItems?: SelectorItem[]): ContextOption[] => {
+      let result: ContextOption[] = [];
+      if (selectedItems) {
+        result = selectedItems.filter(item => item.type !== 'code').map((item) => ({
+          type: item.type,
+          id: item.id,
+          name: item.name,
+          describe: item.tag?.text as string,
+          contextItem: toRaw(item.contextItem),
+          children: (item.children && item.children.length > 0) ? getReferences(item.children) : undefined
+        }));
+      }
+      return result;
+    };
+
+    const updateReferences  = (item: ContextOption, index: number) => {
+      if (index < 0) {
+        const selectTagfontSize = "9px";
+        const newItem: SelectorItem = {
+          type: item.type,
+          id: item.id,
+          name: item.name,
+          tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+          contextItem: item.contextItem
+        }
+        const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
+        if (contextIndex !== -1) {
+          contextItems.value[contextIndex] = newItem;
+        } else {
+          contextItems.value.push(newItem);
+        }
+      } else {
+        const message = selectedSession.value?.history[index];
+        if (message) {
+          const contextIndex = message.contextOption?.findIndex(existing => existing.id === item.id) as number;
+          if (contextIndex !== -1) {
+            if (message.contextOption) {
+              message.contextOption[contextIndex] = item;
+            }
+          } else {
+            message.contextOption?.push(item);
+          }
+        }
+      }
+    };
+
+    const handleAddContext = async (item: ContextOption) => { 
       const selectTagfontSize = "9px";
       const newItem: SelectorItem = {
         type: item.type,
         id: item.id,
         name: item.name,
         tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
-        reference: item.reference
+        contextItem: item.contextItem
       }
-      const index = referenceItems.value.findIndex(existing => existing.id === newItem.id);
-      if (index !== -1) {
-        referenceItems.value[index] = newItem;
+      const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
+      if (contextIndex !== -1) {
+        contextItems.value[contextIndex] = newItem;
       } else {
-        referenceItems.value.push(newItem);
+        contextItems.value.push(newItem);
       }
     };
+
+    const expandContext = (index: number, expand: boolean | undefined) => {
+      if (expand === undefined) {
+        expand = false;
+      }
+      expand = !expand
+      vscode.postMessage({ type: 'expandContext', data: {index: index, expand: expand} });
+    };
+
+    const getContextIconPath = (expand: boolean | undefined): string => {
+      try {
+          let iconPath = '';
+          let relativePath = isDark.value ? 'dark' : 'light';
+          if (expand) {
+            iconPath = 'arrow-down.svg';
+          } else {
+            iconPath = 'arrow-left.svg';
+          }
+          return new URL(`${iconRoot}${relativePath}/${iconPath}`, currentModuleUrl).href;
+      } catch (error) {
+          console.error('图标加载失败:', error);
+          return '';
+      }
+    }
+
+    const getContextDescription = (contextOption: ContextOption[]): string => {
+      const result = `${contextOption.length} 个上下文信息`;
+      return result;
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Enter') {
@@ -362,7 +508,7 @@ export default defineComponent({
           adjustTextareaHeight();
         } else if (!event.shiftKey) {
           event.preventDefault();
-          sendMessage();
+          handleMessage();
         }
       }
     };
@@ -501,16 +647,19 @@ export default defineComponent({
       return Math.min(contentHeight, maxTextAreaHeight);
     }
 
-    const addReference = () => {
-      vscode.postMessage({ type: 'addReference' });
-    };
-
-    const removeReference = (id: string) => {
-      referenceItems.value = referenceItems.value.filter(item => item.id !== id)
+    const removeReference = (id: string, index: number) => {
+      if (index >= 0) {
+        const message = selectedSession.value?.history[index];
+        if (message) {
+          message.contextOption = message.contextOption?.filter(item => item.id !== id);
+        }
+      } else {
+        contextItems.value = contextItems.value.filter(item => item.id !== id);
+      }
     };
 
     // const references = () => {
-    //   referenceItems.value.map(item => item.reference);
+    //   contextItems.value.map(item => item.reference);
     // }
 
     // 计算属性：按日期分组的历史会话
@@ -551,15 +700,6 @@ export default defineComponent({
           return '';
       }
     };
-    const getRefIcon = (type: string) => {
-      return type === 'code' ? 'codicon-symbol-method' : 
-             type === 'file' ? 'codicon-file' : 'codicon-folder';
-    };
-
-    // 格式化时间
-    const formatTime = (timestamp: number) => {
-      return new Date(timestamp).toLocaleTimeString();
-    };
 
     // 创建新会话
     const createSession = () => {
@@ -585,24 +725,13 @@ export default defineComponent({
       }
     }
 
-    const sendMessage = () => {
+    const handleMessage = () => {
       if (selectedSession.value?.isAIStreamTransfer == false) {
-        if (!messageInput.value.trim()) {
-          return;
-        }
-        vscode.postMessage({
-          type: 'sendMessage',
-          data: {
-            sessionId: selectedSession.value?.sessionId,
-            content: messageInput.value,
-            index: modifiedIndex.value
-          }
-          // references: references
-        });
-        modifiedIndex.value = undefined;
+        cancelModify(modifiedIndex.value);
+        const options = getReferences(contextItems.value)
+        sendMessage(messageInput.value, undefined, options);
+        contextItems.value = [];
         messageInput.value = '';
-        // references.value = [];
-
         if (textareaRef.value) {
           textareaRef.value.style.height = 'auto';
           containerHeight.value = defaultInputContainerHeight;
@@ -612,6 +741,26 @@ export default defineComponent({
           type: 'pauseAIStreamTransfer',
           data: { sessionId: selectedSession.value?.sessionId}
         });
+      }
+    }
+
+    const sendMessage = (query: string, index?: number, contextOption?: ContextOption[]) => {
+      try {
+        if (!query.trim()) {
+          return;
+        }
+        vscode.postMessage({
+          type: 'sendMessage',
+          data: {
+            sessionId: selectedSession.value?.sessionId,
+            content: query,
+            index: index,
+            contextOption: contextOption,
+            contextExpand: false
+          }
+        });
+      } catch (error) {
+        console.error(error);
       }
     };
 
@@ -624,15 +773,26 @@ export default defineComponent({
 
     const modify = (index: number) => {
       modifiedIndex.value = index;
+      currentContext.value = selectedSession.value?.history[index]?.contextOption;
     };
 
-    const cancelModify = () => {
+    const cancelModify = (index: number | undefined) => {
+      if (index) {
+        const message = selectedSession.value?.history[index];
+        if (message) {
+          message.contextOption = currentContext.value;
+        }
+      }
       modifiedIndex.value = undefined;
     };
 
-    const finishEdit = (value: string) => {
-      messageInput.value = value;
-      sendMessage();
+    const finishEdit = (value: string, index: number) => {
+      const options = selectedSession.value?.history[index]?.contextOption?.map(item => {
+          return toRaw(item);
+        }
+      );
+      sendMessage(value, index, options);
+      modifiedIndex.value = undefined;
     }
 
     const copy = (content: string, event: MouseEvent) => {
@@ -782,7 +942,7 @@ export default defineComponent({
       }
     };
 
-    watch(() => referencesBar.value, (newVal, oldVal) => {
+    watch(() => contextBar.value, (newVal, oldVal) => {
         if (oldVal && referencesBarResizeObserver) {
             referencesBarResizeObserver.unobserve(oldVal);
         }
@@ -823,6 +983,15 @@ export default defineComponent({
       { immediate: true } // 首次加载立即触发
     );
 
+    watch(showCurrentContextOptions, (newVal, oldVal) => {
+        if (oldVal === true && newVal === false) {
+            const selector = currentContextSelectors.value.get(modifiedIndex.value as number);
+            if (selector) {
+                selector.confirmSelection();
+            }
+        }
+    });
+
     watch(showReferenceSelector, (newVal, oldVal) => {
         if (oldVal === true && newVal === false) {
             if (referenceSelector.value) {
@@ -840,14 +1009,14 @@ export default defineComponent({
     });
 
     onMounted(() => {
-        if (referencesBar.value) {
+        if (contextBar.value) {
             referencesBarResizeObserver = new ResizeObserver((entries) => {
                 for (const entry of entries) {
                     referenceBarHeight.value = entry.contentRect.height;
                     adjustTextareaHeight();
                 }
             });
-            referencesBarResizeObserver.observe(referencesBar.value);
+            referencesBarResizeObserver.observe(contextBar.value);
         }
         window.addEventListener('message', (event: MessageEvent) => {
             const message = event.data;
@@ -862,7 +1031,7 @@ export default defineComponent({
                   selectedSession.value = getSelectedSession(data.selectedSession);
                   selectedModel.value = data.selectedModel.name;
                   modelOptions.value = getModels(data.modelInfos);
-                  referenceOptions.value = getReferenceOptions(data.referenceOptions)
+                  contextOption.value = getReferenceOptions(data.contextOption)
                   isInHistoryView.value = false;
                   break;
               case 'themeUpdate':
@@ -872,16 +1041,13 @@ export default defineComponent({
                   selectedModel.value = data.selectedModel.name;
                   break;
               case 'showReferenceOptions':
-                  referenceOptions.value = getReferenceOptions(data.referenceOptions);
+                  contextOption.value = getReferenceOptions(data.contextOption);
                   break;
               case 'selectFiles':
-                  updateReferences(data.selectFiles);
+                  updateReferences(data.selectFiles, data.index);
                   break;
               case 'selectWorkspace':
-                  updateReferences(data.selectWorkspace);
-                  break;
-              case 'addReference':
-                  // references.value.push(message.reference);
+                  updateReferences(data.selectWorkspace, data.index);
                   break;
               case 'aiStreamStart':
                   handleAIStreamStart(data);
@@ -894,6 +1060,9 @@ export default defineComponent({
                     selectedSession.value = getSelectedSession(data.selectedSession);
                   }
                   break;
+              case 'addContext':
+                  handleAddContext(data.contextOption);
+                  break;
               case 'showSessionsSnapshot':
                   historySessions.value = getHistorySessions(data.sessionsSnapshot);
                   isInHistoryView.value = true;
@@ -901,6 +1070,14 @@ export default defineComponent({
               case 'addSession':
                   selectedSession.value = getSelectedSession(data.selectedSession);
                   isInHistoryView.value = false;
+                  break;
+              case 'expandContext':
+                  if (selectedSession.value?.sessionId == data.sessionId) {
+                    const history = selectedSession.value?.history;
+                    if (history) {
+                      history[data.index].contextExpand = data.expand;
+                    }
+                  }
                   break;
               case 'selectSession':
                   selectedSession.value = getSelectedSession(data.selectedSession);
@@ -937,8 +1114,12 @@ export default defineComponent({
       placeholderText,
       messageInput,
       contentBlockWidth,
-      referencesBar,
-      referenceItems,
+      contextBar,
+      contextItems,
+      currentContext,
+      expandContext,
+      getContextIconPath,
+      getContextDescription,
       textareaRef,
       referenceBarHeight,
       containerHeight,
@@ -948,12 +1129,11 @@ export default defineComponent({
       handleInput,
       handleCompositionStart,
       handleCompositionEnd,
-      getRefIcon,
-      formatTime,
       createSession,
       getRoleIconPath,
       getfeedbackIconPath,
       modifiedIndex,
+      handleMessage,
       sendMessage,
       regenerate,
       modify,
@@ -961,15 +1141,17 @@ export default defineComponent({
       finishEdit,
       copy,
       removeMessage,
-      addReference,
       removeReference,
       setSessionName,
       selectSession,
       removeSession,
       backToChat,
+      showCurrentContextOptions,
       showReferenceSelector,
-      referenceOptions,
+      contextOption,
       showReferenceOptions,
+      getCurrentContextItems,
+      setCurrentContextSelector,
       handleReferenceSelectorClose,
       handleReferenceSelect,
       handleReferenceSelectFiles,
@@ -1116,6 +1298,7 @@ export default defineComponent({
 .content {
   position: relative;
   background-color: transparent;
+  border-radius: 5px;
 }
 .message.user .content {
   background-color: var(--vscode-list-inactiveSelectionBackground);
@@ -1179,7 +1362,7 @@ export default defineComponent({
   background-clip: content-box, border-box;
   transition: height 0.2s ease;
   resize: vertical;
-  opacity: 0.9;
+  opacity: 1;
 }
 .input-container:focus-within {
   box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
@@ -1187,11 +1370,74 @@ export default defineComponent({
 .input-container:hover {
   box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
 }
-.references-bar {
+.context-wraper {
+  display: flex;
+  flex-direction: column;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  align-items: flex-end;
+}
+.context-wraper-box {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 0 0 3px 0;
+}
+.context-wraper-left {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.icon-button.item-context {
+  width: 12px;
+  height: 12px;
+  padding: 1px;
+  font-size: 11px;
+  line-height: 11px;
+
+}
+.context-wraper-right {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.context-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  height: 16px;
+  padding: 2px;
+}
+.context-header img {
+  width: 8px;
+  height: 8px;
+  padding: 2px;
+  margin-left: 4px;
+  border-radius: 3px;
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+.context-header-content {
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 12px;
+  opacity: 0.8;
+}
+.icon-button.expand {
+  width: 14px;
+  height: 14px;
+}
+.context-bar {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  padding: 0 5px;
+  border-radius: 5px;
+}
+.context-bar.highlight {
+  background-color: var(--vscode-editor-selectionHighlightBackground);
 }
 .input-container textarea {
   flex: 1;
@@ -1244,6 +1490,10 @@ export default defineComponent({
 }
 .reference-selector {
   bottom: 100%;
+}
+.reference-selector.left {
+  right: 100%;
+  bottom: auto;
 }
 .ref-tooltip {
   position: absolute;
@@ -1391,7 +1641,6 @@ export default defineComponent({
 .input-functions-right .icon-button.message-send:hover + .send-tooltip {
   opacity: 1;
 }
-
 
 .date-section {
   margin-bottom: 15px;

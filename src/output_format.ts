@@ -8,28 +8,6 @@ export class CheckRule {
     ) {}
 }
 
-export class ReferenceInfo {
-    constructor(
-        public type: string,
-        public name: string,
-        public paths?: string[],
-        public content?: string,
-        public range?: any
-    ) {}
-}
-
-export class ReferenceOption {
-    constructor(
-        public type: string,
-        public id: string,
-        public name: string,
-        public describe: string,
-        public icon?: string,
-        public reference?: ReferenceInfo,
-        public children?: ReferenceOption[]
-    ) {}
-}
-
 export interface CheckResult {
     rule: CheckRule;
     tips: string;

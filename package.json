@@ -171,14 +171,14 @@
         "title": "删除历史记录"
       },
       {
-        "command": "extension.chat.addReference",
-        "title": "添加引用",
+        "command": "extension.chat.addContext",
+        "title": "添加到上下文",
         "icon": "$(link)"
       },
       {
-        "command": "extension.chat.selectModel",
-        "title": "选择模型",
-        "icon": "$(server)"
+        "command": "extension.chat.checkCode",
+        "title": "检查代码",
+        "icon": "$(link)"
       },
       {
         "command": "extension.chat.addCodeReference",
@@ -191,11 +191,6 @@
       {
         "command": "extension.chat.addFolderReference",
         "title": "Add Folder Reference"
-      },
-      {
-        "command": "extension.chat.addSelectionToChat",
-        "title": "添加到聊天",
-        "category": "Editor"
       }
     ],
     "submenus": [
@@ -264,7 +259,12 @@
           "group": "navigation@3"
         },
         {
-          "command": "extension.chat.addSelectionToChat",
+          "command": "extension.chat.addContext",
+          "when": "editorHasSelection",
+          "group": "navigation@4"
+        },
+        {
+          "command": "extension.chat.checkCode",
           "when": "editorHasSelection",
           "group": "navigation@4"
         }
@@ -384,6 +384,7 @@
   },
   "dependencies": {
     "@babel/traverse": "^7.27.4",
+    "@datastructures-js/deque": "^1.0.5",
     "async-mutex": "^0.5.0",
     "axios": "^1.10.0",
     "better-sqlite3": "^11.10.0",

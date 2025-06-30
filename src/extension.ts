@@ -7,20 +7,18 @@ import * as fs from 'fs';
 // const { JSDOM } = require('jsdom');
 const iconv = require('iconv-lite');
 import { RuleOperator, RuleResultProvider } from './rule_check';
-import { ReferenceOperator } from './reference_operator';
+import { ContextMgr } from './core/context/context_mgr';
 import { ConfigurationProvider } from './configuration';
 import { CheckRule } from './output_format';
 import { ChatViewProvider, ChatViewTreeDataProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
-import { ReferenceSystem } from './reference_system';
-import { ModelSelector } from './model_selector';
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
 let ruleOperator: RuleOperator;
-let referenceOperator: ReferenceOperator
+let contextMgr: ContextMgr
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
@@ -202,13 +200,13 @@ function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
 }
 
 async function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
-    aiModelMgr = new AIModelMgr({}, extensionName, storage);
+    contextMgr = new ContextMgr(extensionName);
+    aiModelMgr = new AIModelMgr({}, extensionName, storage, contextMgr);
     const defaultModel = await aiModelMgr.getSelectedModel();
     const defaultModelID = defaultModel ? defaultModel.id : '';
-    referenceOperator = new ReferenceOperator(extensionName);
     chatManager = ChatManager.getInstance(context, userID, storage, defaultModelID, aiModelMgr);
     await chatManager.ready;
-    chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, referenceOperator);
+    chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, contextMgr);
 	const allModelInfos = aiModelMgr.getModelInfos();
     configurationProvider.setModelInfos(allModelInfos);
     context.subscriptions.push(
@@ -245,18 +243,12 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 chatViewProvider.showReferenceOptions(undefined);
             }
         }),
-        vscode.commands.registerCommand('extension.chat.addReference', async () => {
-            await chatViewProvider.addReference();
+        vscode.commands.registerCommand('extension.chat.addContext', async () => {
+            await chatViewProvider.addContext();
         }),
-        vscode.commands.registerCommand('extension.chat.selectModel', async (id: string) => {
-            await chatViewProvider.selectModel(id);
+        vscode.commands.registerCommand('extension.chat.checkCode', async () => {
+            await chatViewProvider.checkCode();
         }),
-        // vscode.commands.registerCommand('extension.chat.addCodeReference', async () => {
-        //     const reference = await ReferenceSystem.addCodeReference();
-        //     if (reference) {
-        //         chatViewProvider.addReference(reference);
-        //     }
-        // }),
         // vscode.commands.registerCommand('extension.chat.addFileReference', async () => {
         //     const reference = await ReferenceSystem.addFileReference();
         //     if (reference) {
@@ -268,10 +260,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
         //     if (reference) {
         //         chatViewProvider.addReference(reference);
         //     }
-        // }),
-        vscode.commands.registerCommand('extension.chat.addSelectionToChat', async () => {
-            await chatViewProvider.addSelectionToChat();
-        })
+        // })
     );
 }
 

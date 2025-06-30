@@ -37,7 +37,7 @@ export class ChatManager {
     }
 
     public async getSession(instanceName: string, sessionId?: string): Promise<Session | undefined> {
-        return await this.storage.getAIInstanceSession(this.userID, instanceName);
+        return await this.storage.getAIInstanceSession(this.userID, instanceName, sessionId);
     }
 
     public async selectSession(instanceName: string, sessionId: string): Promise<Session | undefined> {
@@ -61,12 +61,16 @@ export class ChatManager {
         return await this.storage.setAIInstanceSessionName(this.userID, instanceName, sessionId, sessionName);
     }
 
+    public async setContextExpand(instanceName: string, sessionId: string | undefined, index: number, expand?: boolean) {
+        return await this.storage.setConextExpand(this.userID, instanceName, sessionId, index, expand);
+    }
+
     public async removeMessages(instanceName: string, removeIndexList: number[], sessionId?: string): Promise<Session | undefined> {
         return await this.storage.removeAIInstanceMessages(this.userID, instanceName, sessionId, removeIndexList);
     }
 
-    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number) {
-        const history = await this.getMessages(this.userID, 'chat', session.sessionId, query, index);
+    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number, contextOption?: any[], contextExpand?: boolean) {
+        const history = await this.getMessages(this.userID, 'chat', session.sessionId, query, index, contextOption, contextExpand);
         let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
         modelID = this.getValidModelID(modelID);
 
@@ -84,17 +88,17 @@ export class ChatManager {
         return this.aiModelMgr.chatStream(signal, modelID, data);
     }
 
-    private async getMessages(userID: string, instanceName: string, sessionId?: string, query?: string, index?: number): Promise<Message[]> {
+    private async getMessages(userID: string, instanceName: string, sessionId?: string, query?: string, index?: number, contextOption?: any[], contextExpand?: boolean): Promise<Message[]> {
         let message: Message;
         let history: Message[];
         if (index != undefined) {
             if (query) {
-                message = { role: 'user', content: query as string, timestamp: Date.now() };
+                message = { role: 'user', content: query as string, timestamp: Date.now(), contextOption: contextOption, contextExpand: contextExpand };
                 await this.storage.updateUserInfo(userID, instanceName, sessionId, message, undefined, true, index);
             }
             history = await this.storage.getAIInstanceMessages(userID, instanceName, sessionId, true ) || [];
         } else {
-            message = { role: 'user', content: query as string, timestamp: Date.now() };
+            message = { role: 'user', content: query as string, timestamp: Date.now(), contextOption: contextOption, contextExpand: contextExpand };
             await this.storage.updateUserInfo(userID, instanceName, sessionId, message);
             history = await this.storage.getAIInstanceMessages(userID, instanceName, sessionId, true ) || [];
             await this.storage.addAIRound(userID, instanceName, sessionId);

@@ -1,6 +1,6 @@
 //ReferenceType = 'code' | 'files' | 'workspace' | 'function';
 
-export interface Reference {
+export interface ContextItem {
   type: string;
   name: string;
   paths?: string[];
@@ -8,11 +8,22 @@ export interface Reference {
   range?: any;
 }
 
+export interface ContextOption {
+  type: string;
+  id: string;
+  name: string;
+  describe: string;
+  icon?: string;
+  contextItem?: ContextItem;
+  children?: ContextOption[];
+}
+
 export interface Message {
   role: string;
   content: string;
   timestamp: number;
-  references?: Reference[];
+  contextOption?: ContextOption[];
+  contextExpand?: boolean;
 }
 
 export interface Session {
@@ -26,7 +37,7 @@ export interface Session {
 declare global {
   type IChatMessage = Message;
   type IChatSession = Session;
-  type IReference = Reference;
+  type IContextItem = ContextItem;
 }
 
 export interface SelectorItemTag {
@@ -37,11 +48,11 @@ export interface SelectorItemTag {
 
 export interface SelectorItem {
   type: string;
-  id: string | number;
+  id: string;
   name: string;
   icon?: string;
   tag?: SelectorItemTag;
-  reference?: Reference;
+  contextItem?: ContextItem;
   children?: SelectorItem[];
 }
 
@@ -71,14 +82,4 @@ export interface ModelInfo {
   id: string;
   name: string;
   type: string;
-}
-
-export interface ReferenceOption {
-  type: string;
-  id: string;
-  name: string;
-  describe: string;
-  icon?: string;
-  reference?: Reference;
-  children?: ReferenceOption[];
 }

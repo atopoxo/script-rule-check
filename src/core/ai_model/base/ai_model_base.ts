@@ -2,6 +2,7 @@ import * as path from 'path';
 // import * as copy from 'lodash/cloneDeep';
 const copy = require('lodash/cloneDeep');
 import { getJsonParser } from '../../json/json_parser';
+import { ContextMgr } from '../../context/context_mgr';
 import { ToolsMgr } from '../../tools/tools_mgr';
 import type { ToolCall } from '../../tools/tools_mgr';
 import type { ContentMap, Delta, InputData, Session, Message } from './ai_types';
@@ -15,6 +16,7 @@ export abstract class AIModelBase {
     protected assistant: string = "assistant";
     protected sentence_divisions: string[] = ["。", "！", "!", "？", "?", "\n"];
     protected toolsMgr: ToolsMgr;
+    protected contextMgr?: ContextMgr;
     protected knowledgeMgr?: any;
     protected additional_tips = {
         begin: "<|tips_start|>",
@@ -24,14 +26,12 @@ export abstract class AIModelBase {
     constructor(config: any, helper: any) {
         this.config = config;
         this.storage = helper.storage;
+        this.contextMgr = helper.contextMgr;
+        this.knowledgeMgr = helper.knowledgeMgr;
         this.toolsMgr = new ToolsMgr(config);
     }
 
     abstract chatStream(signal: AbortSignal, inputData: any): AsyncGenerator<any, void, unknown>;
-
-    setKnowledgeManager(knowledgeMgr: any): void {
-        this.knowledgeMgr = knowledgeMgr;
-    }
 
     async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
         throw new Error("Method not implemented.");
@@ -62,6 +62,7 @@ export abstract class AIModelBase {
 
         while (hasTask) {
             try {
+                this.handleReferences(messages, cache, currentIndex);
                 this.handleKnowledge(useKnowledge, messages, cache, currentIndex);
                 if (toolsOn) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
@@ -91,7 +92,8 @@ export abstract class AIModelBase {
                 messageReplace = true;
             }
         }
-        cache.tools_describe = { tools_usage: "", tools_describe: "" };;
+        cache.tools_describe = { tools_usage: "", tools_describe: "" };
+        cache.context = "";
         cache.knowledge = "";
         await this.saveCache(needSave, cache, userId, instanceName, sessionId);
     }
@@ -275,6 +277,16 @@ export abstract class AIModelBase {
         } else {
             if (toolsMessages.return_to_ai) {
                 toolsMessages.return_to_ai += "\n}\n";
+            }
+        }
+    }
+
+    private handleReferences(messages: Message[], cache: any, index: number): void {
+        if (!cache.context && this.contextMgr && messages[index].contextOption) {
+            const contextDescribe = this.contextMgr.getContext(messages[index].contextOption);
+            if (contextDescribe) {
+                cache.context = `${this.additional_tips.begin}${contextDescribe}${this.additional_tips.end}`;
+                messages[index].content += cache.context;
             }
         }
     }

@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { Session, ReferenceItem } from './core/ai_model/base/ai_types';
+import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
-import { ReferenceOperator } from './reference_operator';
+import { ContextMgr } from './core/context/context_mgr';
 
 export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -46,7 +46,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         private context: vscode.ExtensionContext,
         private chatManager: ChatManager,
         private aiModelMgr: AIModelMgr,
-        private referenceOperator: ReferenceOperator
+        private contextMgr: ContextMgr
     ) {
         this._extensionUri = context.extensionUri;
     }
@@ -92,16 +92,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     await this.selectFiles(data);
                     break;
                 case 'selectWorkspace':
-                    await this.selectWorkspace();
+                    await this.selectWorkspace(data);
                     break;
                 case 'sendMessage':
-                    await this.sendMessage(data.sessionId, data.content, data.references, data.index);
+                    await this.sendMessage(data.sessionId, data.content, data.contextOption, data.contextExpand, data.index);
                     break;
                 case 'pauseAIStreamTransfer':
                     this.pauseAIStreamTransfer(data.sessionId);
                     break;
                 case 'regenerate':
-                    await this.sendMessage(data.sessionId, data.content, data.references, data.index);
+                    await this.sendMessage(data.sessionId, data.content, data.contextOption, data.contextExpand, data.index);
                     break;
                 case 'removeMessage':
                     await this.removeMessage(data.index, data.sessionId);
@@ -118,11 +118,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'removeSession':
                     await this.removeSession(data.sessionId);
                     break;
-                case 'addReference':
-                    await this.addReference();
-                    break;
                 case 'removeReference':
                     await this.removeReference(data.refIndex);
+                    break;
+                case 'expandContext':
+                    await this.expandContext(data.index, data.expand);
                     break;
                 case 'setSessionName':
                     await this.setSessionName(data.sessionId, data.sessionName);
@@ -162,7 +162,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             isDark: theme === vscode.ColorThemeKind.Dark,
             modelInfos: this.aiModelMgr.getModelInfos(),
             selectedModel: await this.aiModelMgr.getSelectedModel(),
-            referenceOptions: await this.referenceOperator.getOptions(undefined),
+            contextOption: await this.contextMgr.getOptions(undefined),
             selectedSession: selectedSession
         }
         this.updateWebview('initSession', data);
@@ -202,26 +202,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     public async showReferenceOptions(data: object | undefined) {
         const result = {
-            referenceOptions: await this.referenceOperator.getOptions(data)
+            contextOption: await this.contextMgr.getOptions(data)
         }
         this.updateWebview('showReferenceOptions', result);
     }
 
     private async selectFiles(data: any) {
         const result = {
-            selectFiles: await this.referenceOperator.selectFiles(data.onlyFiles)
+            selectFiles: await this.contextMgr.selectFiles(data.onlyFiles),
+            index: data.index
         }
         this.updateWebview('selectFiles', result);
     }
 
-    private async selectWorkspace() {
+    private async selectWorkspace(data: any) {
         const result = {
-            selectWorkspace: await this.referenceOperator.selectWorkspace()
+            selectWorkspace: await this.contextMgr.selectWorkspace(),
+            index: data.index
         }
         this.updateWebview('selectWorkspace', result);
     }
 
-    private async sendMessage(sessionId?: string, query?: string, references?: any[], index?: number) {
+    private async sendMessage(sessionId?: string, query?: string, contextOption?: any[], contextExpand?: boolean, index?: number) {
         const currentSession = await this.chatManager.getSession('chat', sessionId);
         if (!currentSession) {
             return;
@@ -231,7 +233,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (this.view && this.isWebviewReady && !currentSession.isAIStreamTransfer) {
                 const port = this.view.webview;
                 const abortController = new AbortController();
-                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, false, query, index);
+                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, false, query, index, contextOption, contextExpand);
                 currentSession.isAIStreamTransfer = true;
                 port.postMessage({
                     type: 'aiStreamStart',
@@ -310,11 +312,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async removeReference(refIndex: number) {
         // if (this.currentSession) {
         //     const lastMessage = this.currentSession.messages[this.currentSession.messages.length - 1];
-        //     if (lastMessage && lastMessage.references && refIndex < lastMessage.references.length) {
-        //         lastMessage.references.splice(refIndex, 1);
+        //     if (lastMessage && lastMessage.contextOption && refIndex < lastMessage.contextOption.length) {
+        //         lastMessage.contextOption.splice(refIndex, 1);
         //         this.updateWebview('removeReference', {});
         //     }
         // }
+    }
+
+    private async expandContext(index: number, expand: boolean | undefined) {
+        const currentSession = await this.chatManager.setContextExpand("chat", undefined, index, expand);
+        if (!currentSession) {
+            return;
+        }
+        this.updateWebview('expandContext', {sessionId: currentSession.sessionId, index: index, expand: expand});
     }
 
     private async setSessionName(sessionId: string, sessionName: string) {
@@ -322,26 +332,44 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('setSessionName', {sessionName: session.name});
     }
 
-    public async addSelectionToChat() {
+    public async addContext() {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
             const selection = editor.selection;
             const text = editor.document.getText(selection);
-            
-            const reference: ReferenceItem = {
-                type: 'code',
-                path: editor.document.uri.fsPath,
-                name: `Selection from ${path.basename(editor.document.fileName)}`,
-                content: text,
-                range: selection
-            };
-            
-            if (this.view) {
-                this.view.webview.postMessage({
-                    type: 'addReference',
-                    reference
-                });
-            }
+            const subLength = Math.min(text.length, 20);
+            const name = text.substring(0, subLength);
+            const startPos = editor.document.offsetAt(selection.start);
+            const contextOption: ContextOption[] = [{
+                type: 'function',
+                id: name,
+                name: name,
+                describe: name,
+                contextItem: {
+                    type: 'function',
+                    name: name,
+                    paths: [editor.document.fileName],
+                    content: text,
+                    range: {
+                        start: startPos,
+                        end: startPos + text.length,
+                        startLine: selection.start.line,
+                        endLine: selection.end.line
+                    }
+                }
+            }]
+            this.updateWebview('addContext', {contextOption: contextOption});
+        }
+    }
+
+    public async checkCode() {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            const selection = editor.selection;
+            const content = editor.document.getText(selection);
+            const startPos = editor.document.offsetAt(selection.start);
+            const contextOption = this.contextMgr.getRelevantContext(startPos, content, editor.document.fileName);
+            this.updateWebview('addContext', {contextOption: contextOption});
         }
     }
 
@@ -377,18 +405,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         if (selected && this.view) {
             const content = document.getText(selected.symbol.range);
             
-            const reference: ReferenceItem = {
-                type: 'code',
-                path: document.uri.fsPath,
-                name: `${path.basename(document.fileName)}: ${selected.symbol.name}`,
-                content: content,
-                range: selected.symbol.range
-            };
-            
-            this.view.webview.postMessage({
-                type: 'addReference',
-                reference
-            });
+            // const reference: ContextItem = {
+            //     type: 'code',
+            //     path: document.uri.fsPath,
+            //     name: `${path.basename(document.fileName)}: ${selected.symbol.name}`,
+            //     content: content,
+            //     range: selected.symbol.range
+            // };
+            this.updateWebview('addContext', {contextOption: undefined});
         }
     }
 
@@ -409,17 +433,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 const content = await vscode.workspace.fs.readFile(selected.file);
                 const text = Buffer.from(content).toString('utf8');
                 
-                const reference: ReferenceItem = {
-                    type: 'file',
-                    path: selected.file.fsPath,
-                    name: path.basename(selected.file.fsPath),
-                    content: text
-                };
-                
-                this.view.webview.postMessage({
-                    type: 'addReference',
-                    reference
-                });
+                // const reference: ContextItem = {
+                //     type: 'file',
+                //     path: selected.file.fsPath,
+                //     name: path.basename(selected.file.fsPath),
+                //     content: text
+                // };
+                this.updateWebview('addContext', {contextOption: undefined});
             } catch (error) {
                 vscode.window.showErrorMessage(`读取文件失败: ${error}`);
             }
@@ -444,16 +464,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         });
 
         if (selected && this.view) {
-            const reference: ReferenceItem = {
-                type: 'folder',
-                path: selected.folder.fsPath,
-                name: path.basename(selected.folder.fsPath)
-            };
-            
-            this.view.webview.postMessage({
-                type: 'addReference',
-                reference
-            });
+            // const reference: ContextItem = {
+            //     type: 'folder',
+            //     path: selected.folder.fsPath,
+            //     name: path.basename(selected.folder.fsPath)
+            // };
+            this.updateWebview('addContext', {contextOption: undefined});
         }
     }
 

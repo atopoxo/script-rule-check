@@ -12,5 +12,9 @@
 	"terminal.integrated.env.windows": {
 		"NVM_HOME": "C:\\ProgramData\\nvm",
 		"PATH": "${env:PATH};C:\\ProgramData\\nvm"
+	},
+	"files.associations": {
+		"*.rh": "cpp",
+		"type_traits": "cpp"
 	}
 }
