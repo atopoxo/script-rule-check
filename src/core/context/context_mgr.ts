@@ -342,6 +342,10 @@ export class ContextMgr extends ContextBase {
         if (!result.has(filePath)) {
             result.set(filePath, []);
         }
+        const keywordTree: ContextTreeNode = {
+            value: undefined,
+            children: []
+        };
         while (!queue.isEmpty()) {
             const current = queue.popFront();
             const key = `${filePath}:${current.name}`;
@@ -354,7 +358,7 @@ export class ContextMgr extends ContextBase {
                 continue;
             }
             rangeTree.update(current.range.start, current.range.end, 1);
-            this.luaContext.buildDependencyGraph(ast, scopeNode, dependencyGraph, definitionMap, content, 0);
+            this.luaContext.buildDependencyGraph(ast, scopeNode, keywordTree, dependencyGraph, definitionMap, content, 0);
             const dependencies = dependencyGraph.get(current.name) || new Set();
             if (dependencies.size > 0) {
                 for (const dep of dependencies) {

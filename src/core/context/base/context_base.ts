@@ -371,14 +371,11 @@ export class ContextBase {
         const ast = require('luaparse').parse(content, {locations: true, ranges: true});
         const root: ContextTreeNode = {
             value: {
-                type: '',
-                name: '',
-                content: '',
+                type: 'global',
+                name: 'global',
                 range: {
                     start: startPos,
-                    end: startPos + content.length,
-                    startLine: 0,
-                    endLine: 0
+                    end: startPos + content.length
                 }
             }, 
             children: []
@@ -412,14 +409,11 @@ export class ContextBase {
         const ast = parser.parse(content);
         const root: ContextTreeNode = {
             value: {
-                type: '',
-                name: '',
-                content: '',
+                type: 'global',
+                name: 'global',
                 range: {
                     start: startPos,
-                    end: startPos + content.length,
-                    startLine: 0,
-                    endLine: 0
+                    end: startPos + content.length
                 }
             }, 
             children: []
@@ -444,14 +438,11 @@ export class ContextBase {
         const ast = parser.parse(content);
         const root: ContextTreeNode = {
             value: {
-                type: '',
-                name: '',
-                content: '',
+                type: 'global',
+                name: 'global',
                 range: {
                     start: startPos,
-                    end: startPos + content.length,
-                    startLine: 0,
-                    endLine: 0
+                    end: startPos + content.length
                 }
             }, 
             children: []
@@ -473,14 +464,11 @@ export class ContextBase {
         const ast = parser.parse(content);
         const root: ContextTreeNode = {
             value: {
-                type: '',
-                name: '',
-                content: '',
+                type: 'global',
+                name: 'global',
                 range: {
                     start: startPos,
-                    end: startPos + content.length,
-                    startLine: 0,
-                    endLine: 0
+                    end: startPos + content.length
                 }
             }, 
             children: []
