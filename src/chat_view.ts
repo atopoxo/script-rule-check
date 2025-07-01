@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ContextMgr } from './core/context/context_mgr';
+import { getEncoding } from './core/function/base_function';
 
 export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -123,6 +125,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'expandContext':
                     await this.expandContext(data.index, data.expand);
+                    break;
+                case 'openContextFile':
+                    await this.openContextFile(data.context);
                     break;
                 case 'setSessionName':
                     await this.setSessionName(data.sessionId, data.sessionName);
@@ -325,6 +330,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             return;
         }
         this.updateWebview('expandContext', {sessionId: currentSession.sessionId, index: index, expand: expand});
+    }
+
+    private async openContextFile(context: ContextOption) {
+        try {
+            const pathList = context.contextItem?.paths;
+            let filePath = '';
+            if (pathList) {
+                filePath = pathList[0];
+            }
+            const buffer = fs.readFileSync(filePath);
+            let encoding = getEncoding(buffer);
+            await vscode.workspace.getConfiguration().update(
+                'files.encoding', 
+                encoding,
+                vscode.ConfigurationTarget.Workspace
+            );
+
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+            const startLine = (context.contextItem?.range?.startLine || 1) -  1;
+            const endLine = (context.contextItem?.range?.endLine || 1) - 1;
+            const startPosition = new vscode.Position(startLine, 0);
+            const endPosition = new vscode.Position(endLine + 1, 0);
+            const selection = new vscode.Range(startPosition, endPosition);
+            await vscode.window.showTextDocument(doc, {
+                selection: selection
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(`打开文件失败: ${error}`);
+        }
     }
 
     private async setSessionName(sessionId: string, sessionName: string) {

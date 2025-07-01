@@ -47,7 +47,8 @@
                   width: `${contentBlockWidth - (8 + 8)}px`
                 }">
                 <sy-item-list :isDark="isDark" :index="index" :data="msg.contextOption" :isEditable="modifiedIndex != undefined"
-                  @remove="removeReference"></sy-item-list>
+                  @remove="removeReference"
+                  @click="openContextFile"></sy-item-list>
               </div>
             </div>
             <div class="content">
@@ -661,6 +662,11 @@ export default defineComponent({
       }
     };
 
+    const openContextFile = (item: ContextOption) => {
+      const context = toRaw(item);
+      vscode.postMessage({ type: 'openContextFile', data: { context: context } });
+    }
+
     // const references = () => {
     //   contextItems.value.map(item => item.reference);
     // }
@@ -1150,6 +1156,7 @@ export default defineComponent({
       copy,
       removeMessage,
       removeReference,
+      openContextFile,
       setSessionName,
       selectSession,
       removeSession,

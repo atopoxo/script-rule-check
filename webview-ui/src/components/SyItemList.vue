@@ -3,7 +3,7 @@
         <div v-for="(item, index) in data" :key="index" class="list-item"
             @mouseenter="handleItemHover(index)"
             @mouseleave="handleItemLeave(index)"
-            @click="click(index)"
+            @click="click(item)"
         >
             <div class="item-content-left">
                 <div class="item-icon">
@@ -59,8 +59,8 @@ export default defineComponent({
         const removeButtonVisible = ref<Map<number, boolean>>(new Map());
         const isEditable = ref<boolean>(false);
 
-        const click = (id: number) => {
-            emit('click', id, props.index);
+        const click = (item: ContextOption) => {
+            emit('click', item);
         };
 
         const remove = (id: number) => {
