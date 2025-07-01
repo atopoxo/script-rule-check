@@ -41,6 +41,7 @@ export class ContextMgr extends ContextBase {
         let uniqueContextIds = new Set<string>();
         let parts = {
             function: [],
+            code: [],
             file: []
         };
         for (const item of context) {
@@ -49,6 +50,10 @@ export class ContextMgr extends ContextBase {
         if (parts.function.length > 0) {
             result += "\n函数引用:\n";
             result += parts.function.join("\n") + "\n";
+        }
+        if (parts.code.length > 0) {
+            result += "\n代码片段引用:\n";
+            result += parts.code.join("\n") + "\n";
         }
         if (parts.file.length > 0) {
             result += "\n文件引用:\n";
@@ -81,10 +86,10 @@ export class ContextMgr extends ContextBase {
                     }
                     break;
                 default:
-                    if (uniqueContextIds.has(ref.name)) {
+                    if (uniqueContextIds.has(option.id)) {
                         break;
                     }
-                    uniqueContextIds.add(ref.name);
+                    uniqueContextIds.add(option.id);
                     parts[ref.type].push(ref.content);
                     break;
             }
@@ -323,7 +328,7 @@ export class ContextMgr extends ContextBase {
         };
         this.luaContext.buildTree(keywordTree, scopeNode, identifiers.ast, identifiers.content, 0);
         const rangeTree = new SegmentTree(0, identifiers.content.length);
-        rangeTree.update(startPos, startPos + text.length, 1);
+        // rangeTree.update(startPos, startPos + text.length, 1);
         const items: ContextItem[] = [];
         this.getIdentifiersByRange(items, keywordTree, startPos, startPos + text.length);
         const queue = new Deque<string>();
@@ -411,10 +416,12 @@ export class ContextMgr extends ContextBase {
 
     private createContextItemsByRange(result: ContextItem[], source: [number, number][], content: string, posList: number[]) {
         for (const item of source) {
+            const text = content.substring(item[0], item[1]);
+            const name = text.substring(0, 17) + '...';
             const current: ContextItem = {
-                type: 'lua',
-                name: 'souce code',
-                content: content.substring(item[0], item[1]),
+                type: 'code',
+                name: name,
+                content: text,
                 range: {
                     start: item[0],
                     end: item[1],

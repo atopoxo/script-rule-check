@@ -369,7 +369,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             const content = editor.document.getText(selection);
             const startPos = editor.document.offsetAt(selection.start);
             const contextOption = this.contextMgr.getRelevantContext(startPos, content, editor.document.fileName);
-            this.updateWebview('addContext', {contextOption: contextOption});
+            this.updateWebview('addContext', {
+                contextOption: contextOption,
+                query: `请帮我分析一下下面的代码是否存在问题：\n${content}`
+            });
         }
     }
 

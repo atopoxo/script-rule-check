@@ -1217,9 +1217,14 @@ export class ContextBase {
     }
 
     protected ContextItemToOption(item: ContextItem): ContextOption {
+        const pathList = item.paths;
+        let name = '';
+        if (pathList) {
+            name = pathList[0];
+        }
         return {
             type: item.type,
-            id: item.name,
+            id: `${name}:${item.range?.startLine}~${item.range?.endLine}`,
             name: item.name,
             describe: `${item.type}: ${item.name}`,
             contextItem: item

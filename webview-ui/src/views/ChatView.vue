@@ -443,21 +443,23 @@ export default defineComponent({
       }
     };
 
-    const handleAddContext = async (item: ContextOption) => { 
+    const handleAddContext = async (items: ContextOption[]) => {
       const selectTagfontSize = "9px";
-      const newItem: SelectorItem = {
-        type: item.type,
-        id: item.id,
-        name: item.name,
-        tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
-        contextItem: item.contextItem
-      }
-      const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
-      if (contextIndex !== -1) {
-        contextItems.value[contextIndex] = newItem;
-      } else {
-        contextItems.value.push(newItem);
-      }
+      items.forEach(item => {
+        const newItem: SelectorItem = {
+          type: item.type,
+          id: item.id,
+          name: item.name,
+          tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+          contextItem: item.contextItem
+        }
+        const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
+        if (contextIndex !== -1) {
+          contextItems.value[contextIndex] = newItem;
+        } else {
+          contextItems.value.push(newItem);
+        }
+      })
     };
 
     const expandContext = (index: number, expand: boolean | undefined) => {
@@ -1061,7 +1063,11 @@ export default defineComponent({
                   }
                   break;
               case 'addContext':
-                  handleAddContext(data.contextOption);
+                  if (data.query) {
+                    sendMessage(data.query, undefined, data.contextOption);
+                  } else {
+                    handleAddContext(data.contextOption);
+                  }
                   break;
               case 'showSessionsSnapshot':
                   historySessions.value = getHistorySessions(data.sessionsSnapshot);

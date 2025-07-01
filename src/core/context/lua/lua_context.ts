@@ -14,19 +14,22 @@ export interface ScopeNode {
 export class LuaContext extends ContextBase {
     private filters = new Set();
     private dependencyFilters = new Set();
+    private forNumericFilters = new Set();
     constructor() {
         super();
         let filters = ['type', 'range', 'loc', 'identifier'];
         filters.forEach(filter => this.filters.add(filter));
         filters = ['type', 'range', 'loc'];
         filters.forEach(filter => this.dependencyFilters.add(filter));
+        filters = ['variable', 'body', 'loc', 'range', 'type'];
+        filters.forEach(filter => this.forNumericFilters.add(filter));
     }
 
     public buildTree(contextTree: ContextTreeNode | undefined, scopeNode: ScopeNode, root: any, content: string, startPos: number) {
         const traverse = (parentTree: ContextTreeNode | undefined, current: any, statement: any) => {
             const currentTree = this.processNodeForDependencies(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement);
             if (this.isScopeNode(current)) {
-                this.enterNewScope(undefined, parentTree, scopeNode, current, content, startPos, statement);
+                this.enterNewScope(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement);
             }
             for (const key in current) {
                 if (this.filters.has(key)) {
@@ -59,7 +62,7 @@ export class LuaContext extends ContextBase {
                 statement = current;
             }
             if (this.isScopeNode(current)) {
-                this.enterNewScope(definitionMap, undefined, scopeNode, current, content, startPos, statement);
+                this.enterNewScope(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement);
             }
             for (const key in current) {
                 if (this.filters.has(key)) {
@@ -108,14 +111,40 @@ export class LuaContext extends ContextBase {
         return contextTree;
     }
 
-    private processBlockScopeVariables(definitionMap: DefinitionMapType | undefined, contextTree: ContextTreeNode | undefined,
+    private processBlockScopeVariables(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, contextTree: ContextTreeNode | undefined,
         scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any) {
         switch (current.type) {
             case 'ForNumericStatement':
                 const varName = current.variable.name;
                 const scopedName = this.getScopedName(varName, scopeNode);
-                if (definitionMap) {
+                if (definitionMap && dependencyGraph) {
                     this.checkDefineNode(definitionMap, scopeNode, current.variable, content, startPos, statement, varName, scopedName);
+                    if (!dependencyGraph.has(scopedName)) {
+                        dependencyGraph.set(scopedName, new Set());
+                    }
+                    const depSet = dependencyGraph.get(scopedName)!;
+                    const deps = new Set<string>();
+                    for (const key in current) {
+                        if (this.forNumericFilters.has(key)) {
+                            continue;
+                        }
+                        if (current.hasOwnProperty(key) && typeof current[key] === 'object') {
+                            if (Array.isArray(current[key])) {
+                                for (const child of current[key]) {
+                                    if (child) {
+                                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, undefined, deps, scopeNode, child, content, startPos, statement);
+                                    }
+                                }
+                            } else {
+                                if (current[key]) {
+                                    this.collectDependenciesFromExpression(definitionMap, dependencyGraph, undefined, deps, scopeNode, current[key], content, startPos, statement);
+                                }
+                            }
+                        }
+                    }
+                    for (const dep of deps) {
+                        depSet.add(dep);
+                    }
                 } else {
                     this.createTreeNode(contextTree as ContextTreeNode, scopeNode, current, content, startPos, statement, varName, scopedName);
                 }
@@ -125,8 +154,17 @@ export class LuaContext extends ContextBase {
                     if (variable.type === 'Identifier') {
                         const varName = variable.name;
                         const scopedName = this.getScopedName(varName, scopeNode);
-                        if (definitionMap) {
+                        if (definitionMap && dependencyGraph) {
                             this.checkDefineNode(definitionMap, scopeNode, variable, content, startPos, statement, varName, scopedName);
+                            if (!dependencyGraph.has(scopedName)) {
+                                dependencyGraph.set(scopedName, new Set());
+                            }
+                            const depSet = dependencyGraph.get(scopedName)!;
+                            const deps = new Set<string>();
+                            this.collectDependenciesFromExpression(definitionMap, dependencyGraph, undefined, deps, scopeNode, current.iterators, content, startPos, statement);
+                            for (const dep of deps) {
+                                depSet.add(dep);
+                            }
                         } else {
                             this.createTreeNode(contextTree as ContextTreeNode, scopeNode, current, content, startPos, statement, varName, scopedName);
                         }
@@ -153,7 +191,7 @@ export class LuaContext extends ContextBase {
             depSet.add(scopedFuncName);
             const deps = new Set<string>();
             for (const arg of current.arguments) {
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, deps, scopeNode, arg, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, deps, scopeNode, arg, content, startPos, statement);
             }
             for (const dep of deps) {
                 depSet.add(dep);
@@ -182,9 +220,9 @@ export class LuaContext extends ContextBase {
                 }
             }
             if (current.body) {
-                this.enterNewScope(definitionMap, keywordTree, scopeNode, current, content, startPos, statement);
+                this.enterNewScope(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
                 const deps = new Set<string>();
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, deps, scopeNode, current.body, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, deps, scopeNode, current.body, content, startPos, statement);
                 if (deps.size > 0) {
                     if (!dependencyGraph.has(scopedFuncName)) {
                         dependencyGraph.set(scopedFuncName, new Set());
@@ -219,7 +257,7 @@ export class LuaContext extends ContextBase {
             const rightDeps = new Set<string>();
             if (current.init) {
                 for (const expr of current.init) {
-                    this.collectDependenciesFromExpression(definitionMap, keywordTree, rightDeps, scopeNode, expr, content, startPos, statement);
+                    this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, rightDeps, scopeNode, expr, content, startPos, statement);
                 }
             }
             for (const leftVar of leftVars) {
@@ -267,7 +305,7 @@ export class LuaContext extends ContextBase {
             }
             const rightDeps = new Set<string>();
             for (const expr of current.init) {
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, rightDeps, scopeNode, expr, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, rightDeps, scopeNode, expr, content, startPos, statement);
             }
             for (const leftVar of leftVars) {
                 if (rightDeps.size > 0) {
@@ -298,14 +336,14 @@ export class LuaContext extends ContextBase {
         }
     }
 
-    protected collectDependenciesFromExpression(definitionMap: DefinitionMapType | undefined, keywordTree: ContextTreeNode | undefined, dependencies: Set<string>,
+    protected collectDependenciesFromExpression(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, dependencies: Set<string>,
         scopeNode: ScopeNode, node: any, content: string, startPos: number, statement: any) {
         if (!node) {
             return;
         }
         const isBlockNode = this.isBlockScopeNode(node);
         if (isBlockNode) {
-            this.enterNewScope(definitionMap, keywordTree, scopeNode, node, content, startPos, statement);
+            this.enterNewScope(definitionMap, dependencyGraph, keywordTree, scopeNode, node, content, startPos, statement);
         }
         let name: string | null;
         switch (node.type) {
@@ -337,23 +375,23 @@ export class LuaContext extends ContextBase {
             case 'TableConstructorExpression':
                 for (const field of node.fields) {
                     if (field.type === 'TableKey') {
-                        this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, field.key, content, startPos, statement);
-                        this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement);
+                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.key, content, startPos, statement);
+                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement);
                     } else if (field.type === 'TableValue') {
-                        this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement);
+                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement);
                     }
                 }
                 break;
             case 'BinaryExpression':
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement);
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement);
                 break;
             case 'UnaryExpression':
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, node.argument, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.argument, content, startPos, statement);
                 break;
             case 'LogicalExpression':
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement);
-                this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement);
                 break;
             default:
                 for (const key in node) {
@@ -363,10 +401,10 @@ export class LuaContext extends ContextBase {
                     if (node.hasOwnProperty(key) && typeof node[key] === 'object') {
                         if (Array.isArray(node[key])) {
                             for (const child of node[key]) {
-                                this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, child, content, startPos, statement);
+                                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, child, content, startPos, statement);
                             }
                         } else {
-                            this.collectDependenciesFromExpression(definitionMap, keywordTree, dependencies, scopeNode, node[key], content, startPos, statement);
+                            this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node[key], content, startPos, statement);
                         }
                     }
                 }
@@ -463,7 +501,7 @@ export class LuaContext extends ContextBase {
         ].includes(node.type);
     }
 
-    private enterNewScope(definitionMap: DefinitionMapType | undefined, contextTree: ContextTreeNode | undefined,
+    private enterNewScope(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, contextTree: ContextTreeNode | undefined,
         scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any) {
         const scopeType = this.isBlockScopeNode(current) ? 'block' : 'function';
         let scopeName = this.getScopeName(current, startPos, scopeType);
@@ -482,7 +520,7 @@ export class LuaContext extends ContextBase {
         }
         scopeNode.current = newScope;
         if (scopeType === 'block') {
-            this.processBlockScopeVariables(definitionMap, contextTree, scopeNode, current, content, startPos, statement);
+            this.processBlockScopeVariables(definitionMap, dependencyGraph, contextTree, scopeNode, current, content, startPos, statement);
         }
     }
 
