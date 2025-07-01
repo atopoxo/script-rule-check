@@ -463,39 +463,11 @@ export class ContextBase {
     protected traverseLua(node: any, parentName: string, types: IdentifierType[], parent: ContextTreeNode | undefined, content: string, startPos: number) {
         let current: ContextTreeNode | undefined = undefined;
         switch (node.type) {
-            case 'IfStatement':
-                current = this.luaIfStatement(node, parentName, types, content, startPos);
-                break;
-            case 'LocalStatement':
-                current = this.luaLocalStatement(node, parentName, types, content, startPos);
-                break;
-            case 'AssignmentStatement':
-                current = this.luaAssignmentStatement(node, parentName, types, content, startPos);
-                break;
-            case 'ForNumericStatement':
-            case 'ForGenericStatement':
-                current = this.luaForLoopStatement(node, parentName, types, content, startPos);
-                break;
             case 'CallExpression':
                 current = this.luaCallExpression(node, parentName, types, content, startPos);
                 break;
-            case 'FunctionExpression':
-                current = this.luaFunctionExpression(node, parentName, types, content, startPos);
-                break;
-            case 'IndexExpression':
-                current = this.luaIndexExpression(node, parentName, types, content, startPos);
-                break;
-            case 'MemberExpression':
-                current = this.luaMemberExpression(node, parentName, types, content, startPos);
-                break;
             case 'FunctionDeclaration':
                 current = this.luaFunctionDeclaration(node, parentName, types, content, startPos);
-                break;
-            case 'Identifier':
-                current = this.luaIdentifier(node, parentName, types, content, startPos);
-                break;
-            case 'StringLiteral':
-                current = this.luaStringLiteral(node, parentName, types, content, startPos);
                 break;
         }
         let currentName = parentName;
@@ -526,58 +498,6 @@ export class ContextBase {
         }
     }
 
-    private luaIfStatement(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'closure':
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, undefined, content, startPos);
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaLocalStatement(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'variable':
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, undefined, content, startPos);
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaAssignmentStatement(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'variable':
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, undefined, content, startPos);
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaForLoopStatement(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'variable':
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, undefined, content, startPos);
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
     private luaCallExpression(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
         let current: ContextTreeNode | undefined = undefined;
         for (const type of types) {
@@ -591,47 +511,6 @@ export class ContextBase {
         return current;
     }
 
-    private luaFunctionExpression(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'closure':
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, undefined, content, startPos)
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaIndexExpression(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'closure':
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, this.getLuaFunctionName(node.base), content, startPos);
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaMemberExpression(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'variable':
-                    if (node.base && node.base.type === 'Identifier' && node.identifier) {
-                        const item = this.createContextItemForLua(node, node.type, parentName, true, this.getLuaFunctionName(node), content, startPos);
-                        current = {value: item, children: []};
-                    }
-                    break;
-            }
-        }
-        return current;
-    }
-
     private luaFunctionDeclaration(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
         let current: ContextTreeNode | undefined = undefined;
         for (const type of types) {
@@ -639,41 +518,6 @@ export class ContextBase {
                 case 'function':
                     const item = this.createContextItemForLua(node, node.type, parentName, false, this.getLuaFunctionName(node.identifier), content, startPos);
                     current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaIdentifier(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'variable':
-                    let varText = node.name;
-                    if (node.parent) {
-                        if (node.parent.type === 'LocalStatement' || 
-                            node.parent.type === 'AssignmentStatement') {
-                            varText = content.substring(node.parent.range[0] + startPos, node.parent.range[1] + startPos);
-                        }
-                    }
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, node.name, content, startPos);
-                    current = {value: item, children: []};
-                    break;
-            }
-        }
-        return current;
-    }
-
-    private luaStringLiteral(node: any, parentName: string, types: IdentifierType[], content: string, startPos: number): ContextTreeNode | undefined {
-        let current: ContextTreeNode | undefined = undefined;
-        for (const type of types) {
-            switch (type) {
-                case 'variable':
-                    if (typeof node.value === 'string' && node.value.match(/[A-Z_][A-Z0-9_]+/)) {
-                        const item = this.createContextItemForLua(node, node.type, parentName, true, node.value, content, startPos);
-                        current = {value: item, children: []};
-                    }
                     break;
             }
         }

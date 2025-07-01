@@ -265,7 +265,7 @@
         },
         {
           "command": "extension.chat.checkCode",
-          "when": "editorHasSelection",
+          "when": "editorHasSelection && editorLangId == lua",
           "group": "navigation@4"
         }
       ],
