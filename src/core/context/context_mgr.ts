@@ -11,12 +11,12 @@ import { LuaContext } from './lua/lua_context';
 import type { DependencyGraphType, DefinitionMapType, ScopeNode } from './lua/lua_context';
 import { Scope } from '../types/scope'
 import { SegmentTree } from '../function/segment_tree';
-import { range } from 'lodash';
 
 export class ContextMgr extends ContextBase {
     private filters = ['js', 'ts', 'py', 'lua', 'c', 'cc', 'h', 'hpp', 'cpp'];
     private folderBlackList = ['node_modules', 'build', '.git', '.vscode'];
     private luaContext: LuaContext;
+    private contextNameMaxLength: number = 120;
 
     constructor(private extensionName: string) {
         super();
@@ -417,7 +417,7 @@ export class ContextMgr extends ContextBase {
     private createContextItemsByRange(result: ContextItem[], source: [number, number][], content: string, posList: number[]) {
         for (const item of source) {
             const text = content.substring(item[0], item[1]);
-            const name = text.substring(0, 17) + '...';
+            const name = text.substring(0, this.contextNameMaxLength);
             const current: ContextItem = {
                 type: 'code',
                 name: name,

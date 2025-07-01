@@ -42,15 +42,12 @@
                   </button>
                 </div>
               </div>
-              <div v-if="msg.contextExpand" class="context-bar highlight"
+              <div v-if="msg.contextExpand" class="context-bar"
                 :style="{
-                  maxWidth: `${contentBlockWidth - (8 + 8)}px`
+                  width: `${contentBlockWidth - (8 + 8)}px`
                 }">
-                <div v-for="(ref, refIndex) in msg.contextOption" :key="refIndex">
-                  <div v-if="ref.contextItem">
-                    <sy-tag :isDark = isDark :index="index" :removeable="modifiedIndex != undefined" :data = ref @remove="removeReference"></sy-tag>
-                  </div>
-                </div>
+                <sy-item-list :isDark="isDark" :index="index" :data="msg.contextOption" :isEditable="modifiedIndex != undefined"
+                  @remove="removeReference"></sy-item-list>
               </div>
             </div>
             <div class="content">
@@ -91,9 +88,9 @@
       </div>
       <div class="input-container" :style="{ height: containerHeight + 'px' }">
         <div class="context-bar" ref="contextBar">
-          <div v-for="(ref, index) in contextItems" :key="index">
+          <div v-for="(ref, refIndex) in contextItems" :key="refIndex">
             <div v-if="ref.contextItem">
-              <sy-tag :isDark = isDark :data = ref @remove="removeReference"></sy-tag>
+              <sy-tag :isDark = isDark :data = ref :refIndex="refIndex" @remove="removeReference"></sy-tag>
             </div>
           </div>
         </div>
@@ -163,12 +160,14 @@ import MessageRender from '../components/MessageRender.vue';
 import SySelector from '../components/SySelector.vue';
 import SyTag from '../components/SyTag.vue';
 import HistoryView from './HistoryView.vue';
+import SyItemList from '../components/SyItemList.vue';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 import { throttle } from '../functions/BaseFunctions';
+import { cloneDeep } from 'lodash';
 
 export default defineComponent({
   components: {
-    SyMenuBar, MessageRender, SySelector, SyTag, HistoryView
+    SyMenuBar, MessageRender, SySelector, SyTag, HistoryView, SyItemList
   },
   computed: {
     themeClass() {
@@ -649,14 +648,16 @@ export default defineComponent({
       return Math.min(contentHeight, maxTextAreaHeight);
     }
 
-    const removeReference = (id: string, index: number) => {
+    const removeReference = (refIndex: number, index: number) => {
       if (index >= 0) {
         const message = selectedSession.value?.history[index];
-        if (message) {
-          message.contextOption = message.contextOption?.filter(item => item.id !== id);
+        if (message && message.contextOption?.length && refIndex >= 0 && refIndex < message.contextOption.length) {
+          message.contextOption.splice(refIndex, 1);
         }
       } else {
-        contextItems.value = contextItems.value.filter(item => item.id !== id);
+        if (contextItems.value?.length && refIndex >= 0 && refIndex < contextItems.value.length) {
+          contextItems.value.splice(refIndex, 1);
+        }
       }
     };
 
@@ -775,7 +776,8 @@ export default defineComponent({
 
     const modify = (index: number) => {
       modifiedIndex.value = index;
-      currentContext.value = selectedSession.value?.history[index]?.contextOption;
+      const original = selectedSession.value?.history[index]?.contextOption;
+      currentContext.value = original ? cloneDeep(original) : original;
     };
 
     const cancelModify = (index: number | undefined) => {

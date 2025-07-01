@@ -28,6 +28,10 @@ export default defineComponent({
             type: Number,
             default: -1
         },
+        refIndex: {
+            type: Number,
+            default: -1
+        },
         removeable: {
             type: Boolean,
             default: true
@@ -54,7 +58,7 @@ export default defineComponent({
         }
 
         const remove = () => {
-            emit('remove', props.data.id, props.index);
+            emit('remove', props.refIndex, props.index);
         };
 
         const handleItemHover = () => {
