@@ -17,7 +17,7 @@ class SegmentTreeNode {
 export class SegmentTree {
     private root: SegmentTreeNode;
 
-    constructor(left: number, right: number, initialValue: number = 0) {
+    constructor(left: number, right: number, initialValue: number | null = null) {
         this.root = new SegmentTreeNode(left, right, initialValue);
     }
 
@@ -36,27 +36,23 @@ export class SegmentTree {
         }
         const mid = Math.floor((node.left + node.right) / 2);
         this.pushDown(node, mid);
-        if (left < mid) {
+        if (right <= mid) {
+            this.updateNode(node.leftChild!, left, right, value);
+        } else if (left >= mid) {5
+            this.updateNode(node.rightChild!, left, right, value);
+        } else {
             this.updateNode(node.leftChild!, left, mid, value);
-        }
-        if (right > mid) {
             this.updateNode(node.rightChild!, mid, right, value);
         }
         this.updateNodeValue(node);
     }
 
     private pushDown(node: SegmentTreeNode, mid: number): void {
-        if (node.leftChild) {
-            node.leftChild.value = node.value;
-        } else {
+        if (!node.leftChild && !node.rightChild) {
             node.leftChild = new SegmentTreeNode(node.left, mid, node.value);
-        }
-        if (node.rightChild) {
-            node.rightChild.value = node.value;
-        } else {
             node.rightChild = new SegmentTreeNode(mid, node.right, node.value);
+            node.value = null;
         }
-        node.value = null;
     }
 
     private updateNodeValue(node: SegmentTreeNode): void {
@@ -76,12 +72,8 @@ export class SegmentTree {
     }
 
     private queryNode(node: SegmentTreeNode, left: number, right: number, value: number): [number, number][] {
-        if (left == node.left && node.right == right) {
-            if (value == node.value) {
-                return [[node.left, node.right]];
-            } else {
-                return [];
-            }
+        if (node.value === value) {
+            return [[left, right]];
         }
         let leftRes: [number, number][] = [];
         let rightRes: [number, number][] = [];
@@ -104,7 +96,7 @@ export class SegmentTree {
         }
         const lastLeft = leftRanges[leftRanges.length - 1];
         const firstRight = rightRanges[0];
-        if (lastLeft[1] + 1 === firstRight[0]) {
+        if (lastLeft[1] === firstRight[0]) {
             return [
                 ...leftRanges.slice(0, -1),
                 [lastLeft[0], firstRight[1]],

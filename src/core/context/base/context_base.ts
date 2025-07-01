@@ -48,7 +48,7 @@ export class ContextBase {
                 content = getFileContent(filePath);
                 content = content.replace(/\r\n/g, '\n');
             }
-            const types: IdentifierType[] = ['function', 'variable', 'closure', 'constant'];
+            const types: IdentifierType[] = [];
             const result = parser(content, types, startPos);
             
             return result;
@@ -62,15 +62,13 @@ export class ContextBase {
         if (!current.value) {
             return;
         }
-        const currentNode = current.value;
-        if (!currentNode.range) {
+        const context = current.value;
+        if (!context.range) {
             return;
         }
-        if (!(currentNode.range.start <= startPos && endPos <= currentNode.range.end)) {
+        if (startPos <= context.range.start && context.range.end <= endPos) {
+            result.push(context);
             return;
-        }
-        if (currentNode.range.start == startPos && endPos == currentNode.range.end) {
-            result.push(currentNode);
         }
         for (const child of current.children) {
             if (!child.value) {
@@ -86,9 +84,7 @@ export class ContextBase {
             if (childNode.range.start >= endPos) {
                 break;
             }
-            const leftPos = Math.max(startPos, childNode.range.start);
-            const rightPos = Math.min(endPos, childNode.range.end);
-            this.getIdentifiersByRange(result, child, leftPos, rightPos);
+            this.getIdentifiersByRange(result, child, startPos, endPos);
         }
     }
 
@@ -155,11 +151,9 @@ export class ContextBase {
 
     protected resolveIncludePath(currentPath: string, include: string): string | null {
         const currentDir = path.dirname(currentPath);
-        const commonPath = this.findCommonPath(currentDir, include);
+        const basePath = this.findBasePath(currentDir, include);
         
-        if (commonPath) {
-            const relativePath = path.relative(commonPath, currentDir);
-            const basePath = path.dirname(commonPath);
+        if (basePath) {
             const fullPath = path.join(basePath, include);
             if (fs.existsSync(fullPath)) {
                 return fullPath;
@@ -169,23 +163,25 @@ export class ContextBase {
         return this.tryOtherResolutions(currentDir, include);
     }
 
-    private findCommonPath(path1: string, path2: string): string | null {
+    private findBasePath(path1: string, path2: string): string | null {
         const parts1 = path.resolve(path1).split(path.sep);
         const parts2 = path2.split(/[\\/]/);
-        const len = Math.min(parts1.length, parts2.length);
         let commonParts: string[] = [];
+        let baseParts: string[] = [];
         
-        for (let i = 0, j = 0; i < parts1.length && j < parts2.length;) {
+        for (let i = 0, j = 0; i < parts1.length && j < parts2.length; i++) {
             if (parts1[i] === parts2[j]) {
                 commonParts.push(parts1[i]);
-                i++;
                 j++;
             } else {
-                i++;
+                if (commonParts.length > 0) {
+                    break;
+                }
+                baseParts.push(parts1[i]);
             }
         }
         
-        return commonParts.length > 0 ? commonParts.join(path.sep) : null;
+        return commonParts.length > 0 ? baseParts.join(path.sep) : null;
     }
 
     private tryOtherResolutions(currentDir: string, include: string): string | null {
@@ -309,64 +305,6 @@ export class ContextBase {
         return null;
     }
 
-    private extractIdentifiersWithRegex(content: string): {name: string, type: IdentifierType}[] {
-        const identifiers = new Map<string, IdentifierType>();
-    
-        // 提取函数定义（全局和局部）
-        const functionRegex = /(?:local\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
-        let match;
-        while ((match = functionRegex.exec(content)) !== null) {
-            identifiers.set(match[1], 'function');
-        }
-        
-        // 提取函数参数
-        const functionParamRegex = /function\s+[^(]*\(([^)]*)\)/g;
-        while ((match = functionParamRegex.exec(content)) !== null) {
-            const params = match[1].split(',').map(p => p.trim());
-            for (const param of params) {
-                if (param) {
-                    identifiers.set(param, 'variable');
-                }
-            }
-        }
-        
-        // 提取局部变量声明
-        const localVarRegex = /local\s+([a-zA-Z_][a-zA-Z0-9_]*(\s*,\s*[a-zA-Z_][a-zA-Z0-9_]*)*)/g;
-        while ((match = localVarRegex.exec(content)) !== null) {
-            const vars = match[1].split(',').map(v => v.trim());
-            for (const v of vars) {
-                identifiers.set(v, 'variable');
-            }
-        }
-        
-        // 提取for循环中的变量
-        const forLoopRegex = /\bfor\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,?\s*([a-zA-Z_][a-zA-Z0-9_]*)?\s+in\b/g;
-        while ((match = forLoopRegex.exec(content)) !== null) {
-            if (match[1]) identifiers.set(match[1], 'variable');
-            if (match[2]) identifiers.set(match[2], 'variable');
-        }
-        
-        // 提取闭包和函数赋值
-        const closureRegex = /([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*function\s*\(/g;
-        while ((match = closureRegex.exec(content)) !== null) {
-            identifiers.set(match[1], 'closure');
-        }
-        
-        // 提取点号访问的对象属性（如 player.GetMapID）
-        const dotAccessRegex = /([a-zA-Z_][a-zA-Z0-9_]*)\.[a-zA-Z_][a-zA-Z0-9_]*/g;
-        while ((match = dotAccessRegex.exec(content)) !== null) {
-            identifiers.set(match[1], 'variable');
-        }
-        
-        // 提取常量（全大写和下划线组成的标识符）
-        const constantRegex = /\b([A-Z_][A-Z0-9_]+)\b/g;
-        while ((match = constantRegex.exec(content)) !== null) {
-            identifiers.set(match[1], 'variable');
-        }
-        
-        return Array.from(identifiers, ([name, type]) => ({name, type}));
-    }
-
     protected parseLua(content: string, types: IdentifierType[], startPos: number): ContextNode {
         const ast = require('luaparse').parse(content, {locations: true, ranges: true});
         const root: ContextTreeNode = {
@@ -380,7 +318,9 @@ export class ContextBase {
             }, 
             children: []
         };
-        this.traverseLua(ast, (root.value as ContextItem).name, types, root, content, startPos);
+        if (types.length > 0) {
+            this.traverseLua(ast, (root.value as ContextItem).name, types, root, content, startPos);
+        }
         return {
             ast: ast, 
             tree: root,
@@ -717,7 +657,7 @@ export class ContextBase {
                             varText = content.substring(node.parent.range[0] + startPos, node.parent.range[1] + startPos);
                         }
                     }
-                    const item = this.createContextItemForLua(node, node.type, parentName, true, node.name, content, startPos, varText);
+                    const item = this.createContextItemForLua(node, node.type, parentName, true, node.name, content, startPos);
                     current = {value: item, children: []};
                     break;
             }
@@ -753,7 +693,7 @@ export class ContextBase {
         }
     }
 
-    protected createContextItemForLua(node: any, type: string, parentName: string, needRange: boolean, name: string | undefined, content: string, startPos: number, replaceContent?: string, statement?: any): ContextItem {
+    protected createContextItemForLua(node: any, type: string, parentName: string, needRange: boolean, name: string | undefined, content: string, startPos: number, statement?: any): ContextItem {
         let start: number;
         let end: number;
         if (statement) {

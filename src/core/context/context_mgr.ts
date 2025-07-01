@@ -302,33 +302,17 @@ export class ContextMgr extends ContextBase {
         if (!identifiers) {
             return result;
         }
-        const items: ContextItem[] = [];
-        this.getIdentifiersByRange(items, identifiers.tree, startPos, startPos + text.length);
-        const queue = new Deque<ContextItem>();
-        for (const item of items) {
-            queue.pushBack(item);
-        }
-        const visited = new Set<string>();
-        const maxDepth = 3;
-        const dependencyGraph: DependencyGraphType = new Map();
-        const definitionMap: DefinitionMapType = new Map();
-
-        this.findRelatedContext(queue, filePath, identifiers.ast, identifiers.content, result, visited, 0, maxDepth, dependencyGraph, definitionMap);
-        return result;
-    }
-
-    protected findRelatedContext(queue: Deque<ContextItem>,
-        filePath: string,
-        ast: any,
-        content: string,
-        result: Map<string, ContextItem[]>,
-        visited: Set<string>,
-        depth: number,
-        maxDepth = 3,
-        dependencyGraph: DependencyGraphType,
-        definitionMap: DefinitionMapType
-    ) {
-        const rangeTree = new SegmentTree(0, content.length);
+        const keywordTree: ContextTreeNode = {
+            value: {
+                type: 'global',
+                name: 'global',
+                range: {
+                    start: 0,
+                    end: identifiers.content.length
+                }
+            },
+            children: []
+        };
         const rootScope = new Scope('global', undefined);
         const rootScopes = new Map();
         rootScopes.set('global', rootScope);
@@ -337,62 +321,95 @@ export class ContextMgr extends ContextBase {
             current: rootScope,
             currentDepth: 0
         };
+        this.luaContext.buildTree(keywordTree, scopeNode, identifiers.ast, identifiers.content, 0);
+        const rangeTree = new SegmentTree(0, identifiers.content.length);
+        rangeTree.update(startPos, startPos + text.length, 1);
+        const items: ContextItem[] = [];
+        this.getIdentifiersByRange(items, keywordTree, startPos, startPos + text.length);
+        const queue = new Deque<string>();
+        for (const item of items) {
+            queue.pushBack(item.name);
+        }
+        const visited = new Set<string>();
+        const maxDepth = 3;
+
+        this.findRelatedContext(queue, filePath, identifiers.ast, identifiers.content, result, visited, 0, maxDepth, rangeTree);
+        return result;
+    }
+
+    protected findRelatedContext(queue: Deque<string>,
+        filePath: string,
+        ast: any,
+        content: string,
+        result: Map<string, ContextItem[]>,
+        visited: Set<string>,
+        depth: number,
+        maxDepth = 3,
+        rangeTree: SegmentTree
+    ) {
+        const dependencyGraph: DependencyGraphType = new Map();
+        const definitionMap: DefinitionMapType = new Map();
+        const rootScope = new Scope('global', undefined);
+        const rootScopes = new Map();
+        rootScopes.set('global', rootScope);
+        const scopeNode: ScopeNode = {
+            stack: [rootScopes],
+            current: rootScope,
+            currentDepth: 0
+        };
+        this.luaContext.buildDependencyGraph(definitionMap, dependencyGraph, scopeNode, ast, content, 0);
         const visitedIdentifiers = new Set<string>();
-        const missQueue = new Deque<ContextItem>();
+        const missQueue = new Deque<string>();
         if (!result.has(filePath)) {
             result.set(filePath, []);
         }
-        const keywordTree: ContextTreeNode = {
-            value: undefined,
-            children: []
-        };
         while (!queue.isEmpty()) {
             const current = queue.popFront();
-            const key = `${filePath}:${current.name}`;
-            if (visited.has(key)) {
-                continue;
-            }
-            visited.add(key);
-            visitedIdentifiers.add(key);
-            if (!current.range) {
-                continue;
-            }
-            rangeTree.update(current.range.start, current.range.end, 1);
-            this.luaContext.buildDependencyGraph(ast, scopeNode, keywordTree, dependencyGraph, definitionMap, content, 0);
-            const dependencies = dependencyGraph.get(current.name) || new Set();
-            if (dependencies.size > 0) {
+            const definedNode = definitionMap.get(current);
+            if (definedNode) {
+                const key = `${filePath}:${current}`;
+                if (visited.has(key)) {
+                    continue;
+                }
+                visited.add(key);
+                if (visitedIdentifiers.has(definedNode.name)) {
+                    continue;
+                }
+                visitedIdentifiers.add(definedNode.name);
+                if (!definedNode.range) {
+                    continue;
+                }
+                rangeTree.update(definedNode.range.start, definedNode.range.end, 1);
+                const dependencies = dependencyGraph.get(definedNode.name) || new Set();
                 for (const dep of dependencies) {
                     if (visitedIdentifiers.has(dep)) {
                         continue;
                     }
-                    const depNode = definitionMap.get(dep);
-                    if (depNode) {
-                        queue.pushBack(depNode);
-                    }
+                    queue.pushBack(dep);
                 }
             } else {
                 missQueue.pushBack(current);
             }
         }
-        this.createContextItemsByRange(result.get(filePath)!, rangeTree.getRange(0, content.length, 1), content);
+        const posList = this.getPosList(content);
+        this.createContextItemsByRange(result.get(filePath)!, rangeTree.getRange(0, content.length, 1), content, posList);
         if (!missQueue.isEmpty()) {
             const includes = this.extractIncludes(content, path.extname(filePath));
             for (const include of includes) {
                 const includePath = this.resolveIncludePath(filePath, include);
-                if (includePath && fs.existsSync(includePath) && depth < maxDepth) {
+                if (includePath && depth < maxDepth) {
                     const includeIdentifiers = this.getIdentifiers(0, includePath, undefined);
                     if (!includeIdentifiers) {
                         continue;
                     }
-                    this.findRelatedContext(queue, includePath, includeIdentifiers.ast, includeIdentifiers.content, result, visited, depth + 1, maxDepth,
-                        dependencyGraph, definitionMap
-                    );
+                    const currentRangeTree = new SegmentTree(0, includeIdentifiers.content.length);
+                    this.findRelatedContext(missQueue, includePath, includeIdentifiers.ast, includeIdentifiers.content, result, visited, depth + 1, maxDepth, currentRangeTree);
                 }
             }
         }
     }
 
-    private createContextItemsByRange(result: ContextItem[], source: [number, number][], content: string) {
+    private createContextItemsByRange(result: ContextItem[], source: [number, number][], content: string, posList: number[]) {
         for (const item of source) {
             const current: ContextItem = {
                 type: 'lua',
@@ -400,10 +417,38 @@ export class ContextMgr extends ContextBase {
                 content: content.substring(item[0], item[1]),
                 range: {
                     start: item[0],
-                    end: item[1]
+                    end: item[1],
+                    startLine: this.getLineCount(posList, item[0]),
+                    endLine: this.getLineCount(posList, item[1])
                 }
             }
             result.push(current);
         }
+    }
+
+    private getPosList(content: string) {
+        const items = content.split('\n');
+        const result = [];
+        let nowPos = 0;
+        for (const item of items) {
+            nowPos += item.length + 1;
+            result.push(nowPos);
+        }
+        return result;
+    }
+
+    private getLineCount(posList: number[], pos: number) {
+        let left = 0;
+        let right = posList.length - 1
+        let mid = 0;
+        while (left < right) {
+            mid = Math.floor((left + right) / 2);
+            if (posList[mid] <= pos) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        return left + 1;
     }
 }
