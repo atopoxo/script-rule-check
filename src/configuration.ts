@@ -162,7 +162,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             configItem.command = {
                 command: 'extension.model.editInfo',
                 title: '修改模型配置',
-                arguments: [modelInfo.id, {key: value}]
+                arguments: [modelInfo.id, {[key]: value}]
             };
             return configItem;
         });

@@ -11,6 +11,7 @@
             "temperature": 1,
             "maxTokens": 8192,
             "showConfig": false,
+            "safe": true,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
         },
         {
@@ -24,6 +25,7 @@
             "temperature": 1,
             "maxTokens": 8192,
             "showConfig": false,
+            "safe": false,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
         },
         {
@@ -37,6 +39,7 @@
             "temperature": 1,
             "maxTokens": 8192,
             "showConfig": true,
+            "safe": false,
             "apiKey": "sk-89f8a4dba1c84888a237ba4b7f61e9b3"
         },
         {
@@ -50,6 +53,7 @@
             "temperature": 1,
             "maxTokens": 8192,
             "showConfig": true,
+            "safe": false,
             "apiKey": "sk-89f8a4dba1c84888a237ba4b7f61e9b3"
         }
     ]

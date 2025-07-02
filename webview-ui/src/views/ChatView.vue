@@ -303,9 +303,9 @@ export default defineComponent({
     };
 
     const handleModelSelectorClose = (items: any[] | undefined) => {
-      if (items) {
-        handleModelSelect(items);
-      }
+      // if (items) {
+      //   handleModelSelect(items);
+      // }
       showModelSelector.value = false;
     }
     const handleModelSelect = (selected: any[]) => {

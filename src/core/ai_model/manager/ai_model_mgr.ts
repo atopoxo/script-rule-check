@@ -62,12 +62,14 @@ export class AIModelMgr {
 
     saveModelConfig(models: ModelInfo[]) {
         try {
-            const configPath = path.join(__dirname, '../../assets/config/model_config.json');
+            const configPath = path.join(__dirname, '../../../', '../../assets/config/model_config.json');
             const configData = {
                 models: models
             };
             const jsonString = this.jsonParser.toJsonStr(configData, 4);
             fs.writeFileSync(configPath, jsonString, { encoding: 'utf8' });
+            const modelConfigList = this.getAvailableModels();
+            this.setModelConfigs(modelConfigList);
             console.log('模型配置已成功更新');
         } catch (error) {
             console.error('更新模型配置失败:', error);

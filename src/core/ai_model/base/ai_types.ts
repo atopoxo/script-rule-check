@@ -12,6 +12,7 @@ export class ModelInfo {
         public name: string,
         public type: string,
         public showConfig: boolean,
+        public safe: boolean,
         public apiKey: string
     ) {}
 }

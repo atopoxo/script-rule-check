@@ -261,12 +261,12 @@
         {
           "command": "extension.chat.addContext",
           "when": "editorHasSelection",
-          "group": "navigation@4"
+          "group": "navigation@5"
         },
         {
           "command": "extension.chat.checkCode",
           "when": "editorHasSelection && editorLangId == lua",
-          "group": "navigation@4"
+          "group": "navigation@5"
         }
       ],
       "checkSpecificRules.submenu": [

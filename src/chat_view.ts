@@ -198,6 +198,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     public async selectModel(id: string) {
+        const selectedModelConfig = await this.aiModelMgr.getModelConfig(id);
+        if (!selectedModelConfig) {
+            vscode.window.showErrorMessage(`当前选择的模型"${id}"不存在`);
+            return;
+        }
+        if (!selectedModelConfig.apiKey || selectedModelConfig.apiKey.trim() === '') {
+            vscode.window.showErrorMessage(`当前选择的模型"${selectedModelConfig.name}"的apiKey未配置`);
+            return;
+        }
+        if (selectedModelConfig.safe === false) {
+            const confirm = await vscode.window.showWarningMessage(
+                `⚠️ 警告：模型 "${selectedModelConfig.name}" 是外网模型，使用的时候尽量避免敏感信息，否则可能存在安全风险！`,
+                { modal: true },
+                "继续使用"
+            );
+            if (confirm !== "继续使用") {
+                vscode.window.showInformationMessage(`已取消使用风险模型`);
+                return;
+            }
+        }
         await this.aiModelMgr.setSelectedModel(id, this.chatManager.getUserID());
         const data = {
             selectedModel: await this.aiModelMgr.getSelectedModel()
