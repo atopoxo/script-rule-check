@@ -12,7 +12,6 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
   font-family: var(--vscode-font-family);
 }

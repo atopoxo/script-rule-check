@@ -132,6 +132,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'setSessionName':
                     await this.setSessionName(data.sessionId, data.sessionName);
                     break;
+                case 'openSettings':
+                    await this.openSettings();
+                    break;
             }
         });
         view.onDidDispose(() => {
@@ -433,6 +436,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('setSessionName', {sessionName: session.name});
     }
 
+    private async openSettings() {
+        await vscode.commands.executeCommand('workbench.view.extension.script-rule-check');
+        await vscode.commands.executeCommand('scriptRuleConfig.focus');
+        //vscode.commands.executeCommand('workbench.action.openSettings', 'script-rule-check');
+    }
+
     private async addCodeReference() {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
@@ -562,7 +571,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                        <link rel="stylesheet" crossorigin href="${styleUri}">`
                 }
             </head>
-            <body>
+            <body style="padding: 0 0px; overflow-x:hidden;">
                 <div id="app"></div>
             </body>
         </html>`;

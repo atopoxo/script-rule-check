@@ -228,7 +228,7 @@ export default defineComponent({
           vscode.postMessage({ type: 'showSessionsSnapshot' });
           break;
         case 'settings':
-          // vscode.postMessage({ type: 'settings' });
+          vscode.postMessage({ type: 'openSettings' });
           break;
       }
     }
@@ -302,10 +302,7 @@ export default defineComponent({
       showModelSelector.value = showModelSelector.value? false : true;
     };
 
-    const handleModelSelectorClose = (items: any[] | undefined) => {
-      // if (items) {
-      //   handleModelSelect(items);
-      // }
+    const handleModelSelectorClose = (_items: any[] | undefined) => {
       showModelSelector.value = false;
     }
     const handleModelSelect = (selected: any[]) => {
@@ -1182,7 +1179,6 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   padding: 3px 5px;
-  background-color: var(--vscode-editor-background);
 }
 
 .session-title {
