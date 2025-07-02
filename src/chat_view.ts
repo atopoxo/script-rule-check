@@ -87,8 +87,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'selectModel':
                     await this.selectModel(data.id);
                     break;
-                case 'showReferenceOptions':
-                    await this.showReferenceOptions(data);
+                case 'showContextOptions':
+                    await this.showContextOptions(data);
                     break;
                 case 'selectFiles':
                     await this.selectFiles(data);
@@ -205,27 +205,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('selectModel', data);
     }
 
-    public async showReferenceOptions(data: object | undefined) {
+    public async showContextOptions(data: object | undefined) {
         const result = {
             contextOption: await this.contextMgr.getOptions(data)
         }
-        this.updateWebview('showReferenceOptions', result);
+        this.updateWebview('showContextOptions', result);
     }
 
     private async selectFiles(data: any) {
         const result = {
-            selectFiles: await this.contextMgr.selectFiles(data.onlyFiles),
-            index: data.index
+            index: data.index,
+            contextOption: await this.contextMgr.selectFiles(data.onlyFiles)
         }
-        this.updateWebview('selectFiles', result);
+        this.updateWebview('updateContext', result);
     }
 
     private async selectWorkspace(data: any) {
         const result = {
-            selectWorkspace: await this.contextMgr.selectWorkspace(),
-            index: data.index
+            index: data.index,
+            contextOption: await this.contextMgr.selectWorkspace()
         }
-        this.updateWebview('selectWorkspace', result);
+        this.updateWebview('updateContext', result);
     }
 
     private async sendMessage(sessionId?: string, query?: string, contextOption?: any[], contextExpand?: boolean, index?: number) {
@@ -299,6 +299,90 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
+    private async expandContext(index: number, expand: boolean | undefined) {
+        const currentSession = await this.chatManager.setContextExpand("chat", undefined, index, expand);
+        if (!currentSession) {
+            return;
+        }
+        this.updateWebview('expandContext', {sessionId: currentSession.sessionId, index: index, expand: expand});
+    }
+
+    private async openContextFile(context: ContextOption) {
+        try {
+            const pathList = context.contextItem?.paths;
+            let filePath = '';
+            if (pathList) {
+                filePath = pathList[0];
+            }
+            const buffer = fs.readFileSync(filePath);
+            let encoding = getEncoding(buffer);
+            await vscode.workspace.getConfiguration().update(
+                'files.encoding', 
+                encoding,
+                vscode.ConfigurationTarget.Workspace
+            );
+
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+            const startLine = (context.contextItem?.range?.startLine || 0);
+            const endLine = (context.contextItem?.range?.endLine || 0);
+            const startPosition = new vscode.Position(startLine, 0);
+            const endPosition = new vscode.Position(endLine + 1, 0);
+            const selection = new vscode.Range(startPosition, endPosition);
+            await vscode.window.showTextDocument(doc, {
+                selection: selection
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(`打开文件失败: ${error}`);
+        }
+    }
+
+    public async addContext() {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            const selection = editor.selection;
+            const text = editor.document.getText(selection);
+            const subLength = Math.min(text.length, this.contextMgr.getContextNameMaxLength());
+            const name = text.substring(0, subLength);
+            const startPos = editor.document.offsetAt(selection.start);
+            const contextOption: ContextOption[] = [{
+                type: 'function',
+                id: name,
+                name: name,
+                describe: name,
+                contextItem: {
+                    type: 'function',
+                    name: name,
+                    paths: [editor.document.fileName],
+                    content: text,
+                    range: {
+                        start: startPos,
+                        end: startPos + text.length,
+                        startLine: selection.start.line,
+                        endLine: selection.end.line
+                    }
+                }
+            }]
+            this.updateWebview('updateContext', {index: -1, contextOption: contextOption});
+        }
+    }
+
+    public async checkCode() {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            const selection = editor.selection;
+            let content = editor.document.getText(selection);
+            content = content.replace(/\r\n/g, '\n');
+            const fullText = editor.document.getText();
+            const startPos = fullText.slice(0, editor.document.offsetAt(selection.start)).replace(/\r\n/g, '\n').length;
+            const contextOption = this.contextMgr.getRelevantContext(startPos, content, editor.document.fileName);
+            this.updateWebview('updateContext', {
+                index: -1,
+                contextOption: contextOption,
+                query: `请帮我分析一下下面的代码是否存在问题：\n${content}`
+            });
+        }
+    }
+
     public async addReference() {
         const items = ['代码', '文件', '文件夹'];
         const selected = await vscode.window.showQuickPick(items, {
@@ -324,90 +408,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // }
     }
 
-    private async expandContext(index: number, expand: boolean | undefined) {
-        const currentSession = await this.chatManager.setContextExpand("chat", undefined, index, expand);
-        if (!currentSession) {
-            return;
-        }
-        this.updateWebview('expandContext', {sessionId: currentSession.sessionId, index: index, expand: expand});
-    }
-
-    private async openContextFile(context: ContextOption) {
-        try {
-            const pathList = context.contextItem?.paths;
-            let filePath = '';
-            if (pathList) {
-                filePath = pathList[0];
-            }
-            const buffer = fs.readFileSync(filePath);
-            let encoding = getEncoding(buffer);
-            await vscode.workspace.getConfiguration().update(
-                'files.encoding', 
-                encoding,
-                vscode.ConfigurationTarget.Workspace
-            );
-
-            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
-            const startLine = (context.contextItem?.range?.startLine || 1) -  1;
-            const endLine = (context.contextItem?.range?.endLine || 1) - 1;
-            const startPosition = new vscode.Position(startLine, 0);
-            const endPosition = new vscode.Position(endLine + 1, 0);
-            const selection = new vscode.Range(startPosition, endPosition);
-            await vscode.window.showTextDocument(doc, {
-                selection: selection
-            });
-        } catch (error) {
-            vscode.window.showErrorMessage(`打开文件失败: ${error}`);
-        }
-    }
-
     private async setSessionName(sessionId: string, sessionName: string) {
         const session = await this.chatManager.setSessionName('chat', sessionId, sessionName) as Session;
         this.updateWebview('setSessionName', {sessionName: session.name});
-    }
-
-    public async addContext() {
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            const selection = editor.selection;
-            const text = editor.document.getText(selection);
-            const subLength = Math.min(text.length, 20);
-            const name = text.substring(0, subLength);
-            const startPos = editor.document.offsetAt(selection.start);
-            const contextOption: ContextOption[] = [{
-                type: 'function',
-                id: name,
-                name: name,
-                describe: name,
-                contextItem: {
-                    type: 'function',
-                    name: name,
-                    paths: [editor.document.fileName],
-                    content: text,
-                    range: {
-                        start: startPos,
-                        end: startPos + text.length,
-                        startLine: selection.start.line,
-                        endLine: selection.end.line
-                    }
-                }
-            }]
-            this.updateWebview('addContext', {contextOption: contextOption});
-        }
-    }
-
-    public async checkCode() {
-        const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            const selection = editor.selection;
-            const content = editor.document.getText(selection);
-            const startPos = editor.document.offsetAt(selection.start);
-            const contextOption = this.contextMgr.getRelevantContext(startPos, content, editor.document.fileName);
-            this.updateWebview('addContext', {
-                contextOption: contextOption,
-                query: `请帮我分析一下下面的代码是否存在问题：\n${content}`
-            });
-        }
     }
 
     private async addCodeReference() {

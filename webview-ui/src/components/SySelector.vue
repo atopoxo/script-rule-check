@@ -158,7 +158,7 @@ export default defineComponent({
 
     const handleItemClick = (item: SelectorItem) => {
         switch (item.type) {
-            case "code":
+            case "code-block":
                 const flag = !isSelected(item);
                 item.children?.map(child => {
                     updateSelectedItems(child, true, flag);

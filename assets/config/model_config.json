@@ -7,9 +7,10 @@
             "codeName": "deepseek",
             "modelName": "volcengine-deepseek-v3",
             "name": "volcengine-deepseek-chat",
-            "type": "快速响应",
+            "type": "内网-快速响应",
             "temperature": 1,
             "maxTokens": 8192,
+            "showConfig": false,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
         },
         {
@@ -17,11 +18,12 @@
             "id": "online/volcengine-deepseek-reasoner",
             "platform": "online",
             "codeName": "deepseek",
-            "modelName": "volcengine-deepseek-reasoner",
+            "modelName": "tcdpr1",
             "name": "volcengine-deepseek-reasoner",
-            "type": "深度思考",
+            "type": "外网-深度思考",
             "temperature": 1,
             "maxTokens": 8192,
+            "showConfig": false,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
         },
         {
@@ -31,9 +33,10 @@
             "codeName": "deepseek",
             "modelName": "deepseek-chat",
             "name": "deepseek-chat",
-            "type": "快速响应",
+            "type": "外网-快速响应",
             "temperature": 1,
             "maxTokens": 8192,
+            "showConfig": true,
             "apiKey": "sk-89f8a4dba1c84888a237ba4b7f61e9b3"
         },
         {
@@ -43,9 +46,10 @@
             "codeName": "deepseek",
             "modelName": "deepseek-reasoner",
             "name": "deepseek-reasoner",
-            "type": "深度思考",
+            "type": "外网-深度思考",
             "temperature": 1,
             "maxTokens": 8192,
+            "showConfig": true,
             "apiKey": "sk-89f8a4dba1c84888a237ba4b7f61e9b3"
         }
     ]

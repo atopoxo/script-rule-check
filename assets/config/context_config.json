@@ -1,8 +1,8 @@
 {
     "options": [
         {
-          "type": "code",
-          "id": "code",
+          "type": "code-block",
+          "id": "code-block",
           "name": "Code",
           "icon": "code.svg",
           "describe": "添加代码作为上下文"
@@ -20,13 +20,6 @@
           "name": "Folders",
           "icon": "folders.svg",
           "describe": "添加文件夹作为上下文"
-        },
-        {
-          "type": "workspace",
-          "id": "workspace",
-          "name": "Workspace",
-          "icon": "workspace.svg",
-          "describe": "使用工作区代码作为上下文"
         }
     ]
 }

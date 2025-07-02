@@ -463,9 +463,9 @@ export class ContextBase {
     protected traverseLua(node: any, parentName: string, types: IdentifierType[], parent: ContextTreeNode | undefined, content: string, startPos: number) {
         let current: ContextTreeNode | undefined = undefined;
         switch (node.type) {
-            case 'CallExpression':
-                current = this.luaCallExpression(node, parentName, types, content, startPos);
-                break;
+            // case 'CallExpression':
+            //     current = this.luaCallExpression(node, parentName, types, content, startPos);
+            //     break;
             case 'FunctionDeclaration':
                 current = this.luaFunctionDeclaration(node, parentName, types, content, startPos);
                 break;
@@ -1041,22 +1041,29 @@ export class ContextBase {
             range: {
                 start: targetNode.startIndex + startPos,
                 end: targetNode.endIndex + startPos,
-                startLine: targetNode.startPosition.row + 1,
-                endLine: targetNode.endPosition.row + 1
+                startLine: targetNode.startPosition.row,
+                endLine: targetNode.endPosition.row
             }
         };
         return result;
     }
 
-    protected ContextItemToOptions(result: ContextOption[], current: ContextTreeNode) {
+    protected ContextItemToOptions(result: ContextOption[], filePath: string, content: string, posList: number[], current: ContextTreeNode) {
         const value = current.value;
-        if (value) {
+        if (value && value.type !== 'global') {
+            value.paths = [filePath];
+            if (value.range) {
+                value.range.startLine = this.getLineCount(posList, value.range.start);
+                value.range.endLine = this.getLineCount(posList, value.range.end);
+                const text = content.substring(value.range.start, value.range.end);
+                value.content = text;
+            }   
             const item = this.ContextItemToOption(value);
             result.push(item);
         }
         const children = current.children;
         for (const child of children) {
-            this.ContextItemToOptions(result, child);
+            this.ContextItemToOptions(result, filePath, content, posList, child);
         }
     }
 
@@ -1067,11 +1074,37 @@ export class ContextBase {
             name = pathList[0];
         }
         return {
-            type: item.type,
+            type: 'code',
             id: `${name}:${item.range?.startLine}~${item.range?.endLine}`,
             name: item.name,
             describe: `${item.type}: ${item.name}`,
             contextItem: item
         };
+    }
+
+    protected getPosList(content: string) {
+        const items = content.split('\n');
+        const result = [];
+        let nowPos = 0;
+        for (const item of items) {
+            nowPos += item.length + 1;
+            result.push(nowPos);
+        }
+        return result;
+    }
+
+    protected getLineCount(posList: number[], pos: number) {
+        let left = 0;
+        let right = posList.length - 1
+        let mid = 0;
+        while (left < right) {
+            mid = Math.floor((left + right) / 2);
+            if (posList[mid] <= pos) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        return left;
     }
 }

@@ -134,8 +134,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const isSelected = this.config.get<string>('selectedModel', '') === info.id;
         const item = new vscode.TreeItem(info.name);
         item.id = info.id;
-        item.contextValue = 'modelInfo';
-        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        item.contextValue = info.showConfig ? 'modelInfo': '';
+        item.collapsibleState = info.showConfig ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         // item.command = {
         //     command: 'extension.toggleModelInfo',
         //     title: info.name,

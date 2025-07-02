@@ -1,5 +1,3 @@
-//ReferenceType = 'code' | 'files' | 'workspace' | 'function';
-
 export interface ContextItem {
   type: string;
   name: string;

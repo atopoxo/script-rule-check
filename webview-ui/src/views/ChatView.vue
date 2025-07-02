@@ -16,7 +16,7 @@
             <div v-if="msg.contextOption && msg.contextOption.length > 0" class="context-wraper">
               <div class="context-wraper-box">
                 <div v-if="modifiedIndex == index" class="context-wraper-left">
-                  <button class="icon-button item-context" @click="showReferenceOptions(index)">#</button>
+                  <button class="icon-button item-context" @click="showContextOptions(index)">#</button>
                   <sy-selector v-if="showCurrentContextOptions" :visible="showCurrentContextOptions" class="reference-selector left"
                     :ref="el => setCurrentContextSelector(el, index)"
                     title="上下文"
@@ -42,7 +42,7 @@
                   </button>
                 </div>
               </div>
-              <div v-if="msg.contextExpand" class="context-bar"
+              <div v-if="msg.contextExpand" class="context-bar highlight"
                 :style="{
                   width: `${contentBlockWidth - (8 + 8)}px`
                 }">
@@ -106,7 +106,7 @@
         ></textarea>
         <div class="input-functions">
           <div class="input-functions-left">
-            <button class="icon-button" @click="showReferenceOptions()">#</button>
+            <button class="icon-button" @click="showContextOptions()">#</button>
             <sy-selector v-if="showReferenceSelector" :visible="showReferenceSelector" class="reference-selector" ref="referenceSelector"
               title="上下文"
               :width="460"
@@ -328,8 +328,8 @@ export default defineComponent({
       }));
     };
 
-    const showReferenceOptions = (index?: number) => {
-      vscode.postMessage({ type: 'showReferenceOptions' });
+    const showContextOptions = (index?: number) => {
+      vscode.postMessage({ type: 'showContextOptions' });
       if (index) {
         showCurrentContextOptions.value = showCurrentContextOptions.value ? false: true;
       } else {
@@ -400,7 +400,7 @@ export default defineComponent({
     const getReferences = (selectedItems?: SelectorItem[]): ContextOption[] => {
       let result: ContextOption[] = [];
       if (selectedItems) {
-        result = selectedItems.filter(item => item.type !== 'code').map((item) => ({
+        result = selectedItems.filter(item => item.type !== 'code-block').map((item) => ({
           type: item.type,
           id: item.id,
           name: item.name,
@@ -412,54 +412,39 @@ export default defineComponent({
       return result;
     };
 
-    const updateReferences  = (item: ContextOption, index: number) => {
+    const updateContext = (items: ContextOption[], index: number) => {
       if (index < 0) {
         const selectTagfontSize = "9px";
-        const newItem: SelectorItem = {
-          type: item.type,
-          id: item.id,
-          name: item.name,
-          tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
-          contextItem: item.contextItem
-        }
-        const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
-        if (contextIndex !== -1) {
-          contextItems.value[contextIndex] = newItem;
-        } else {
-          contextItems.value.push(newItem);
-        }
+        items.forEach(item => {
+          const newItem: SelectorItem = {
+            type: item.type,
+            id: item.id,
+            name: item.name,
+            tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+            contextItem: item.contextItem
+          }
+          const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
+          if (contextIndex !== -1) {
+            contextItems.value[contextIndex] = newItem;
+          } else {
+            contextItems.value.push(newItem);
+          }
+        });
       } else {
         const message = selectedSession.value?.history[index];
         if (message) {
-          const contextIndex = message.contextOption?.findIndex(existing => existing.id === item.id) as number;
-          if (contextIndex !== -1) {
-            if (message.contextOption) {
-              message.contextOption[contextIndex] = item;
+          items.forEach(item => {
+            const contextIndex = message.contextOption?.findIndex(existing => existing.id === item.id) as number;
+            if (contextIndex !== -1) {
+              if (message.contextOption) {
+                message.contextOption[contextIndex] = item;
+              }
+            } else {
+              message.contextOption?.push(item);
             }
-          } else {
-            message.contextOption?.push(item);
-          }
+          });
         }
       }
-    };
-
-    const handleAddContext = async (items: ContextOption[]) => {
-      const selectTagfontSize = "9px";
-      items.forEach(item => {
-        const newItem: SelectorItem = {
-          type: item.type,
-          id: item.id,
-          name: item.name,
-          tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
-          contextItem: item.contextItem
-        }
-        const contextIndex = contextItems.value.findIndex(existing => existing.id === newItem.id);
-        if (contextIndex !== -1) {
-          contextItems.value[contextIndex] = newItem;
-        } else {
-          contextItems.value.push(newItem);
-        }
-      })
     };
 
     const expandContext = (index: number, expand: boolean | undefined) => {
@@ -666,21 +651,6 @@ export default defineComponent({
       const context = toRaw(item);
       vscode.postMessage({ type: 'openContextFile', data: { context: context } });
     }
-
-    // const references = () => {
-    //   contextItems.value.map(item => item.reference);
-    // }
-
-    // 计算属性：按日期分组的历史会话
-    // const groupedSessions = computed(() => {
-    //   const groups: Record<string, ChatSession[]> = {};
-    //   historySessions.value.forEach(sess => {
-    //     const date = new Date(sess.lastActive).toLocaleDateString();
-    //     if (!groups[date]) groups[date] = [];
-    //     groups[date].push(sess);
-    //   });
-    //   return groups;
-    // });
 
     const getfeedbackIconPath = (type: string) => { 
       try {
@@ -1050,14 +1020,15 @@ export default defineComponent({
               case 'selectModel':
                   selectedModel.value = data.selectedModel.name;
                   break;
-              case 'showReferenceOptions':
+              case 'showContextOptions':
                   contextOption.value = getReferenceOptions(data.contextOption);
                   break;
-              case 'selectFiles':
-                  updateReferences(data.selectFiles, data.index);
-                  break;
-              case 'selectWorkspace':
-                  updateReferences(data.selectWorkspace, data.index);
+              case 'updateContext':
+                  if (data.query) {
+                    sendMessage(data.query, undefined, data.contextOption);
+                  } else {
+                    updateContext(data.contextOption, data.index);
+                  }
                   break;
               case 'aiStreamStart':
                   handleAIStreamStart(data);
@@ -1068,13 +1039,6 @@ export default defineComponent({
               case 'removeMessage':
                   if (selectedSession.value?.sessionId == data.selectedSession.sessionId) {
                     selectedSession.value = getSelectedSession(data.selectedSession);
-                  }
-                  break;
-              case 'addContext':
-                  if (data.query) {
-                    sendMessage(data.query, undefined, data.contextOption);
-                  } else {
-                    handleAddContext(data.contextOption);
                   }
                   break;
               case 'showSessionsSnapshot':
@@ -1164,7 +1128,7 @@ export default defineComponent({
       showCurrentContextOptions,
       showReferenceSelector,
       contextOption,
-      showReferenceOptions,
+      showContextOptions,
       getCurrentContextItems,
       setCurrentContextSelector,
       handleReferenceSelectorClose,
@@ -1195,25 +1159,6 @@ export default defineComponent({
   flex-direction: column;
 }
 
-.welcome-view {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 20px;
-  text-align: center;
-}
-
-.welcome-view h1 {
-  margin-bottom: 16px;
-}
-
-.welcome-view p {
-  margin-bottom: 24px;
-  color: var(--vscode-descriptionForeground);
-}
-
 .primary-button {
   background-color: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
@@ -1227,7 +1172,6 @@ export default defineComponent({
   background-color: var(--vscode-button-hoverBackground);
 }
 
-/* 聊天容器 */
 .chat-container {
   display: flex;
   flex-direction: column;

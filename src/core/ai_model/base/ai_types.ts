@@ -11,6 +11,7 @@ export class ModelInfo {
         public maxTokens: number,
         public name: string,
         public type: string,
+        public showConfig: boolean,
         public apiKey: string
     ) {}
 }

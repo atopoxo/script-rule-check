@@ -240,7 +240,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
         }),
         vscode.window.onDidChangeActiveTextEditor(editor => {
             if (editor) {
-                chatViewProvider.showReferenceOptions(undefined);
+                chatViewProvider.showContextOptions(undefined);
             }
         }),
         vscode.commands.registerCommand('extension.chat.addContext', async () => {

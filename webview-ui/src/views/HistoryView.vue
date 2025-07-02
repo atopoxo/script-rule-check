@@ -270,6 +270,9 @@ export default defineComponent({
 .session-item:hover {
     background-color: var(--vscode-toolbar-hoverBackground);
 }
+.item-check {
+    flex-shrink: 0;
+}
 .item-icon {
     margin-right: 3px;
     display: flex;
@@ -277,6 +280,7 @@ export default defineComponent({
     justify-content: center;
     width: 14px;
     height: 14px;
+    flex-shrink: 0;
 }
 .item-name {
     font-size: 14px;

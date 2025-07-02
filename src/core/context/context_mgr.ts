@@ -23,6 +23,10 @@ export class ContextMgr extends ContextBase {
         this.luaContext = new LuaContext();
     }
 
+    public getContextNameMaxLength(): number {
+        return this.contextNameMaxLength;
+    }
+
     public getRelevantContext(startPos: number, content: string, filePath: string): ContextOption[] {
         const result: ContextOption[] = [];
         const itemMap = this.getRelatedContext(startPos, content, filePath);
@@ -65,32 +69,21 @@ export class ContextMgr extends ContextBase {
     private processContext(parts: any, uniqueContextIds: Set<string>, option: any) {
         const ref = option.contextItem;
         if (ref) {
-            switch (ref.type) {
+            switch (option.type) {
                 case 'file':
                 case 'folder':
-                    if (ref.paths) {
-                        for (const filePath of ref.paths) {
-                            if (uniqueContextIds.has(filePath)) {
-                                continue;
-                            }
-                            uniqueContextIds.add(filePath);
-                            try {
-                                if (fs.existsSync(filePath)) {
-                                    const content = getFileContent(filePath);
-                                    parts['file'].push(filePath + ":\n" + content + "\n");
-                                }
-                            } catch (error) {
-                                console.error(`Error reading file: ${filePath}`, error);
-                            }
-                        }
+                    if (uniqueContextIds.has(option.id)) {
+                        break;
                     }
+                    uniqueContextIds.add(option.id);
+                    parts[option.type].push(ref.paths[0] + ":\n" + ref.content + "\n");
                     break;
                 default:
                     if (uniqueContextIds.has(option.id)) {
                         break;
                     }
                     uniqueContextIds.add(option.id);
-                    parts[ref.type].push(ref.content);
+                    parts[option.type].push(ref.content);
                     break;
             }
         }
@@ -104,8 +97,8 @@ export class ContextMgr extends ContextBase {
     public getOptions(data: object | undefined): ContextOption[] {
         let options = this.getOptionsFromFile();
         options.forEach(option => {
-            if (option.type == 'code') {
-                option.children = this.getCodeReferenceOptions(data);
+            if (option.type == 'code-block') {
+                option.children = this.getCodeContextOptions(data);
                 if (option.children && option.children.length == 0) {
                     option.children = undefined;
                 }
@@ -114,15 +107,8 @@ export class ContextMgr extends ContextBase {
         return options;
     }
 
-    async selectFiles(onlyFiles: boolean): Promise<ContextOption> {
-        const optionType = onlyFiles ? 'files' : 'folders';
-        let result: ContextOption = { 
-            type: optionType, 
-            id: optionType, 
-            name: optionType, 
-            describe: '上下文文件列表',
-            contextItem: { type: optionType, name: optionType, paths: [] }
-        };
+    async selectFiles(onlyFiles: boolean): Promise<ContextOption[]> {
+        const result: ContextOption[] = [];
         const options: vscode.OpenDialogOptions = {
             canSelectMany: true,
             canSelectFolders: !onlyFiles,
@@ -140,8 +126,29 @@ export class ContextMgr extends ContextBase {
                 const pathList = allPaths.map(filePath => {
                     return filePath;
                 });
-                if (result.contextItem) {
-                    result.contextItem.paths = pathList;
+                for (const filePath of pathList) {
+                    const content = getFileContent(filePath);
+                    const posList = this.getPosList(content);
+                    const type = 'file';
+                    let item: ContextOption = { 
+                        type: type, 
+                        id: filePath, 
+                        name: filePath, 
+                        describe: '上下文文件列表',
+                        contextItem: { 
+                            type: type, 
+                            name: filePath, 
+                            paths: [filePath],
+                            content: content,
+                            range: {
+                                start: 0,
+                                end: content.length,
+                                startLine: 0,
+                                endLine: this.getLineCount(posList, content.length - 1),
+                            }
+                        }
+                    };
+                    result.push(item);
                 }
             }
         } catch (error) {
@@ -150,17 +157,10 @@ export class ContextMgr extends ContextBase {
         return result;
     }
 
-    async selectWorkspace(): Promise<ContextOption> {
+    async selectWorkspace(): Promise<ContextOption[]> {
         const workspace = vscode.workspace.workspaceFolders?.[0];
         const workspacePath = workspace?.uri;
-        const optionType = 'workspace';
-        let result: ContextOption = { 
-            type: optionType, 
-            id: optionType, 
-            name: optionType, 
-            describe: '工作区文件列表',
-            contextItem: { type: optionType, name: optionType, paths: [] }
-        };
+        let result: ContextOption[] = [];
         if (!workspacePath) {
             return Promise.resolve(result);
         }
@@ -170,8 +170,29 @@ export class ContextMgr extends ContextBase {
             const pathList = allPaths.map(filePath => {
                 return filePath;
             });
-            if (result.contextItem) {
-                result.contextItem.paths = pathList;
+            for (const filePath of pathList) {
+                const content = getFileContent(filePath);
+                const posList = this.getPosList(content);
+                const type = 'file';
+                let item: ContextOption = { 
+                    type: type, 
+                    id: filePath, 
+                    name: filePath, 
+                    describe: '工作区文件列表',
+                    contextItem: { 
+                        type: type, 
+                        name: filePath, 
+                        paths: [filePath],
+                        content: content,
+                        range: {
+                            start: 0,
+                            end: content.length,
+                            startLine: 0,
+                            endLine: this.getLineCount(posList, content.length - 1),
+                        }
+                    }
+                };
+                result.push(item);
             }
         } catch (error) {
             console.error(error);
@@ -240,7 +261,7 @@ export class ContextMgr extends ContextBase {
 
     getOptionsFromFile():  ContextOption[] {
         try {
-            const configPath = path.join(path.dirname(path.dirname(__dirname)), '../../assets/config/reference_config.json');
+            const configPath = path.join(path.dirname(path.dirname(__dirname)), '../../assets/config/context_config.json');
             const rawConfig = fs.readFileSync(configPath, 'utf-8');
             if (rawConfig) {
                 const obj = JSON.parse(rawConfig);
@@ -254,7 +275,7 @@ export class ContextMgr extends ContextBase {
         }
     }
 
-    getCodeReferenceOptions(data: object | undefined): ContextOption[] | undefined {
+    getCodeContextOptions(data: object | undefined): ContextOption[] | undefined {
         if (!vscode.window.activeTextEditor) {
             return undefined;
         }
@@ -268,7 +289,8 @@ export class ContextMgr extends ContextBase {
             const parsedData = parser(content, types, 0);
             const functionMap = new Map<string, ContextOption>();
             const contextOptions: ContextOption[] = [];
-            this.ContextItemToOptions(contextOptions, parsedData.tree);
+            const posList = this.getPosList(content);
+            this.ContextItemToOptions(contextOptions, filePath, content, posList, parsedData.tree);
             contextOptions.forEach(item => {
                 functionMap.set(item.id, item);
             });
@@ -431,31 +453,5 @@ export class ContextMgr extends ContextBase {
             }
             result.push(current);
         }
-    }
-
-    private getPosList(content: string) {
-        const items = content.split('\n');
-        const result = [];
-        let nowPos = 0;
-        for (const item of items) {
-            nowPos += item.length + 1;
-            result.push(nowPos);
-        }
-        return result;
-    }
-
-    private getLineCount(posList: number[], pos: number) {
-        let left = 0;
-        let right = posList.length - 1
-        let mid = 0;
-        while (left < right) {
-            mid = Math.floor((left + right) / 2);
-            if (posList[mid] <= pos) {
-                left = mid + 1;
-            } else {
-                right = mid;
-            }
-        }
-        return left + 1;
     }
 }

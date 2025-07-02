@@ -25,11 +25,8 @@
 <script lang="ts">
 import { defineComponent, ref, watchEffect } from 'vue';
 import type { PropType } from 'vue';
-import type { Window }  from '../types/GlobalTypes';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 import type { ContextOption } from '../types/ChatTypes';
-
-declare const window: Window;
 
 export default defineComponent({
     name: 'SyItemList',
@@ -135,8 +132,8 @@ export default defineComponent({
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    margin: 6px 0;
-    padding: 6px 6px;
+    margin: 2px 0;
+    padding: 2px 6px;
     border-radius: 5px;
 }
 .list-item:hover {

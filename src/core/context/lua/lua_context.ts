@@ -491,9 +491,9 @@ export class LuaContext extends ContextBase {
     private isBlockScopeNode(node: any): boolean {
         return [
             'DoStatement',        // do...end 块
-            'IfStatement',         // if 语句块
-            'ElseifStatement',     // elseif 语句块
-            'ElseStatement',       // else 语句块
+            'IfClause',         // if 语句块
+            'ElseifClause',     // elseif 语句块
+            'ElseClause',       // else 语句块
             'ForNumericStatement', // 数值 for 循环
             'ForGenericStatement', // 泛型 for 循环
             'WhileStatement',      // while 循环
