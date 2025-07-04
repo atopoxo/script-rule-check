@@ -4,7 +4,7 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig({
-  assetsInclude: ['​**​/*.svg', '​**​/*.png', '​**​/*.jpg'],
+  assetsInclude: ['**/*.svg', '**/*.png', '**/*.jpg'],
   plugins: [
     vue({
       script: {
@@ -35,7 +35,7 @@ export default defineConfig({
   },
   build: {
     outDir: path.resolve(__dirname, 'dist'), // 输出到插件目录
-    assetsDir: 'static',
+    assetsDir: 'assets',
     emptyOutDir: true,
     sourcemap: true,
     minify: false,

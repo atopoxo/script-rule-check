@@ -201,6 +201,7 @@ function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
 
 async function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
     contextMgr = new ContextMgr(extensionName);
+    await contextMgr.init();
     aiModelMgr = new AIModelMgr({}, extensionName, storage, contextMgr);
     const defaultModel = await aiModelMgr.getSelectedModel();
     const defaultModelID = defaultModel ? defaultModel.id : '';

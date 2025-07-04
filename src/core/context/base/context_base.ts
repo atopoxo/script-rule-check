@@ -4,6 +4,7 @@ import path from 'path';
 import { Trie } from '../../function/trie'
 import {ContextOption, ContextItem, ContextTreeNode} from '../../ai_model/base/ai_types'
 import { getFileContent } from '../../function/base_function';
+import { Parser, Language } from 'web-tree-sitter';
 
 interface ContextNode {
     ast: any;
@@ -12,10 +13,10 @@ interface ContextNode {
 }
 
 export type IdentifierType = 'function' | 'variable' | 'closure' | 'constant';
-type Parser = (content: string, types: IdentifierType[], startPos: number) => ContextNode;
+type ParserFormat = (content: string, types: IdentifierType[], startPos: number) => ContextNode;
 
 export class ContextBase {
-    protected languageParsers: {[key: string]: Parser} = {
+    protected languageParsers: {[key: string]: ParserFormat} = {
         lua: (content, types, startPos) => this.parseLua(content, types, startPos),
         py: (content, types, startPos) => this.parsePython(content, types, startPos),
         js: (content, types, startPos) => this.parseJsTs(content, types, startPos),
@@ -27,9 +28,30 @@ export class ContextBase {
         cpp: (content, types, startPos) => this.parseCpp(content, types, startPos)
     };
     private luaPropertyFilters = new Set();
+    private languageCache: Map<string, any> = new Map();
 
     constructor() {
         this.initLuaPropertyFilters();
+    }
+
+    protected async init() {
+        await Parser.init();
+        await this.loadLanguageWasm('python');
+        await this.loadLanguageWasm('cpp');
+        await this.loadLanguageWasm('javascript');
+        await this.loadLanguageWasm('typescript');
+    }
+
+    protected async loadLanguageWasm(lang: string): Promise<any> {
+        if (this.languageCache.has(lang)) {
+            return this.languageCache.get(lang);
+        }
+        const wasmPath = require.resolve(`tree-sitter-${lang}/tree-sitter-${lang}.wasm`);
+        // const wasmBinary = fs.readFileSync(wasmPath);
+        // const language = await WebAssembly.compile(wasmBinary);
+        const language = await Language.load(wasmPath);
+        this.languageCache.set(lang, language);
+        return language;
     }
 
     private initLuaPropertyFilters() {
@@ -342,9 +364,10 @@ export class ContextBase {
     // }
 
     protected parsePython(content: string, types: IdentifierType[], startPos: number): ContextNode {
-        const Parser = require('tree-sitter');
+        // const Parser = require('tree-sitter');
         const parser = new Parser();
-        const language = require('tree-sitter-python');
+        // const language = require('tree-sitter-python');
+        const language = this.languageCache.get('python');
         parser.setLanguage(language);
         const ast = parser.parse(content);
         const root: ContextTreeNode = {
@@ -359,7 +382,9 @@ export class ContextBase {
             children: []
         };
         
-        this.traversePython(ast.rootNode, (root.value as ContextItem).name, types, root, content, startPos);
+        if (ast) {
+            this.traversePython(ast.rootNode, (root.value as ContextItem).name, types, root, content, startPos);
+        }
         return {
             ast: ast, 
             tree: root,
@@ -368,12 +393,14 @@ export class ContextBase {
     }
 
     protected parseJsTs(content: string, types: IdentifierType[], startPos: number): ContextNode {
-        const Parser = require('tree-sitter');
+        // const Parser = require('tree-sitter');
         const parser = new Parser();
-        const JavaScript = require('tree-sitter-javascript');
-        const TypeScript = require('tree-sitter-typescript');
+        // const JavaScript = require('tree-sitter-javascript');
+        // const TypeScript = require('tree-sitter-typescript');
         const isTypeScript = /\.tsx?$/.test(content) || /(^|\n)\s*@ts-/.test(content);
-        const language = isTypeScript ? TypeScript.typescript : JavaScript;
+        // const language = isTypeScript ? TypeScript.typescript : JavaScript;
+        const langType = isTypeScript ? 'typescript' : 'javascript';
+        const language = this.languageCache.get(langType);
         parser.setLanguage(language);
         const ast = parser.parse(content);
         const root: ContextTreeNode = {
@@ -387,8 +414,9 @@ export class ContextBase {
             }, 
             children: []
         };
-        
-        this.traverseJavaScript(ast.rootNode, (root.value as ContextItem).name, types, root, content, startPos);
+        if (ast) {
+            this.traverseJavaScript(ast.rootNode, (root.value as ContextItem).name, types, root, content, startPos);
+        }
         return {
             ast: ast, 
             tree: root,
@@ -397,9 +425,10 @@ export class ContextBase {
     }
 
     protected parseCpp(content: string, types: IdentifierType[], startPos: number): ContextNode {
-        const Parser = require('tree-sitter');
+        // const Parser = require('tree-sitter');
         const parser = new Parser();
-        const language = require('tree-sitter-cpp');
+        // const language = require('tree-sitter-cpp');
+        const language = this.languageCache.get('cpp');
         parser.setLanguage(language);
         const ast = parser.parse(content);
         const root: ContextTreeNode = {
@@ -413,8 +442,9 @@ export class ContextBase {
             }, 
             children: []
         };
-        
-        this.traverseCpp(ast.rootNode, (root.value as ContextItem).name, types, root, content, startPos);
+        if (ast) {
+            this.traverseCpp(ast.rootNode, (root.value as ContextItem).name, types, root, content, startPos);
+        }
         return {
             ast: ast, 
             tree: root,

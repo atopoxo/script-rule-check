@@ -23,6 +23,10 @@ export class ContextMgr extends ContextBase {
         this.luaContext = new LuaContext();
     }
 
+    public async init() {
+        await super.init();
+    }
+
     public getContextNameMaxLength(): number {
         return this.contextNameMaxLength;
     }

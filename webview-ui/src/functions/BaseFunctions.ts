@@ -38,7 +38,7 @@ const replaceOutsideCode = (source: string, pattern: RegExp, replacement: string
     return result;
 };
 
-export const md2html = (content: string) => {
+export const md2html = (content: string, iconPath: string) => {
     let text = String(content)
     text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
     const codeStyleBegin = `<pre class="hljs"><code>`;
@@ -88,8 +88,15 @@ export const md2html = (content: string) => {
         },
         render: function(tokens: any, idx: any) {
             return tokens[idx].nesting === 1 
-                ? '<div class="think-block">\n' 
-                : '</div>\n';
+                ? `<div class="think-block expanded">
+                        <div class="think-header">
+                            <button class="icon-button content-header">
+                                <img class="think-icon" src="${iconPath}"/>
+                                <div class="content-header-content">思考过程</div>
+                            </button>
+                        </div>
+                        <div class="think-content-wrapper">`
+                : `</div></div>`;
         }
     })
     .use(markdownItContainer, 'conclusion', {
@@ -98,8 +105,9 @@ export const md2html = (content: string) => {
         },
         render: function(tokens: any, idx: any) {
             return tokens[idx].nesting === 1 
-                ? '<div class="conclusion-block">\n' 
-                : '</div>\n';
+                ? `<div class="conclusion-block">
+                        <div class="conclusion-content-wrapper">` 
+                : '</div></div>';
         }
     })
     .use(MarkdownItMathjax());

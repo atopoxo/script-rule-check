@@ -21,8 +21,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick } from 'vue';
+import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { throttle, md2html } from '../functions/BaseFunctions';
+import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 
 export default defineComponent({
   props: {
@@ -357,12 +358,51 @@ export default defineComponent({
         emit('finish-edit', value, index);
     }
 
+    let thinkExpand = true;
+    const getContextIconPath = computed(() => {
+      try {
+          let iconPath = '';
+          let relativePath = props.isDark ? 'dark' : 'light';
+          if (thinkExpand) {
+            iconPath = 'arrow-down.svg';
+          } else {
+            iconPath = 'arrow-left.svg';
+          }
+          return new URL(`${iconRoot}${relativePath}/${iconPath}`, currentModuleUrl).href;
+      } catch (error) {
+          console.error('图标加载失败:', error);
+          return '';
+      }
+    });
+    const expandContext = (event: any) => {
+      const block = event.target.closest('.think-block');
+      if (thinkExpand) {
+        block.classList.remove('expanded');
+        const content = block.querySelector('.think-content-wrapper');
+        if (content) {
+          content.style.maxHeight = '0';
+        }
+      } else {
+        block.classList.add('expanded');
+        const content = block.querySelector('.think-content-wrapper');
+        if (content) {
+          content.style.maxHeight = content.scrollHeight + 'px';
+        }
+      }
+      thinkExpand = !thinkExpand;
+    };
+
     watchEffect(async () => {
         themeInit();
         contentType.value = props.contentType;
         textEditable.value = props.textEditable;
         if (props.contentType === 'html') {
-            contentValue.value = md2html(props.content);
+            contentValue.value = md2html(props.content, getContextIconPath.value);
+            await nextTick();
+            contentRef.value?.querySelectorAll('.content-header').forEach((header: any) => {
+                header.removeEventListener('click', expandContext);
+                header.addEventListener('click', expandContext);
+            });
         } else if (props.contentType === 'text') {
             contentValue.value = props.content;
             if (textEditable.value) {
@@ -379,6 +419,7 @@ export default defineComponent({
     });
 
     onMounted(() => {
+      // initMutationObserver();
       if (contentRef.value) {
         contentRef.value.addEventListener('click', handleCopyClick);
       }
@@ -405,12 +446,78 @@ export default defineComponent({
         textEditPadding,
         maxWidth,
         containerHeight,
+        getContextIconPath,
+        expandContext
     };
   }
 });
 </script>
 
 <style>
+.think-header {
+    display: inline-flex;
+    color: var(--vscode-tab-inactiveForeground);;
+    font-size: 11px;
+    height: 16px;
+    line-height: 12px;
+    font-weight: 500;
+    padding: 2px;
+    border-radius: 5px;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
+}
+.think-content-wrapper {
+    border-radius: 6px;
+    padding: 0;
+    margin-top: 0;
+    overflow: hidden;
+}
+.think-block.expanded .think-content-wrapper {
+  padding: 0px 8px 8px 8px;
+  margin-top: 8px;
+  border: 1px solid var(--vscode-commandCenter-inactiveBorder);
+}
+.conclusion-content-wrapper {
+  border-radius: 6px;
+  padding: 0px 8px 8px 8px;
+  margin-top: 8px;
+  border: 1px transparent;
+}
+.icon-button {
+  background: none;
+  border: none;
+  color: var(--vscode-icon-foreground);
+  cursor: pointer;
+  padding: 4px;
+  margin: 0 2px;
+  border-radius: 3px;
+}
+.icon-button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+.content-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  height: 16px;
+  padding: 2px;
+}
+.content-header img {
+  width: 8px;
+  height: 8px;
+  padding: 2px;
+  margin-right: 4px;
+  border-radius: 3px;
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+.content-header-content {
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 12px;
+  opacity: 0.8;
+}
 .code-block-wrapper {
     display: flex;
     flex-direction: column;

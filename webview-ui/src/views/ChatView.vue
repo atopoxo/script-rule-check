@@ -8,7 +8,7 @@
         <div v-for="(msg, index) in selectedSession.history" :key="index" :class="`message ${msg.role}`">
           <div v-if="msg.role === 'user' || msg.role === 'assistant'" class="role-block">
             <div class="avatar">
-              <img :src=getRoleIconPath(msg.role) />
+              <img :src="getRoleIconPath(msg.role)" />
             </div>
             <div class="role-name" v-if="msg.role === 'assistant'">AI 助手</div>
           </div>

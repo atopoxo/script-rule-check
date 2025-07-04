@@ -64,7 +64,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [
                 this._extensionUri,
                 vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'static'),
-                vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'src', 'assets'),
+                vscode.Uri.joinPath(this._extensionUri, 'webview-ui', 'dist', 'assets'),
                 vscode.Uri.parse('http://localhost:5173')
             ],
             enableCommandUris: true,

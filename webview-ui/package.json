@@ -8,8 +8,9 @@
     "debug:extension": "npm run watch:extension",
     "dev": "vite",
     "dev:sourcemap": "vite --debug --force",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "vue-tsc -b && vite build && npm run copy-assets",
+    "preview": "vite preview",
+    "copy-assets": "copyfiles -u 2 src/assets/**/* dist/assets/"
   },
   "dependencies": {
     "east-asian-width": "^0.1.1",
