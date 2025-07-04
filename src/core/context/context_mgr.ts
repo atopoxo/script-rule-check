@@ -353,11 +353,12 @@ export class ContextMgr extends ContextBase {
         const scopeNode: ScopeNode = {
             stack: [rootScopes],
             current: rootScope,
-            currentDepth: 0
+            currentDepth: 0,
+            filePath: filePath
         };
         this.luaContext.buildTree(keywordTree, scopeNode, identifiers.ast, identifiers.content, 0);
         const rangeTree = new SegmentTree(0, identifiers.content.length);
-        // rangeTree.update(startPos, startPos + text.length, 1);
+        rangeTree.update(startPos, startPos + text.length, 1);
         const items: ContextItem[] = [];
         this.getIdentifiersByRange(items, keywordTree, startPos, startPos + text.length);
         const queue = new Deque<string>();
@@ -389,7 +390,8 @@ export class ContextMgr extends ContextBase {
         const scopeNode: ScopeNode = {
             stack: [rootScopes],
             current: rootScope,
-            currentDepth: 0
+            currentDepth: 0,
+            filePath: filePath
         };
         this.luaContext.buildDependencyGraph(definitionMap, dependencyGraph, scopeNode, ast, content, 0);
         const visitedIdentifiers = new Set<string>();
@@ -425,11 +427,16 @@ export class ContextMgr extends ContextBase {
                 missQueue.pushBack(current);
             }
         }
+        while (!missQueue.isEmpty()) {
+            const item = missQueue.popFront();
+            queue.pushBack(item);
+        }
         const posList = this.getPosList(content);
         this.createContextItemsByRange(result.get(filePath)!, rangeTree.getRange(0, content.length, 1), content, posList);
-        if (!missQueue.isEmpty()) {
+        if (!queue.isEmpty()) {
             const includes = this.extractIncludes(content, path.extname(filePath));
-            for (const include of includes) {
+            for (let i = includes.length - 1; i >= 0; i--) {
+                const include = includes[i];
                 const includePath = this.resolveIncludePath(filePath, include);
                 if (includePath && depth < maxDepth) {
                     const includeIdentifiers = this.getIdentifiers(0, includePath, undefined);
@@ -437,7 +444,7 @@ export class ContextMgr extends ContextBase {
                         continue;
                     }
                     const currentRangeTree = new SegmentTree(0, includeIdentifiers.content.length);
-                    this.findRelatedContext(missQueue, includePath, includeIdentifiers.ast, includeIdentifiers.content, result, visited, depth + 1, maxDepth, currentRangeTree);
+                    this.findRelatedContext(queue, includePath, includeIdentifiers.ast, includeIdentifiers.content, result, visited, depth + 1, maxDepth, currentRangeTree);
                 }
             }
         }
