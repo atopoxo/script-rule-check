@@ -291,6 +291,9 @@ export class ContextMgr extends ContextBase {
         try {
             const content = getFileContent(filePath);
             const parsedData = parser(content, types, 0);
+            if (Array.isArray(parsedData)) {
+                return parsedData;
+            }
             const functionMap = new Map<string, ContextOption>();
             const contextOptions: ContextOption[] = [];
             const posList = this.getPosList(content);

@@ -68,6 +68,20 @@ vsc-extension-quickstart.md
 **/node_modules/**/test/
 **/node_modules/**/Release/obj/
 **/node_modules/**/@esbuild/
+**/node_modules/typescript/
+**/node_modules/@vue/
+**/node_modules/vue/
+**/node_modules/@rollup/
+**/node_modules/rollup/
+**/node_modules/vite/
+**/node_modules/.vite/
+**/node_modules/@babel/
+**/node_modules/esbuild/
+**/node_modules/prebuild-install/
+**/node_modules/@volar/
+**/node_modules/entities/
+**/node_modules/@vitejs/
+**/node_modules/vue-router/
 
 node_modules/tree-sitter/**/*.node
 node_modules/tree-sitter-*/**/*.node

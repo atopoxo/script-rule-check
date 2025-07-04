@@ -1,185 +1,99 @@
-### 中文版 README.md
+# Script Rule Check Extension
 
-```markdown
-# VSCode 脚本规则检查工具
+## 功能概述 (Features Overview)
 
-![VSCode扩展](https://img.shields.io/badge/VSCode-Extension-green)
-![Version](https://img.shields.io/badge/Version-0.0.3-blue)
+### 脚本规则检查 (Script Rule Checking)
+- 🧪 **多规则检查**：支持11种不同的脚本检查规则（Trap脚本、场景模块、玩家模块等）
+- 🌳 **多种显示模式**：支持树形结构、平铺列表和规则结构三种结果展示方式
+- ⚙️ **自定义配置**：允许用户选择要执行的特定规则组合
+- 📊 **实时进度显示**：带有进度条和取消功能的检查过程
+- 🔍 **结果导航**：可直接从结果跳转到问题代码位置
 
-一个基于自定义规则集的脚本检查工具，支持 Lua/Python 脚本的自动化检查，提供多模式结果展示和灵活配置。
+### AI辅助功能 (AI Assistance)
+- 💬 **智能聊天**：集成大模型进行代码分析和技术问答
+- 🧠 **上下文管理**：支持添加代码片段、文件和文件夹作为对话上下文
+- 🔄 **流式响应**：实时显示AI生成内容，支持暂停和继续
+- 🧪 **代码检查**：智能分析选中的代码片段并提出改进建议
+- 📚 **会话管理**：支持创建、删除、重命名和切换多个对话
 
-## 功能特性
+### 配置管理 (Configuration Management)
+- 🛠️ **模型配置**：支持多种AI模型，可自定义模型参数
+- 📂 **工作区设置**：配置产品库目录和检查规则
+- 🌙 **主题适配**：自动适应VS Code的亮色/暗色主题
 
-- **产品目录配置**  
-  支持自定义产品根目录路径（需包含 `tools/CheckScripts` 子目录）
-- **多规则检查**  
-  支持全规则检查、自定义规则筛选、单个规则快速检查
-- **智能结果展示**  
-  提供三种展示模式：
-  - 🌳 目录树结构（默认）
-  - 📜 文件平铺列表
-  - 🧩 按规则聚合
-- **编码自动识别**  
-  自动检测文件编码（支持 GBK/UTF-8 等）
-- **可视化配置**  
-  提供图形化配置界面，支持动态规则开关
+## 如何使用 (How to Use)
 
-## 安装方式
+### 基本设置 (Basic Setup)
+1. 安装插件后，通过命令面板执行 `Set Product Directory` 命令
+2. 输入您的产品库根目录路径（绝对路径）
+3. 保存配置后，插件将自动初始化
 
-### 市场安装
-1. 在 VSCode 扩展商店搜索 "script-rule-check"
-2. 点击安装按钮
+### 执行脚本检查 (Running Script Checks)
+1. 在资源管理器中右键点击文件或文件夹
+2. 选择以下任一选项：
+   - `检查所有用例规则`：运行全部11种检查
+   - `检查自定义用例规则`：仅运行选定的规则
+   - `检查指定用例规则`：选择特定规则执行
+3. 检查结果将显示在侧边栏的"Script Check Results"视图中
 
-### 手动安装
+### 使用AI聊天功能 (Using AI Chat)
+1. 打开侧边栏的"AI Chat"视图
+2. 选择要使用的AI模型
+3. 输入您的问题或请求
+4. （可选）通过以下方式添加上下文：
+   - 选中代码后点击"添加到上下文"
+   - 使用"检查代码"分析选中代码
+   - 添加文件或文件夹作为参考
+
+### 快捷键 (Shortcuts)
+- `Ctrl+Alt+R`：强制重启插件（Windows）
+- `Cmd+Alt+R`：强制重启插件（Mac）
+
+## 开发说明 (Development Notes)
+
+### 技术栈 (Technology Stack)
+- TypeScript
+- VS Code Extension API
+- SQLite（数据存储）
+- Vue.js（Webview UI）
+- Tree-sitter（代码解析）
+
+### 构建命令 (Build Commands)
 ```bash
-git clone https://github.com/atopoxo/script-rule-check.git
-cd script-rule-check
-vsce package
-code --install-extension script-rule-check-0.0.3.vsix
+# 开发模式
+npm run debug
+
+# 生产构建
+npm run vscode:prepublish
+
+# 运行测试
+npm run test
 ```
 
-## 使用说明
+## 许可证 (License)
 
-### 基础配置
-1. 点击侧边栏「脚本规则检查」图标
-2. 在 Configuration 面板设置产品库目录（如 `z:/trunk`）
+MIT License
 
-### 执行检查
-| 操作方式                | 说明                         |
-|-----------------------|----------------------------|
-| 右键菜单 -> 检查所有用例规则 | 对选中文件/目录执行全规则检查      |
-| 右键菜单 -> 检查自定义规则  | 仅执行配置中勾选的规则          |
-| 右键菜单 -> 检查指定规则    | 从子菜单选择特定规则进行检查      |
+Copyright (c) 2025 shaoyi
 
-### 结果查看
-- 检查结果将显示在「Script Check Results」视图
-- 通过顶部工具栏切换展示模式：
-  ```plaintext
-  🌳 目录树结构 | 📜 文件列表 | 🧩 规则聚合
-  ```
-- 双击结果项自动跳转到对应代码位置
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-## 高级配置
-```json
-{
-  "script-rule-check.customCheckRules": ["rule1", "rule3"],  // 自定义勾选规则ID
-  "script-rule-check.displayMode": "rule"  // 可选值：tree/flat/rule
-}
-```
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-## 命令列表
-| 命令                          | 功能描述                     |
-|------------------------------|----------------------------|
-| `extension.checkAllRules`     | 执行全规则检查               |
-| `extension.checkCustomRules`  | 执行自定义规则检查           |
-| `extension.setProductDir`     | 设置产品库目录               |
-| `extension.setDisplayMode`    | 切换结果展示模式             |
-
-## 注意事项
-1. 确保产品库路径包含有效的检查工具链：
-   ```
-   /tools/CheckScripts/
-     ├── Case/          # 规则脚本
-     ├── Log/           # 检查日志
-     └── lua/5.1/lua.exe
-   ```
-2. 遇到文件编码问题时，工具会自动尝试 GBK/UTF-8 解码
-3. 日志文件生成在 `tools/CheckScripts/CheckScripts/Log` 目录
-
-## 版权声明
-MIT License © 2025 [shaoyi](https://github.com/atopoxo)
-```
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 
-### English Version README.md
-
-```markdown
-# VSCode Script Rule Checker
-
-![VSCode Extension](https://img.shields.io/badge/VSCode-Extension-green)
-![Version](https://img.shields.io/badge/Version-0.0.3-blue)
-
-An intelligent script validation tool with customizable rule sets, supporting Lua/Python automation checks and multi-mode result visualization.
-
-## Key Features
-
-- **Product Directory Configuration**  
-  Customizable root directory path (requires `tools/CheckScripts` subdirectory)
-- **Multi-rule Validation**  
-  Support full-rule checks, custom rule selection, and single-rule quick checks
-- **Smart Result Visualization**  
-  Three display modes:
-  - 🌳 Directory Tree (default)
-  - 📜 File List 
-  - 🧩 Rule-oriented Grouping
-- **Auto Encoding Detection**  
-  Supports GBK/UTF-8 and other encodings
-- **Visual Configuration**  
-  Graphical interface with dynamic rule toggling
-
-## Installation
-
-### Marketplace
-1. Search "script-rule-check" in VSCode Extensions
-2. Click Install
-
-### Manual Install
-```bash
-git clone https://github.com/atopoxo/script-rule-check.git
-cd script-rule-check
-vsce package
-code --install-extension script-rule-check-0.0.3.vsix
-```
-
-## Usage Guide
-
-### Basic Setup
-1. Click the 「Script Rule Check」 sidebar icon
-2. Set product directory in Configuration panel (e.g. `z:/trunk`)
-
-### Execution Methods
-| Operation                  | Description                  |
-|---------------------------|------------------------------|
-| Right-click -> Check All Rules | Full-rule check for selected files/dirs |
-| Right-click -> Check Custom Rules | Execute selected rules only |
-| Right-click -> Check Specific Rule | Choose from rule submenu |
-
-### Result Inspection
-- Results display in 「Script Check Results」 view
-- Switch modes via top toolbar:
-  ```plaintext
-  🌳 Tree | 📜 Flat | 🧩 Rule
-  ```
-- Double-click items to navigate to code locations
-
-## Advanced Configuration
-```json
-{
-  "script-rule-check.customCheckRules": ["rule1", "rule3"],  // Custom rule IDs
-  "script-rule-check.displayMode": "rule"  // Options: tree/flat/rule
-}
-```
-
-## Command List
-| Command                      | Description               |
-|------------------------------|---------------------------|
-| `extension.checkAllRules`     | Execute full-rule check   |
-| `extension.checkCustomRules`  | Run custom rule checks    |
-| `extension.setProductDir`     | Set product directory     |
-| `extension.setDisplayMode`    | Switch display mode       |
-
-## Notes
-1. Ensure product directory contains valid toolchain:
-   ```
-   /tools/CheckScripts/
-     ├── Case/          # Rule scripts
-     ├── Log/           # Check logs
-     └── lua/5.1/lua.exe
-   ```
-2. Auto encoding fallback to GBK/UTF-8 when detection fails
-3. Log files generated in `tools/CheckScripts/CheckScripts/Log`
-
-## License
-MIT License © 2025 [shaoyi](https://github.com/atopoxo)
-```
+**GitHub Repository**: [https://github.com/atopoxo/script-rule-check](https://github.com/atopoxo/script-rule-check)
