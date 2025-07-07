@@ -337,6 +337,12 @@
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "extension.chat.checkCode",
+        "key": "shift+c",
+        "when": "editorTextFocus && editorHasSelection && editorLangId == lua",
+        "mac": "shift+c"
       }
     ]
   },

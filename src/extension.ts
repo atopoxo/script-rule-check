@@ -245,9 +245,11 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
             }
         }),
         vscode.commands.registerCommand('extension.chat.addContext', async () => {
+            await vscode.commands.executeCommand('chatView.focus');
             await chatViewProvider.addContext();
         }),
         vscode.commands.registerCommand('extension.chat.checkCode', async () => {
+            await vscode.commands.executeCommand('chatView.focus');
             await chatViewProvider.checkCode();
         }),
         // vscode.commands.registerCommand('extension.chat.addFileReference', async () => {

@@ -367,8 +367,15 @@ export class ContextMgr extends ContextBase {
         }
         const visited = new Set<string>();
         const maxDepth = 3;
+        const selected = {
+            filePath: filePath,
+            range: {
+                start: startPos,
+                end: startPos + text.length
+            }
+        }
 
-        this.findRelatedContext(queue, filePath, identifiers.ast, identifiers.content, result, visited, 0, maxDepth, rangeTree);
+        this.findRelatedContext(queue, filePath, identifiers.ast, identifiers.content, result, visited, 0, maxDepth, rangeTree, selected);
         return result;
     }
 
@@ -380,7 +387,8 @@ export class ContextMgr extends ContextBase {
         visited: Set<string>,
         depth: number,
         maxDepth = 3,
-        rangeTree: SegmentTree
+        rangeTree: SegmentTree,
+        selected: any
     ) {
         const dependencyGraph: DependencyGraphType = new Map();
         const definitionMap: DefinitionMapType = new Map();
@@ -431,6 +439,9 @@ export class ContextMgr extends ContextBase {
             const item = missQueue.popFront();
             queue.pushBack(item);
         }
+        if (selected.filePath == filePath) {
+            rangeTree.update(selected.range.start, selected.range.end, 0);
+        }
         const posList = this.getPosList(content);
         this.createContextItemsByRange(result.get(filePath)!, rangeTree.getRange(0, content.length, 1), content, posList);
         if (!queue.isEmpty()) {
@@ -444,7 +455,7 @@ export class ContextMgr extends ContextBase {
                         continue;
                     }
                     const currentRangeTree = new SegmentTree(0, includeIdentifiers.content.length);
-                    this.findRelatedContext(queue, includePath, includeIdentifiers.ast, includeIdentifiers.content, result, visited, depth + 1, maxDepth, currentRangeTree);
+                    this.findRelatedContext(queue, includePath, includeIdentifiers.ast, includeIdentifiers.content, result, visited, depth + 1, maxDepth, currentRangeTree, selected);
                 }
             }
         }

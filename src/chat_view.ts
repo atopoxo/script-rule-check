@@ -437,7 +437,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async openSettings() {
-        await vscode.commands.executeCommand('workbench.view.extension.script-rule-check');
+        // await vscode.commands.executeCommand('workbench.view.extension.script-rule-check');
         await vscode.commands.executeCommand('scriptRuleConfig.focus');
         //vscode.commands.executeCommand('workbench.action.openSettings', 'script-rule-check');
     }
