@@ -1,7 +1,6 @@
 import { singleton } from 'tsyringe';
 import { Pool } from 'pg';
-import Database from 'better-sqlite3';
-type SqliteDatabase = InstanceType<typeof Database>;
+import initSqlJs from 'sql.js';
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -16,7 +15,7 @@ const MAX_SESSION_NAME_LENGTH = 60;
 export class Storage {
     private jsonParser = getJsonParser();
     private userCache: UserInfo | undefined = undefined;
-    private localDB: SqliteDatabase | null = null;
+    private localDB: any = null;
     private remoteDB: Pool | null = null;
     private remoteDBConnected: boolean = false;
     private lock = new Mutex();
@@ -83,8 +82,10 @@ export class Storage {
                 await this.remoteDB.query('DELETE FROM users WHERE user_id = $1', [userId]);
             }
             if (this.localDB) {
-                const stmt = this.localDB.prepare('DELETE FROM users WHERE user_id = ?');
-                stmt.run(userId);
+                const stmt = this.localDB.prepare('DELETE FROM users WHERE user_id = :userId');
+                stmt.bind({ ':userId': userId });
+                stmt.step();
+                stmt.free();
             }
             this.userCache = undefined;
             console.log("删除用户id:\t", userId);
@@ -315,11 +316,37 @@ export class Storage {
     }
 
     private async initDatabases() {
-        const dbDir = path.dirname(this.config.localDBPath || this.dbPath);
+        const fullDbPath = this.config.localDBPath || this.dbPath;
+        const dbDir = path.dirname(fullDbPath);
         if (!fs.existsSync(dbDir)) {
             fs.mkdirSync(dbDir, { recursive: true });
         }
-        this.localDB = new Database(this.dbPath);
+        try {
+            const wasmBinary = fs.readFileSync(
+                path.join(path.dirname(require.resolve('sql.js')), 'sql-wasm.wasm')
+            );
+            
+            const SQL = await initSqlJs({
+                wasmBinary,
+                locateFile: (file: string) => {
+                    if (file === 'sql-wasm.wasm') {
+                        return '';
+                    }
+                    return file;
+                }
+            });
+            let dbData: Uint8Array | null = null;
+            if (fs.existsSync(fullDbPath)) {
+                dbData = new Uint8Array(fs.readFileSync(fullDbPath));
+            }
+            this.localDB = new SQL.Database(dbData || undefined);
+            console.log(`SQL.js database initialized at: ${fullDbPath}`);
+        } catch (err) {
+            console.error("创建本地数据库失败:", err);
+            throw err;
+        }
+        
+        // this.localDB = new Database(this.dbPath);
         this.setupLocalDatabase();
         const localUsers = this.getAllLocalUsers();
         for (const user of localUsers) {
@@ -396,11 +423,20 @@ export class Storage {
     }
 
     private getAllLocalUsers(): { user_id: string; data: Buffer }[] {
+        const rows: { user_id: string; data: Buffer }[] = [];
         if (!this.localDB) {
-            return [];
+            return rows;
         }
         const stmt = this.localDB.prepare("SELECT user_id, data FROM users");
-        return stmt.all() as { user_id: string; data: Buffer }[];
+        while (stmt.step()) {
+            const row = stmt.get();
+            rows.push({
+                user_id: row[0],
+                data: Buffer.from(row[1]) // 将 Uint8Array 转换为 Buffer
+            });
+        }
+        stmt.free();
+        return rows;
     }
 
     private async saveUserInfoToRemote(userId: string, data: Buffer) {
@@ -443,9 +479,16 @@ export class Storage {
         }
         if (this.localDB) {
             try {
-                const stmt = this.localDB.prepare('SELECT data FROM users WHERE user_id = ?');
-                const row = stmt.get(userId) as { data: UserInfo } || null;
-                return row ? row.data as UserInfo : null;
+                const stmt = this.localDB.prepare('SELECT data FROM users WHERE user_id = :userId');
+                stmt.bind({ ':userId': userId });
+                let rowData: any = null;
+                if (stmt.step()) {
+                    const row = stmt.get();
+                    rowData = row[0];
+                }
+                stmt.free();
+                const userInfo = rowData ? this.jsonParser.parse(Buffer.from(rowData).toString()) : null;
+                return userInfo;
             } catch (err) {
                 console.error("Failed to load user from local", err);
             }
@@ -473,12 +516,31 @@ export class Storage {
         if (this.localDB) {
             try {
                 const stmt = this.localDB.prepare(
-                    `INSERT OR REPLACE INTO users (user_id, data) VALUES (?, ?)`
+                    `INSERT OR REPLACE INTO users (user_id, data) VALUES (:userId, :data)`
                 );
-                stmt.run(userId, Buffer.from(serialized));
+                stmt.bind({
+                    ':userId': userId,
+                    ':data': Buffer.from(serialized)
+                })
+                stmt.step();
+                stmt.free();
+                await this.persistDatabase();
             } catch (err) {
                 console.error("Failed to save user to local", err);
             }
+        }
+    }
+
+    private async persistDatabase() {
+        if (!this.localDB) {
+            return;
+        }
+        try {
+            const fullDbPath = this.config.localDBPath || this.dbPath;
+            const dbData = this.localDB.export();
+            fs.writeFileSync(fullDbPath, Buffer.from(dbData));
+        } catch (err) {
+            console.error("Failed to persist database to file system", err);
         }
     }
 

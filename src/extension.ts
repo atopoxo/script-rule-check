@@ -14,6 +14,7 @@ import { ChatViewProvider, ChatViewTreeDataProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
+import { getGlobalConfigValue } from "./core/function/base_function"
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
@@ -43,6 +44,8 @@ let aiModelMgr: AIModelMgr;
 //     assetUri: string;
 //     fallbackAssetUri: string;
 // }
+
+//electron版本查看：https://releases.electronjs.org/release?channel=stable
 export async function activate(context: vscode.ExtensionContext) {
     console.log(`${extensionName} actived!`);
     
@@ -56,19 +59,19 @@ export async function activate(context: vscode.ExtensionContext) {
     : 'production';
 
     const storageUri = vscode.extensions.getExtension(`${publisher}.${extensionName}`)?.extensionUri as vscode.Uri;
-    const dbPath = vscode.Uri.joinPath(storageUri, 'data.db').fsPath;
+    const dbPath = vscode.Uri.joinPath(storageUri, 'script-rule-check.db').fsPath;
     storage = new Storage({}, userID, dbPath);
     await storage.ready;
     customConfig = vscode.workspace.getConfiguration(extensionName);
-    const configurationProvider = new ConfigurationProvider(customConfig);
+    const configurationProvider = new ConfigurationProvider(extensionName);
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
-    const productDir = customConfig.get<string>('productDir', '');
+    const productDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(extensionName)) {
                 customConfig = vscode.workspace.getConfiguration(extensionName);
                 updateDisplayMode(customConfig);
-                const newDir = customConfig.get<string>('productDir', '');
+                const newDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
                 if (fs.existsSync(newDir)) {
                     if (!registered) {
                         registerNormalCommands(context, configurationProvider, newDir);
@@ -78,11 +81,11 @@ export async function activate(context: vscode.ExtensionContext) {
                 } else {
                     vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
                 }
-                configurationProvider.refresh(customConfig);
+                configurationProvider.refresh();
             }
         }),
         vscode.commands.registerCommand('extension.setProductDir', async () => {
-            const currentDir = customConfig.get<string>('productDir', '');
+            const currentDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
             const newDir = await vscode.window.showInputBox({
                 value: currentDir,
                 prompt: '输入产品库目录'
@@ -93,7 +96,8 @@ export async function activate(context: vscode.ExtensionContext) {
                         registerNormalCommands(context, configurationProvider, newDir);
                         registered = true;
                     }
-                    await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
+                    // await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
+                    await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Global);
                 } else {
                     vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
                 }
@@ -102,11 +106,11 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     if (!fs.existsSync(productDir)) {
         vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
-        return;
-    }
-    if (!registered) {
-        registerNormalCommands(context, configurationProvider, productDir);
-        registered = true;
+    } else {
+        if (!registered) {
+            registerNormalCommands(context, configurationProvider, productDir);
+            registered = true;
+        }
     }
     registerAICommands(context, configurationProvider);
 
@@ -194,7 +198,7 @@ async function saveWorkspaceState() {
 }
 
 function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
-    const displayMode = customConfig.get<string>('displayMode', 'tree');
+    const displayMode = getGlobalConfigValue<string>(extensionName, 'displayMode', 'tree');
     vscode.commands.executeCommand('setContext', `${extensionName}.displayMode`, displayMode);
     return displayMode;
 }
@@ -213,10 +217,10 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('chatView', chatViewProvider),
         vscode.commands.registerCommand('extension.toggleModelInfo', async (modelID: string) => {
-            let selectedModel: string = customConfig.get('selectedModel', '');
+            let selectedModel: string = getGlobalConfigValue<string>(extensionName, 'selectedModel', '');
             selectedModel = selectedModel === modelID ? '' : modelID;
             await customConfig.update('selectedModel', selectedModel, vscode.ConfigurationTarget.Global);
-            configurationProvider.refresh(customConfig);
+            configurationProvider.refresh();
         }),
         vscode.commands.registerCommand('extension.model.editInfo', async (modelID: string, data: object) => {
             const modelInfo = allModelInfos.find(info => info.id === modelID);
@@ -235,7 +239,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 }
                 (modelInfo as any)[key] = newValue;
                 aiModelMgr.saveModelConfig(allModelInfos);
-                configurationProvider.refresh(customConfig);
+                configurationProvider.refresh();
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
         }),
@@ -288,13 +292,13 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             await checkRules(targets, finalRules, productDir, toolDir, ruleDir);
 		}),
         vscode.commands.registerCommand('extension.toggleCustomCheckRules', async (ruleId: string) => {
-            let selectedRules: string[] = customConfig.get('customCheckRules', []);
+            let selectedRules: string[] = getGlobalConfigValue<string[]>(extensionName, 'customCheckRules', []);
             selectedRules = selectedRules.includes(ruleId) ? selectedRules.filter(id => id !== ruleId) : [...selectedRules, ruleId];
             await customConfig.update('customCheckRules', selectedRules, vscode.ConfigurationTarget.Global);
-            configurationProvider.refresh(customConfig);
+            configurationProvider.refresh();
         }),
         vscode.commands.registerCommand('extension.checkCustomRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
-            const selectedRules = customConfig.get<string[]>('customCheckRules', []);
+            const selectedRules = getGlobalConfigValue<string[]>(extensionName, 'customCheckRules', []);
             if (selectedRules.length === 0) {
                 vscode.window.showWarningMessage('未选择任何自定义检查规则，请在配置中选择。');
                 return;

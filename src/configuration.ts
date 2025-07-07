@@ -1,19 +1,17 @@
 import * as vscode from 'vscode';
 import { ModelInfo } from './core/ai_model/base/ai_types';
 import { CheckRule } from "./output_format"
+import { getGlobalConfigValue } from "./core/function/base_function"
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private allCheckRules: CheckRule[] = [];
     private allModelInfos: ModelInfo[] = [];
-    private config: vscode.WorkspaceConfiguration;
 
-    constructor(config: vscode.WorkspaceConfiguration) {
-        this.config = config
+    constructor(private extensionName: string) {
     }
-    refresh(config: vscode.WorkspaceConfiguration): void {
-        this.config = config;
+    refresh(): void {
         this._onDidChangeTreeData.fire();
     }
 
@@ -54,7 +52,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private createConfigItem(): vscode.TreeItem {
-        const item = new vscode.TreeItem(`产品库目录: ${this.config.get('productDir')}`);
+        const item = new vscode.TreeItem(`产品库目录: ${getGlobalConfigValue<string>(this.extensionName, 'productDir', '')}`);
         item.contextValue = 'configItem';
         item.command = {
             command: 'extension.setProductDir',
@@ -72,7 +70,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private createModeSelectorItem(): vscode.TreeItem {
-        const currentMode = this.config.get('displayMode', 'tree');
+        const currentMode = getGlobalConfigValue<string>(this.extensionName, 'displayMode', 'tree');
         const item = new vscode.TreeItem(`显示模式: ${currentMode}`);
         item.contextValue = 'modeSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
@@ -81,7 +79,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private createModelSelectorItem(): vscode.TreeItem {
-        const selectedModel = this.config.get('selectedModel', '');
+        const selectedModel = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '');
         const item = new vscode.TreeItem(`当前模型: ${selectedModel}`);
         item.contextValue = 'modelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
@@ -96,7 +94,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         ];
     }
     private createModeItem(mode: string, label: string): vscode.TreeItem {
-        const isCurrent = this.config.get('displayMode') === mode;
+        const isCurrent = getGlobalConfigValue<string>(this.extensionName, 'displayMode', 'flat') === mode;
         const item = new vscode.TreeItem(label);
         item.command = {
             command: 'extension.setDisplayMode',
@@ -113,7 +111,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return this.allCheckRules.map(rule => this.createCustomCheckRuleItem(rule));
     }
     private createCustomCheckRuleItem(rule: CheckRule): vscode.TreeItem {
-        const isSelected = this.config.get<string[]>('customCheckRules', []).includes(rule.id);
+        const isSelected = getGlobalConfigValue<string[]>(this.extensionName, 'customCheckRules', []).includes(rule.id);
         const item = new vscode.TreeItem(rule.taskName);
         item.id = rule.id;
         item.contextValue = 'customCheckRule';
@@ -131,7 +129,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private createModelItem(info: ModelInfo): vscode.TreeItem {
-        const isSelected = this.config.get<string>('selectedModel', '') === info.id;
+        const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '') === info.id;
         const item = new vscode.TreeItem(info.name);
         item.id = info.id;
         item.contextValue = info.showConfig ? 'modelInfo': '';

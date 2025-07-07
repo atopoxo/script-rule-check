@@ -88,3 +88,13 @@ node_modules/tree-sitter-*/**/*.node
 
 node_modules/web-tree-sitter/**/*.node
 node_modules/web-tree-sitter/lib/
+
+node_modules/sql.js/.devcontainer
+node_modules/sql.js/.eslintrc*
+node_modules/sql.js/.jsdoc.config*
+node_modules/sql.js/logo.svg
+node_modules/sql.js/AUTHORS
+node_modules/sql.js/.nojekyll
+node_modules/sql.js/**/*-debug*
+node_modules/sql.js/**/*.zip
+node_modules/sql.js/**/*-asm*

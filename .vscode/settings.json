@@ -16,5 +16,6 @@
 	"files.associations": {
 		"*.rh": "cpp",
 		"type_traits": "cpp"
-	}
+	},
+	"script-rule-check.productDir": "z:/trunk"
 }

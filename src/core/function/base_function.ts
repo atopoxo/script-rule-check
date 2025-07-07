@@ -1,5 +1,6 @@
 const chardet = require('chardet');
 import fs from 'fs';
+import * as vscode from 'vscode';
 import * as iconv from 'iconv-lite';
 function singleton<T extends new (...args: any[]) => any>(cls: T): T {
     const instances = new Map<T, InstanceType<T>>();
@@ -86,3 +87,9 @@ export function getFileContent(filePath?: string, buffer?: any, encoding?: Buffe
     }
     return content;
 }
+
+export function getGlobalConfigValue<T>(extensionName: string, key: string, defaultValue: T): T {
+    const config = vscode.workspace.getConfiguration(extensionName);
+    const globalValue = config.inspect<T>(key)?.globalValue;
+    return globalValue !== undefined ? globalValue : defaultValue;
+};
