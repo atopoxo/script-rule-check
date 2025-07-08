@@ -275,8 +275,20 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
         }),
         vscode.commands.registerCommand('extension.aiCharacter.add', async () => {
             await configurationProvider.addNewAICharacter();
-            const currentCharacters = await configurationProvider.getAICharacterInfos();
-            await customConfig.update('aiCharacterInfos', currentCharacters, vscode.ConfigurationTarget.Global);
+            chatViewProvider.selectAICharacter();
+        }),
+        vscode.commands.registerCommand('extension.aiCharacter.remove', async (item: vscode.TreeItem) => {
+            if (item.id) {
+                const confirm = await vscode.window.showWarningMessage(
+                    `确定要删除角色 "${item.label}" 吗?`, 
+                    { modal: true }, 
+                    '确定'
+                );
+                if (confirm === '确定') {
+                    await configurationProvider.removeAICharacter(item.id);
+                    chatViewProvider.selectAICharacter();
+                }
+            }
         }),
         vscode.commands.registerCommand('extension.aiCharacter.selectedChange', async (aiCharacterId: string) => {
             await customConfig.update('selectedAICharacter', aiCharacterId, vscode.ConfigurationTarget.Global);

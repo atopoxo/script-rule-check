@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -188,6 +188,10 @@
         "title": "选择AI角色"
       },
       {
+        "command": "extension.aiCharacter.remove",
+        "title": "删除AI角色"
+      },
+      {
         "command": "extension.chat.deleteHistorySession",
         "title": "删除历史记录"
       },
@@ -252,7 +256,13 @@
           "group": "navigation@5"
         }
       ],
-      "view/item/context": [],
+      "view/item/context": [
+        {
+          "command": "extension.aiCharacter.remove",
+          "when": "viewItem == aiCharacterInfo",
+          "group": "action"
+        }
+      ],
       "explorer/context": [
         {
           "submenu": "functions.submenu",
@@ -360,9 +370,9 @@
       },
       {
         "command": "extension.chat.checkCode",
-        "key": "shift+c",
+        "key": "alt+q",
         "when": "editorTextFocus && editorHasSelection && editorLangId == lua",
-        "mac": "shift+c"
+        "mac": "alt+q"
       }
     ]
   },

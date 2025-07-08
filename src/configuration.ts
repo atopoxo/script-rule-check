@@ -9,6 +9,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private allCheckRules: CheckRule[] = [];
     private allModelInfos: ModelInfo[] = [];
     private allAICharacterInfos: AICharacterInfo[] = [];
+    private defaultAICharacterId: string = 'normal chat character';
 
     constructor(private extensionName: string) {
     }
@@ -25,7 +26,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         let aiCharacterInfos = getGlobalConfigValue<any[]>(this.extensionName, 'aiCharacterInfos', []) || [];
         if (aiCharacterInfos.length <= 0) {
             aiCharacterInfos = [{
-                id: 'normal chat character',
+                id: this.defaultAICharacterId,
                 name: '通用聊天角色',
                 describe: ''
             }]
@@ -73,6 +74,22 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         this.setAICharacterInfos(currentCharacters);
         await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', currentCharacters);
         await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', id);
+    }
+
+    public async removeAICharacter(id: string): Promise<void> {
+        const currentCharacters = await this.getAICharacterInfos();
+        const selectedAICharacterId = getGlobalConfigValue(this.extensionName, 'selectedAICharacter', '');
+        const index = currentCharacters.findIndex((item) => item.id === id);
+        if (index !== -1) {
+            if (currentCharacters[index].id != this.defaultAICharacterId) {
+                currentCharacters.splice(index, 1);
+            }
+        }
+        if (id == selectedAICharacterId) {
+            await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', this.defaultAICharacterId);
+        }
+        this.setAICharacterInfos(currentCharacters);
+        await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', currentCharacters);
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
