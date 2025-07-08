@@ -98,8 +98,8 @@ export default defineComponent({
 }
 .menu-describe {
     font-size: 12px;
-    opacity: 0.8;
-    color: var(--sy-menu-bar-text-color);
+    opacity: 1;
+    color: var(--vscode-editorLink-activeForeground);
 }
 .menu-content-right {
     display: flex;

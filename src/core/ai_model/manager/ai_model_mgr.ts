@@ -7,6 +7,7 @@ import { ModelInfo } from "../base/ai_types";
 import { AIModelBase } from "../base/ai_model_base";
 import { Storage } from '../../storage/storage';
 import { ContextMgr } from '../../context/context_mgr';
+import { setGlobalConfigValue } from '../../function/base_function';
 
 @singleton()
 export class AIModelMgr {
@@ -32,10 +33,9 @@ export class AIModelMgr {
     }
 
     async setSelectedModel(id: string, userID: string) {
-        const config = vscode.workspace.getConfiguration(this.extensionName)
         let selectedModel = this.modelconfigs.get(id);
         if (selectedModel) {
-            await config.update('selectedModel', id, vscode.ConfigurationTarget.Global);
+            await setGlobalConfigValue(this.extensionName, 'selectedModel', id);
             await this.storage.setAIInstanceModelID(userID, 'chat', id);
         }
     }

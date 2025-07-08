@@ -17,6 +17,14 @@ export class ModelInfo {
     ) {}
 }
 
+export class AICharacterInfo {
+    constructor(
+        public id: string,
+        public name: string,
+        public describe: string
+    ) {}
+}
+
 export interface ContextItem {
     type: string;
     name: string;

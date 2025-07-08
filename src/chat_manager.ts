@@ -3,18 +3,21 @@ import { Message, InputData } from './core/ai_model/base/ai_types';
 import { Storage } from './core/storage/storage';
 import { Session } from './core/ai_model/base/ai_types';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
+import { getGlobalConfigValue } from './core/function/base_function';
 
 export class ChatManager {
     private static instance: ChatManager;
     private context: vscode.ExtensionContext;
+    private extensionName: string;
     private aiModelMgr: AIModelMgr;
     private userID: string = "";
     private storage: Storage;
     private defaultModelID: string = "";
     public ready: Promise<void>;
 
-    private constructor(context: vscode.ExtensionContext, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr) {
+    private constructor(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr) {
         this.context = context;
+        this.extensionName = extensionName;
         this.userID = userID;
         this.defaultModelID = defaultModelID;
         this.storage = storage;
@@ -29,11 +32,18 @@ export class ChatManager {
         return this.userID;
     }
 
-    public static getInstance(context: vscode.ExtensionContext, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr): ChatManager {
+    public static getInstance(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr): ChatManager {
         if (!ChatManager.instance) {
-            ChatManager.instance = new ChatManager(context, userID, storage, defaultModelID, aiModelMgr);
+            ChatManager.instance = new ChatManager(context, extensionName, userID, storage, defaultModelID, aiModelMgr);
         }
         return ChatManager.instance;
+    }
+
+    public getSelectedAICharacter(): any {
+        const selectedAICharacterId = getGlobalConfigValue<any>(this.extensionName, 'selectedAICharacter', {});
+        const aiCharacterInfos = getGlobalConfigValue<any[]>(this.extensionName, 'aiCharacterInfos', []) || [];
+        const characterInfo = aiCharacterInfos.find(info => info.id === selectedAICharacterId);
+        return characterInfo;
     }
 
     public async getSession(instanceName: string, sessionId?: string): Promise<Session | undefined> {
@@ -126,6 +136,7 @@ export class ChatManager {
     }
 
     private insertDatetime(messages: Message[], user: string): void {
+        const aiCharacter = this.getSelectedAICharacter();
         const sendTime = new Date().toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
@@ -135,7 +146,7 @@ export class ChatManager {
             second: '2-digit',
             hour12: false
         }).replace(/\//g, '-');
-        const systemTips: Message = {role: "system", content: `\n当前时间为：${sendTime}\n`, timestamp: Date.now()};
+        const systemTips: Message = {role: "system", content: `\n${aiCharacter.describe}\n当前时间为：${sendTime}\n`, timestamp: Date.now()};
         if (messages.length > 0) {
             if (messages[0].role !== user) {
                 messages[0].content = systemTips.content;

@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
-import { ModelInfo } from './core/ai_model/base/ai_types';
+import { ModelInfo, AICharacterInfo } from './core/ai_model/base/ai_types';
 import { CheckRule } from "./output_format"
-import { getGlobalConfigValue } from "./core/function/base_function"
+import { getGlobalConfigValue, setGlobalConfigValue } from "./core/function/base_function"
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private allCheckRules: CheckRule[] = [];
     private allModelInfos: ModelInfo[] = [];
+    private allAICharacterInfos: AICharacterInfo[] = [];
 
     constructor(private extensionName: string) {
     }
@@ -20,9 +21,58 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         this._onDidChangeTreeData.fire();
     }
 
-    setModelInfos(modelInfos: ModelInfo[]) {
-        this.allModelInfos = modelInfos;
+    public async initAICharacterInfos() {
+        let aiCharacterInfos = getGlobalConfigValue<any[]>(this.extensionName, 'aiCharacterInfos', []) || [];
+        if (aiCharacterInfos.length <= 0) {
+            aiCharacterInfos = [{
+                id: 'normal chat character',
+                name: '通用聊天角色',
+                describe: ''
+            }]
+            await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', aiCharacterInfos);
+            await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', aiCharacterInfos[0].id);
+        }
+        this.setAICharacterInfos(aiCharacterInfos);
+    }
+
+    public setModelInfos(infos: ModelInfo[]) {
+        this.allModelInfos = infos;
         this._onDidChangeTreeData.fire();
+    }
+
+    public setAICharacterInfos(infos: AICharacterInfo[]) {
+        this.allAICharacterInfos = infos;
+        this._onDidChangeTreeData.fire();
+    }
+
+    public async getAICharacterInfos(): Promise<AICharacterInfo[]> {
+        let aiCharacterInfos = getGlobalConfigValue<any[]>(this.extensionName, 'aiCharacterInfos', []) || [];
+        return aiCharacterInfos;
+    }
+
+    public async addNewAICharacter(): Promise<void> {
+        const name = await vscode.window.showInputBox({
+            placeHolder: '输入新角色名称',
+            prompt: '请输入AI角色名称'
+        });
+        if (!name) {
+            return;
+        }
+        const describe = await vscode.window.showInputBox({
+            placeHolder: '输入角色描述',
+            prompt: '请输入角色描述'
+        }) || '';
+        const id = `ai_character_${Date.now()}`;
+        const newCharacter: AICharacterInfo = {
+            id,
+            name,
+            describe
+        };
+        const currentCharacters = await this.getAICharacterInfos();
+        currentCharacters.push(newCharacter);
+        this.setAICharacterInfos(currentCharacters);
+        await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', currentCharacters);
+        await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', id);
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -35,7 +85,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
                 this.createConfigItem(),
                 this.createCustomCheckRuleSelectorItem(),
                 this.createModeSelectorItem(),
-                this.createModelSelectorItem()
+                this.createModelSelectorItem(),
+                this.createAICharacterSelectorItem()
             ];
         }
         if (element.contextValue === 'customCheckRuleSelector') {
@@ -44,8 +95,12 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             return this.createModeItems();
         } else if (element.contextValue === 'modelSelector') {
             return this.createModelItems();
+        } else if (element.contextValue === 'aiCharacterSelector') {
+            return this.createAICharacterItems();
         } else if (element.contextValue === 'modelInfo') {
             return this.getModelConfigItems(element);
+        } else if (element.contextValue === 'aiCharacterInfo') {
+            return this.getAICharacterConfigItems(element);
         }
         
         return [];
@@ -83,6 +138,20 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const item = new vscode.TreeItem(`当前模型: ${selectedModel}`);
         item.contextValue = 'modelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createAICharacterSelectorItem(): vscode.TreeItem {
+        const selectedAICharacterId = getGlobalConfigValue<string>(this.extensionName, 'selectedAICharacter', '');
+        const selectedAICharacter = this.allAICharacterInfos.find(info => info.id === selectedAICharacterId) || {name: ''};
+        const item = new vscode.TreeItem(`当前AI角色: ${selectedAICharacter.name}`);
+        item.contextValue = 'aiCharacterSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        item.iconPath = new vscode.ThemeIcon('add');
+        item.command = {
+            command: 'extension.aiCharacter.add',
+            title: '添加新角色'
+        };
         return item;
     }
 
@@ -128,6 +197,10 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return this.allModelInfos.map(item => this.createModelItem(item));
     }
 
+    private createAICharacterItems(): vscode.TreeItem[] {
+        return this.allAICharacterInfos.map(item => this.createAICharacterItem(item));
+    }
+
     private createModelItem(info: ModelInfo): vscode.TreeItem {
         const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '') === info.id;
         const item = new vscode.TreeItem(info.name);
@@ -140,6 +213,21 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         //     arguments: [info.id]
         // };
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        return item;
+    }
+
+    private createAICharacterItem(info: AICharacterInfo): vscode.TreeItem {
+        const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedAICharacter', '') === info.id;
+        const item = new vscode.TreeItem(info.name);
+        item.id = info.id;
+        item.contextValue = 'aiCharacterInfo';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        item.command = {
+            command: 'extension.aiCharacter.selectedChange',
+            title: '选择ai角色',
+            arguments: [item.id]
+        };
         return item;
     }
 
@@ -161,6 +249,29 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
                 command: 'extension.model.editInfo',
                 title: '修改模型配置',
                 arguments: [modelInfo.id, {[key]: value}]
+            };
+            return configItem;
+        });
+    }
+
+    private getAICharacterConfigItems(item: vscode.TreeItem): vscode.TreeItem[] {
+        const currentItem = this.allAICharacterInfos.find(info => info.id === item.id);
+        let describe = "";
+        if (currentItem) {
+            describe = currentItem.describe;
+        }
+        const config = {
+            "describe": describe
+        }
+
+        return Object.entries(config).map(([key, value]) => {
+            const configItem = new vscode.TreeItem(`${key}: ${value}`);
+            configItem.contextValue = 'aiCharacterlConfig';
+            configItem.iconPath = new vscode.ThemeIcon('settings');
+            configItem.command = {
+                command: 'extension.aiCharacter.editInfo',
+                title: '修改ai角色配置',
+                arguments: [item.id, {[key]: value}]
             };
             return configItem;
         });

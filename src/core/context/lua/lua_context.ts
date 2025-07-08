@@ -39,15 +39,15 @@ export class LuaContext extends ContextBase {
                     break;
                 case 'FunctionDeclaration':
                 case 'FunctionExpression':
-                case 'AssignmentStatement':
                     this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
                     break;
+                case 'AssignmentStatement':
                 case 'LocalStatement':
                     this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'variables']));
                     break;
                 case 'ForNumericStatement':
                 case 'ForGenericStatement':
-                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'variable']));
+                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'variable', 'variables']));
                     break;
                 default:
                     this.filters.set(type, new Set(['*']));
@@ -569,12 +569,18 @@ export class LuaContext extends ContextBase {
 
     private resolveScopedName(scopeNode: ScopeNode, name: string): string {
         if (scopeNode.current?.hasVariable(name)) {
-            return scopeNode.current.getScopedName(name)!;
+            const scopedName = scopeNode.current.getScopedName(name)!;
+            if (this.isDefined(scopedName)) {
+                return scopedName;
+            }
         }
         let parentScope = scopeNode.current?.parent;
         while (parentScope) {
             if (parentScope.hasVariable(name)) {
-                return parentScope.getScopedName(name)!;
+                const scopedName = parentScope.getScopedName(name)!;
+                if (this.isDefined(scopedName)) {
+                    return scopedName;
+                }
             }
             parentScope = parentScope.parent;
         }
@@ -590,6 +596,15 @@ export class LuaContext extends ContextBase {
             scopedName = `global>${name}`;
         }
         return scopedName;
+    }
+
+    private isDefined(scopedName: string): boolean {
+        const parts = scopedName.split('>').filter(part => part !== '');
+        if (parts.length > 0 && !parts[parts.length - 1].includes("-")) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     private isRangeChange(current: any): boolean {

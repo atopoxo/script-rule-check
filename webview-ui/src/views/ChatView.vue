@@ -1005,6 +1005,7 @@ export default defineComponent({
             switch (type) {
               case 'initSession':
                   isDark.value = data.isDark;
+                  titleBarText.value = data.aiCharacter.name || titleBarText.value;
                   selectedSession.value = getSelectedSession(data.selectedSession);
                   selectedModel.value = data.selectedModel.name;
                   modelOptions.value = getModels(data.modelInfos);
@@ -1013,6 +1014,9 @@ export default defineComponent({
                   break;
               case 'themeUpdate':
                   isDark.value = data.isDark;
+                  break;
+              case 'selectAICharacter':
+                  titleBarText.value = data.aiCharacter.name || titleBarText.value;
                   break;
               case 'selectModel':
                   selectedModel.value = data.selectedModel.name;

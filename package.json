@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -57,6 +57,19 @@
           "type": "string",
           "default": "",
           "description": "当前选中的大模型"
+        },
+        "script-rule-check.aiCharacterInfos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "ai角色列表"
+        },
+        "script-rule-check.selectedAICharacter": {
+          "type": "string",
+          "default": "",
+          "description": "当前选中的ai角色"
         }
       }
     },
@@ -167,6 +180,14 @@
         "title": "修改模型配置"
       },
       {
+        "command": "extension.aiCharacter.editInfo",
+        "title": "修改AI角色配置"
+      },
+      {
+        "command": "extension.aiCharacter.selectedChange",
+        "title": "选择AI角色"
+      },
+      {
         "command": "extension.chat.deleteHistorySession",
         "title": "删除历史记录"
       },
@@ -260,12 +281,11 @@
         },
         {
           "command": "extension.chat.addContext",
-          "when": "editorHasSelection",
           "group": "navigation_ai@1"
         },
         {
           "command": "extension.chat.checkCode",
-          "when": "editorHasSelection && editorLangId == lua",
+          "when": "editorLangId == lua",
           "group": "navigation_ai@2"
         }
       ],

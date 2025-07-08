@@ -5,7 +5,7 @@ import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ContextMgr } from './core/context/context_mgr';
-import { getEncoding } from './core/function/base_function';
+import { getEncoding, getGlobalConfigValue } from './core/function/base_function';
 
 export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
@@ -168,12 +168,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         selectedSession.isAIStreamTransfer = false;
         const data = {
             isDark: theme === vscode.ColorThemeKind.Dark,
+            aiCharacter: this.chatManager.getSelectedAICharacter(),
             modelInfos: this.aiModelMgr.getModelInfos(),
             selectedModel: await this.aiModelMgr.getSelectedModel(),
             contextOption: await this.contextMgr.getOptions(undefined),
             selectedSession: selectedSession
         }
         this.updateWebview('initSession', data);
+    }
+
+    public selectAICharacter() {
+        const data = {
+            aiCharacter: this.chatManager.getSelectedAICharacter()
+        }
+        this.updateWebview('selectAICharacter', data);
     }
 
     private async selectSession(sessionId: string) {
@@ -363,10 +371,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
             const selection = editor.selection;
-            const text = editor.document.getText(selection);
-            const subLength = Math.min(text.length, this.contextMgr.getContextNameMaxLength());
-            const name = text.substring(0, subLength);
-            const startPos = editor.document.offsetAt(selection.start);
+            const fullText = editor.document.getText();
+            let content = '';
+            let startPos = 0;
+            if (selection.isEmpty) {
+                content = fullText;
+            } else {
+                content = editor.document.getText(selection);
+                startPos = fullText.slice(0, editor.document.offsetAt(selection.start)).replace(/\r\n/g, '\n').length;
+            }
+            content = content.replace(/\r\n/g, '\n');
+            const subLength = Math.min(content.length, this.contextMgr.getContextNameMaxLength());
+            const name = content.substring(0, subLength);
             const contextOption: ContextOption[] = [{
                 type: 'function',
                 id: name,
@@ -376,10 +392,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     type: 'function',
                     name: name,
                     paths: [editor.document.fileName],
-                    content: text,
+                    content: content,
                     range: {
                         start: startPos,
-                        end: startPos + text.length,
+                        end: startPos + content.length,
                         startLine: selection.start.line,
                         endLine: selection.end.line
                     }
@@ -393,10 +409,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
             const selection = editor.selection;
-            let content = editor.document.getText(selection);
-            content = content.replace(/\r\n/g, '\n');
             const fullText = editor.document.getText();
-            const startPos = fullText.slice(0, editor.document.offsetAt(selection.start)).replace(/\r\n/g, '\n').length;
+            let content = '';
+            let startPos = 0;
+            if (selection.isEmpty) {
+                content = fullText;
+            } else {
+                content = editor.document.getText(selection);
+                startPos = fullText.slice(0, editor.document.offsetAt(selection.start)).replace(/\r\n/g, '\n').length;
+            }
+            content = content.replace(/\r\n/g, '\n');
             const contextOption = this.contextMgr.getRelevantContext(startPos, content, editor.document.fileName);
             this.updateWebview('updateContext', {
                 index: -1,

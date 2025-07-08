@@ -603,6 +603,7 @@ export default defineComponent({
     white-space: pre-wrap;
     overflow-wrap: break-word;
     transition: height 0.3s ease;
+    color: var(--vscode-editor-foreground);
 }
 .textarea-container {
     position: relative;

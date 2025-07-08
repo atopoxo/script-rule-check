@@ -64,6 +64,7 @@ export async function activate(context: vscode.ExtensionContext) {
     await storage.ready;
     customConfig = vscode.workspace.getConfiguration(extensionName);
     const configurationProvider = new ConfigurationProvider(extensionName);
+    await configurationProvider.initAICharacterInfos();
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     const productDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
     context.subscriptions.push(
@@ -209,7 +210,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     aiModelMgr = new AIModelMgr({}, extensionName, storage, contextMgr);
     const defaultModel = await aiModelMgr.getSelectedModel();
     const defaultModelID = defaultModel ? defaultModel.id : '';
-    chatManager = ChatManager.getInstance(context, userID, storage, defaultModelID, aiModelMgr);
+    chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelID, aiModelMgr);
     await chatManager.ready;
     chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, contextMgr);
 	const allModelInfos = aiModelMgr.getModelInfos();
@@ -243,6 +244,44 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
         }),
+        vscode.commands.registerCommand('extension.aiCharacter.editInfo', async (aiCharacterId: string, data: object) => {
+            const aiCharacterInfos = getGlobalConfigValue<any[]>(extensionName, 'aiCharacterInfos', []) || [];
+            const characterInfo = aiCharacterInfos.find(info => info.id === aiCharacterId);
+            if (!characterInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${aiCharacterId} 的AI角色。`);
+                return;
+            }
+            const entries = Object.entries(data);
+            await entries.forEach(async ([key, value]) => {
+                const newValue = await vscode.window.showInputBox({
+                    prompt: `请输入角色"${characterInfo.name}"的新属性"${key}"`,
+                    value: value || ''
+                });
+                if (newValue === undefined) {
+                    return;
+                }
+                (characterInfo as any)[key] = newValue;
+                const index = aiCharacterInfos.findIndex((info: any) => info.id === aiCharacterId);
+                if (index !== -1) {
+                    aiCharacterInfos[index] = characterInfo;
+                } else {
+                    aiCharacterInfos.push(characterInfo);
+                }
+                await customConfig.update('aiCharacterInfos', aiCharacterInfos, vscode.ConfigurationTarget.Global);
+                configurationProvider.setAICharacterInfos(aiCharacterInfos);
+                configurationProvider.refresh();
+                vscode.window.showInformationMessage(`模型"${characterInfo.name}"的"${key}"已更新为"${newValue}"`);
+            })
+        }),
+        vscode.commands.registerCommand('extension.aiCharacter.add', async () => {
+            await configurationProvider.addNewAICharacter();
+            const currentCharacters = await configurationProvider.getAICharacterInfos();
+            await customConfig.update('aiCharacterInfos', currentCharacters, vscode.ConfigurationTarget.Global);
+        }),
+        vscode.commands.registerCommand('extension.aiCharacter.selectedChange', async (aiCharacterId: string) => {
+            await customConfig.update('selectedAICharacter', aiCharacterId, vscode.ConfigurationTarget.Global);
+            chatViewProvider.selectAICharacter();
+        }),
         vscode.window.onDidChangeActiveTextEditor(editor => {
             if (editor) {
                 chatViewProvider.showContextOptions(undefined);
@@ -255,19 +294,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
         vscode.commands.registerCommand('extension.chat.checkCode', async () => {
             await vscode.commands.executeCommand('chatView.focus');
             await chatViewProvider.checkCode();
-        }),
-        // vscode.commands.registerCommand('extension.chat.addFileReference', async () => {
-        //     const reference = await ReferenceSystem.addFileReference();
-        //     if (reference) {
-        //         chatViewProvider.addReference(reference);
-        //     }
-        // }),
-        // vscode.commands.registerCommand('extension.chat.addFolderReference', async () => {
-        //     const reference = await ReferenceSystem.addFolderReference();
-        //     if (reference) {
-        //         chatViewProvider.addReference(reference);
-        //     }
-        // })
+        })
     );
 }
 

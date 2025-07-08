@@ -88,7 +88,7 @@ export class ContextBase {
         if (!context.range) {
             return;
         }
-        if (startPos <= context.range.start && context.range.end <= endPos) {
+        if (context.name != 'global' && startPos <= context.range.start && context.range.end <= endPos) {
             result.push(context);
             return;
         }

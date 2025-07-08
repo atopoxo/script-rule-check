@@ -88,8 +88,13 @@ export function getFileContent(filePath?: string, buffer?: any, encoding?: Buffe
     return content;
 }
 
-export function getGlobalConfigValue<T>(extensionName: string, key: string, defaultValue: T): T {
-    const config = vscode.workspace.getConfiguration(extensionName);
+export function getGlobalConfigValue<T>(section: string, key: string, defaultValue: T): T {
+    const config = vscode.workspace.getConfiguration(section);
     const globalValue = config.inspect<T>(key)?.globalValue;
     return globalValue !== undefined ? globalValue : defaultValue;
 };
+
+export async function setGlobalConfigValue(section: string, key: string, value: any) {
+    const config = vscode.workspace.getConfiguration(section);
+    await config.update(key, value, vscode.ConfigurationTarget.Global);
+}
