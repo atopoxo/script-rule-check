@@ -25,6 +25,7 @@ export class LuaContext extends ContextBase {
     private initFilters() {
         const types: string[] = [
             'CallExpression',
+            'MemberExpression',
             'FunctionDeclaration',
             'FunctionExpression',
             'LocalStatement',
@@ -35,13 +36,18 @@ export class LuaContext extends ContextBase {
         for (const type of types) {
             switch (type) {
                 case 'CallExpression':
-                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'base']));
+                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
+                    break;
+                case 'MemberExpression':
+                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
                     break;
                 case 'FunctionDeclaration':
                 case 'FunctionExpression':
                     this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
                     break;
                 case 'AssignmentStatement':
+                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
+                    break;
                 case 'LocalStatement':
                     this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'variables']));
                     break;
@@ -58,21 +64,21 @@ export class LuaContext extends ContextBase {
 
     public buildTree(contextTree: ContextTreeNode | undefined, scopeNode: ScopeNode, root: any, content: string, startPos: number) {
         const traverse = (parentTree: ContextTreeNode | undefined, current: any, statement: any) => {
-            const isFileLocal = this.isFileLocalVariable(scopeNode,current);
-            if (isFileLocal) {
+            const isLocalFunction = this.isLocalFunction(scopeNode, current);
+            if (isLocalFunction) {
                 this.enterNewScope(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement, true);   
             }
             const currentTree = this.processNodeForDependencies(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement);
             const filters = this.filters.get(current.type);
             if (!filters?.has("*")) {
-                if (this.isScopeNode(current)) {
-                    this.enterNewScope(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement);
-                }
                 for (const key in current) {
                     if (filters?.has(key)) {
                         continue;
                     }
                     if (current.hasOwnProperty(key) && typeof current[key] === 'object') {
+                        if (this.isScopeNode(current, key)) {
+                            this.enterNewScope(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement);
+                        }
                         if (Array.isArray(current[key])) {
                             for (const child of current[key]) {
                                 if (child) {
@@ -84,13 +90,13 @@ export class LuaContext extends ContextBase {
                                 traverse(currentTree, current[key], statement);
                             }
                         }
+                        if (this.isScopeNode(current, key)) {
+                            this.exitScope(scopeNode);
+                        }
                     }
                 }
-                if (this.isScopeNode(current)) {
-                    this.exitScope(scopeNode);
-                }
             }
-            if (isFileLocal) {
+            if (isLocalFunction) {
                 this.exitScope(scopeNode);   
             }
         };
@@ -102,20 +108,20 @@ export class LuaContext extends ContextBase {
             if (this.isRangeChange(current)) {
                 statement = current;
             }
-            const isFileLocal = this.isFileLocalVariable(scopeNode,current);
-            if (isFileLocal) {
+            const isLocalFunction = this.isLocalFunction(scopeNode, current);
+            if (isLocalFunction) {
                 this.enterNewScope(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement, true);   
             }
             const filters = this.filters.get(current.type);
             if (!filters?.has("*")) {
-                if (this.isScopeNode(current)) {
-                    this.enterNewScope(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement);
-                }
                 for (const key in current) {
                     if (filters?.has(key)) {
                         continue;
                     }
                     if (current.hasOwnProperty(key) && typeof current[key] === 'object') {
+                        if (this.isScopeNode(current, key)) {
+                            this.enterNewScope(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement);
+                        }
                         if (Array.isArray(current[key])) {
                             for (const child of current[key]) {
                                 if (child) {
@@ -127,14 +133,14 @@ export class LuaContext extends ContextBase {
                                 traverse(current[key], statement);
                             }
                         }
+                        if (this.isScopeNode(current, key)) {
+                            this.exitScope(scopeNode);
+                        }
                     }
-                }
-                if (this.isScopeNode(current)) {
-                    this.exitScope(scopeNode);
                 }
             }
             this.processNodeForDependencies(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement);
-            if (isFileLocal) {
+            if (isLocalFunction) {
                 this.exitScope(scopeNode);
             }
         };
@@ -148,13 +154,9 @@ export class LuaContext extends ContextBase {
             case 'Identifier':
                 contextTree = this.processIdentifierDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
                 break;
-            // case 'BinaryExpression':
-            // case 'LogicalExpression':
-            //     contextTree = this.processBinaryDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
-            //     break;
-            // case 'UnaryExpression':
-            //     contextTree = this.processUnaryDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
-            //     break;
+            case 'MemberExpression':
+                contextTree = this.processMemberDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
+                break;
             case 'CallExpression':
                 contextTree = this.processCallDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
                 break;
@@ -242,18 +244,9 @@ export class LuaContext extends ContextBase {
         return result;
     }
 
-
-    protected processBinaryDependencies(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
+    protected processMemberDependencies(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
         scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
-        let result: ContextTreeNode | undefined = undefined;
-        result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current.left, content, startPos, statement);
-        result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current.right, content, startPos, statement);
-        return result;
-    }
-
-    protected processUnaryDependencies(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
-        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
-        let result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current.argument, content, startPos, statement);
+        let result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
         return result;
     }
 
@@ -261,12 +254,16 @@ export class LuaContext extends ContextBase {
         scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
         let name = '';
         let scopedName = '';
+        let deep = true;
+        let dependencyNode = current;
         if (current.type == 'Identifier') {
             name = current.name;
-            scopedName = `${this.getScopedName(current.name, scopeNode)}-${current.range[0]}`;
+            scopedName = `${this.getScopedName(name, scopeNode)}-${current.range[0]}`;
         } else if (current.type == 'MemberExpression') {
             name = this.getFunctionName(current) as string;
-            scopedName = `${this.getScopedName(name, scopeNode)}-${current.range[0]}`;
+            scopedName = this.getScopedName(this.getFunctionName(current, true) as string, scopeNode);
+            deep = false;
+            dependencyNode = current.base;
         } else {
             if (definitionMap && dependencyGraph) {
                 return undefined;
@@ -276,22 +273,15 @@ export class LuaContext extends ContextBase {
         }
         if (definitionMap && dependencyGraph) {
             this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, name, scopedName);
-            if (scopeNode.currentDepth > 0) {
-                let currentScope = scopeNode.current;
-                let depth = scopeNode.currentDepth;
-                this.exitScope(scopeNode);
-                const rightDeps = new Set<string>();
-                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, rightDeps, scopeNode, current, content, startPos, statement, true);
-                scopeNode.current = currentScope;
-                scopeNode.currentDepth = depth;
-                if (rightDeps.size > 0) {
-                    if (!dependencyGraph.has(scopedName)) {
-                        dependencyGraph.set(scopedName, new Set());
-                    }
-                    const deps = dependencyGraph.get(scopedName)!;
-                    for (const dep of rightDeps) {
-                        deps.add(dep);
-                    }
+            const rightDeps = new Set<string>();
+            this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, rightDeps, scopeNode, dependencyNode, content, startPos, statement, deep);
+            if (rightDeps.size > 0) {
+                if (!dependencyGraph.has(scopedName)) {
+                    dependencyGraph.set(scopedName, new Set());
+                }
+                const deps = dependencyGraph.get(scopedName)!;
+                for (const dep of rightDeps) {
+                    deps.add(dep);
                 }
             }
             return undefined;
@@ -307,15 +297,18 @@ export class LuaContext extends ContextBase {
         if (!funcName) {
             return;
         }
-        const scopedFuncName = this.resolveScopedName(scopeNode, funcName);
-        const funcDeclareName = `${this.getScopedName(funcName, scopeNode)}-${current.range[0]}`;
+        let funcDeclareName = '';
+        if (current.base.type == 'MemberExpression') {
+            funcDeclareName = this.getScopedName(this.getFunctionName(current.base, true) as string, scopeNode);
+        } else {
+            funcDeclareName = `${this.getScopedName(funcName, scopeNode)}-${current.range[0]}`;
+        }
         if (definitionMap && dependencyGraph) {
             this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, funcName, funcDeclareName);
             if (!dependencyGraph.has(funcDeclareName)) {
                 dependencyGraph.set(funcDeclareName, new Set());
             }
             const depSet = dependencyGraph.get(funcDeclareName)!; 
-            depSet.add(scopedFuncName);
             const deps = new Set<string>();
             for (const arg of current.arguments) {
                 this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, deps, scopeNode, arg, content, startPos, statement);
@@ -359,9 +352,7 @@ export class LuaContext extends ContextBase {
                         depSet.add(dep);
                     }
                 }
-                if (this.isScopeNode(current)) {
-                    this.exitScope(scopeNode);
-                }
+                this.exitScope(scopeNode);
             }
             return undefined;
         } else {
@@ -374,12 +365,19 @@ export class LuaContext extends ContextBase {
         scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
         if (definitionMap && dependencyGraph) {
             const leftVars: string[] = [];
+            const isFileLocal = scopeNode.currentDepth == 0;
+            if (isFileLocal) {
+                this.enterNewScope(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement, isFileLocal);
+            }
             for (const variable of current.variables) {
                 if (variable.type === 'Identifier') {
                     const scopedName = this.getScopedName(variable.name, scopeNode);
                     leftVars.push(scopedName);
                     this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, variable.name, scopedName);
                 }
+            }
+            if (isFileLocal) {
+                this.exitScope(scopeNode);
             }
             const rightDeps = new Set<string>();
             if (current.init) {
@@ -400,11 +398,18 @@ export class LuaContext extends ContextBase {
             }
             return undefined;
         } else {
+            const isFileLocal = scopeNode.currentDepth == 0;
+            if (isFileLocal) {
+                this.enterNewScope(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement, isFileLocal);
+            }
             for (const variable of current.variables) {
                 if (variable.type === 'Identifier') {
                     const scopedName = this.getScopedName(variable.name, scopeNode);
                     this.createTreeNode(keywordTree as ContextTreeNode, scopeNode, variable, content, startPos, statement, variable.name, scopedName);
                 }
+            }
+            if (isFileLocal) {
+                this.exitScope(scopeNode);
             }
             return keywordTree;
         }
@@ -419,12 +424,12 @@ export class LuaContext extends ContextBase {
             for (const variable of current.variables) {
                 if (variable.type === 'Identifier') {
                     name = variable.name;
-                    scopedName = this.resolveScopedName(scopeNode, name);
+                    scopedName = `${this.getScopedName(name, scopeNode)}-${current.range[0]}`;
                     leftVars.push(scopedName);
                 } else if (variable.type === 'MemberExpression') {
                     name = this.getFunctionName(variable) as string;
                     if (name) {
-                        scopedName = this.resolveScopedName(scopeNode, name);
+                        scopedName = this.getScopedName(this.getFunctionName(variable, true) as string, scopeNode);
                         leftVars.push(scopedName);
                     }
                 }
@@ -450,11 +455,11 @@ export class LuaContext extends ContextBase {
             for (const variable of current.variables) {
                 if (variable.type === 'Identifier') {
                     name = variable.name;
-                    scopedName = this.resolveScopedName(scopeNode, name);
+                    scopedName = this.getScopedName(name, scopeNode);
                 } else if (variable.type === 'MemberExpression') {
                     name = this.getFunctionName(variable) as string;
                     if (name) {
-                        scopedName = this.resolveScopedName(scopeNode, name);
+                        scopedName = this.getScopedName(this.getFunctionName(variable, true) as string, scopeNode);
                     }
                 }
                 this.createTreeNode(keywordTree as ContextTreeNode, scopeNode, variable, content, startPos, statement, name, scopedName);
@@ -484,14 +489,20 @@ export class LuaContext extends ContextBase {
             case 'CallExpression':
                 name = this.getFunctionName(node.base);
                 if (name) {
-                    const funcDeclareName = deep ? `${this.resolveScopedName(scopeNode, name)}`: `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
+                    let scopedName = ''
+                    if (node.base.type == 'MemberExpression') {
+                        scopedName = this.getScopedName(this.getFunctionName(node.base, true) as string, scopeNode);
+                    } else {
+                        scopedName = `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
+                    }
+                    const funcDeclareName = deep ? `${this.resolveScopedName(scopeNode, name)}`: `${scopedName}`;
                     dependencies.add(funcDeclareName);
                 }
                 break;
             case 'MemberExpression':
-                name = this.getFunctionName(node);
+                name = this.getFunctionName(node, true);
                 if (name) {
-                    const scopedFuncName = deep ? `${this.resolveScopedName(scopeNode, name)}` : `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
+                    const scopedFuncName = `${this.getScopedName(name, scopeNode)}`;
                     dependencies.add(scopedFuncName);
                 }
                 break;
@@ -504,23 +515,58 @@ export class LuaContext extends ContextBase {
             case 'TableConstructorExpression':
                 for (const field of node.fields) {
                     if (field.type === 'TableKey') {
-                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.key, content, startPos, statement);
-                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement);
+                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.key, content, startPos, statement, deep);
+                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement, deep);
                     } else if (field.type === 'TableValue') {
-                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement);
+                        this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, field.value, content, startPos, statement, deep);
                     }
+                }
+                if (node.fields.length <= 0) {
+                    name = node.type as string;
+                    dependencies.add(name);
                 }
                 break;
             case 'BinaryExpression':
-                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement);
-                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement, deep);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement, deep);
                 break;
             case 'UnaryExpression':
-                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.argument, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.argument, content, startPos, statement, deep);
                 break;
             case 'LogicalExpression':
-                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement);
-                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.left, content, startPos, statement, deep);
+                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node.right, content, startPos, statement, deep);
+                break;
+            case 'AssignmentStatement':
+                let scopedName = '';
+                for (const variable of node.variables) {
+                    if (variable.type === 'Identifier') {
+                        name = variable.name as string;
+                        scopedName = `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
+                        dependencies.add(scopedName);
+                    } else if (variable.type === 'MemberExpression') {
+                        name = this.getFunctionName(variable) as string;
+                        if (name) {
+                            scopedName = this.getScopedName(this.getFunctionName(variable, true) as string, scopeNode);
+                            dependencies.add(scopedName);
+                        }
+                    }
+                }
+                break;
+            case 'LocalStatement':
+                const isFileLocal = scopeNode.currentDepth == 0;
+                if (isFileLocal) {
+                    this.enterNewScope(definitionMap, dependencyGraph, keywordTree, scopeNode, node, content, startPos, statement, isFileLocal);
+                }
+                for (const variable of node.variables) {
+                    if (variable.type === 'Identifier') {
+                        const scopedName = this.getScopedName(variable.name, scopeNode);
+                        dependencies.add(scopedName);
+                    }
+                }
+                if (isFileLocal) {
+                    this.exitScope(scopeNode);
+                }
                 break;
             default:
                 for (const key in node) {
@@ -530,10 +576,10 @@ export class LuaContext extends ContextBase {
                     if (node.hasOwnProperty(key) && typeof node[key] === 'object') {
                         if (Array.isArray(node[key])) {
                             for (const child of node[key]) {
-                                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, child, content, startPos, statement);
+                                this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, child, content, startPos, statement, deep);
                             }
                         } else {
-                            this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node[key], content, startPos, statement);
+                            this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, dependencies, scopeNode, node[key], content, startPos, statement, deep);
                         }
                     }
                 }
@@ -608,17 +654,19 @@ export class LuaContext extends ContextBase {
     }
 
     private isRangeChange(current: any): boolean {
-        if (this.isScopeNode(current) || current.type == 'LocalStatement' || current.type == 'AssignmentStatement' || current.type == 'CallStatement' || current.type == 'Identifier') {
+        if (this.isScopeNode(current, '') || current.type == 'LocalStatement' || current.type == 'AssignmentStatement' || current.type == 'CallStatement' || current.type == 'Identifier') {
             return true;
         } else {
             return false;
         }
     }
     
-    private isScopeNode(node: any): boolean {
-        return node.type === 'FunctionDeclaration' || 
-               node.type === 'FunctionExpression' ||
-               this.isBlockScopeNode(node);
+    private isScopeNode(node: any, key: string): boolean {
+        if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') {
+            return key != 'parameters';
+        } else {
+            return this.isBlockScopeNode(node);
+        }
     }
 
     private isBlockScopeNode(node: any): boolean {
@@ -638,7 +686,17 @@ export class LuaContext extends ContextBase {
         if (scopeNode.currentDepth === 0) {
             if (node.type === 'LocalStatement') {
                 return true;
-            } else if ((node.type == 'FunctionDeclaration' || node.type == 'FunctionExpression') && node.isLocal) {
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    private isLocalFunction(scopeNode: ScopeNode, node: any): boolean {
+        if (scopeNode.currentDepth === 0) {
+            if ((node.type == 'FunctionDeclaration' || node.type == 'FunctionExpression') && node.isLocal) {
                 return true;
             } else {
                 return false;
@@ -695,7 +753,7 @@ export class LuaContext extends ContextBase {
         }
     }
 
-    protected getFunctionName(node: any): string | null {
+    protected getFunctionName(node: any, declare: boolean = false): string | null {
         if (!node) {
             return null;
         }
@@ -703,7 +761,11 @@ export class LuaContext extends ContextBase {
             case 'Identifier':
                 return node.name;
             case 'MemberExpression':
-                return `${this.getFunctionName(node.base)}>${this.getFunctionName(node.identifier)}`;
+                let name = this.getFunctionName(node.base, declare);
+                if (declare && node.base.type == 'Identifier') {
+                    name = `${name}-${node.range[0]}`
+                }
+                return `${name}>${this.getFunctionName(node.identifier)}`;
             case 'CallExpression':
                 return this.getFunctionName(node.base);
             default:
