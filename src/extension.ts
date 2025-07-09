@@ -393,6 +393,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
     });
 }
 async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 
+    await vscode.commands.executeCommand('ruleCheckResults.focus');
     const logDir = path.join(toolDir, "Log");
     if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
