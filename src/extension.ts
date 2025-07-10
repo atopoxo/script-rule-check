@@ -10,7 +10,7 @@ import { RuleOperator, RuleResultProvider } from './rule_check';
 import { ContextMgr } from './core/context/context_mgr';
 import { ConfigurationProvider } from './configuration';
 import { CheckRule } from './output_format';
-import { ChatViewProvider, ChatViewTreeDataProvider } from './chat_view';
+import { ChatViewProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
@@ -213,6 +213,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelID, aiModelMgr);
     await chatManager.ready;
     chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, contextMgr);
+    // chatViewProvider.createWebview();
 	const allModelInfos = aiModelMgr.getModelInfos();
     configurationProvider.setModelInfos(allModelInfos);
     context.subscriptions.push(
@@ -300,12 +301,20 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
             }
         }),
         vscode.commands.registerCommand('extension.chat.addContext', async () => {
-            await vscode.commands.executeCommand('chatView.focus');
-            await chatViewProvider.addContext();
+            const isWebViewCreated = await chatViewProvider.isViewCreated();
+            if (isWebViewCreated) {
+                await chatViewProvider.addContext();
+            } else {
+                console.log("聊天视图未创建，请重试...");
+            }
         }),
         vscode.commands.registerCommand('extension.chat.checkCode', async () => {
-            await vscode.commands.executeCommand('chatView.focus');
-            await chatViewProvider.checkCode();
+            const isWebViewCreated = await chatViewProvider.isViewCreated();
+            if (isWebViewCreated) {
+                await chatViewProvider.checkCode();
+            } else {
+                console.log("聊天视图未创建，请重试...");
+            }
         })
     );
 }

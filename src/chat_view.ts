@@ -5,41 +5,11 @@ import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ContextMgr } from './core/context/context_mgr';
-import { getEncoding, getGlobalConfigValue } from './core/function/base_function';
-
-export class ChatViewTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
-    readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-
-    constructor(
-        private context: vscode.ExtensionContext
-    ) {
-    }
-
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(element?: vscode.TreeItem): Thenable<vscode.TreeItem[]> {
-        if (element) {
-            return Promise.resolve([]);
-        } else {
-            const item = new vscode.TreeItem('打开聊天面板', vscode.TreeItemCollapsibleState.None);
-            item.command = {
-                command: 'extension.openChatPanel',
-                title: '打开聊天面板'
-            };
-            item.iconPath = new vscode.ThemeIcon('comment');
-            return Promise.resolve([item]);
-        }
-    }
-
-    refresh(): void {
-        this._onDidChangeTreeData.fire();
-    }
-}
+import { getEncoding } from './core/function/base_function';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
+    private viewCreatedPromise: Promise<boolean>;
+    private viewCreatedResolve!: (value: boolean) => void;
     private view: vscode.WebviewView | undefined;
     private _extensionUri: vscode.Uri;
     private isWebviewReady = false;
@@ -51,6 +21,37 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         private contextMgr: ContextMgr
     ) {
         this._extensionUri = context.extensionUri;
+        this.viewCreatedPromise = new Promise((resolve) => {
+            this.viewCreatedResolve = resolve;
+        });
+    }
+
+    public async createWebview() {
+        if (this.view) {
+            return;
+        }
+        const activeEditor = vscode.window.activeTextEditor;
+        await vscode.commands.executeCommand('chatView.focus');
+        if (activeEditor) {
+            await vscode.window.showTextDocument(activeEditor.document, {
+                viewColumn: activeEditor.viewColumn,
+                preserveFocus: false
+            });
+        }
+    }
+
+    public async isViewCreated(timeout = 5000): Promise<boolean> {
+        if (this.view && this.isWebviewReady) {
+            return true;
+        }
+        if (!this.view) {
+            await vscode.commands.executeCommand('chatView.focus');
+        }
+        const viewCreated = await Promise.race([
+            this.viewCreatedPromise,
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeout))
+        ]);
+        return viewCreated;
     }
 
     public resolveWebviewView(
@@ -58,6 +59,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
+        if (!this.view) {
+            this.initWebView(view);
+        }
+    }
+
+    private initWebView(view: vscode.WebviewView) {
         this.view = view;
         view.webview.options = {
             enableScripts: true,
@@ -83,6 +90,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'ready':
                     this.isWebviewReady = true;
                     await this.initSession(vscode.window.activeColorTheme.kind);
+                    if (this.viewCreatedResolve) {
+                        this.viewCreatedResolve(true);
+                    }
                     break;
                 case 'selectModel':
                     await this.selectModel(data.id);
