@@ -251,7 +251,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 return;
             }
         }
-        await this.aiModelMgr.setSelectedModel(id, this.chatManager.getUserID());
+        await this.aiModelMgr.setSelectedModel(id, this.chatManager.getUserID(), 'chat');
         const data = {
             selectedModel: await this.aiModelMgr.getSelectedModel()
         }

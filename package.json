@@ -71,6 +71,11 @@
           "default": "",
           "description": "当前选中的大模型"
         },
+        "script-rule-check.selectedToolModel": {
+          "type": "string",
+          "default": "",
+          "description": "当前工具预判模型"
+        },
         "script-rule-check.aiCharacterInfos": {
           "type": "array",
           "items": {
@@ -204,6 +209,10 @@
       {
         "command": "extension.model.editInfo",
         "title": "修改模型配置"
+      },
+      {
+        "command": "extension.toolModel.selectedChange",
+        "title": "选择工具模型"
       },
       {
         "command": "extension.aiCharacter.editInfo",

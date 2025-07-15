@@ -209,8 +209,10 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     await contextMgr.init();
     aiModelMgr = new AIModelMgr(configurationProvider.getConfig(), extensionName, storage, contextMgr);
     const defaultModel = await aiModelMgr.getSelectedModel();
-    const defaultModelID = defaultModel ? defaultModel.id : '';
-    chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelID, aiModelMgr);
+    const defaultModelId = defaultModel ? defaultModel.id : '';
+    const defaultToolModel = await aiModelMgr.getSelectedToolModel();
+    const defaultToolModelId = defaultToolModel ? defaultToolModel.id : '';
+    chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelId, defaultToolModelId, aiModelMgr);
     await chatManager.ready;
     chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, contextMgr);
     // chatViewProvider.createWebview();
@@ -240,10 +242,28 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                     return;
                 }
                 (modelInfo as any)[key] = newValue;
-                aiModelMgr.saveModelConfig(allModelInfos);
+                aiModelMgr.saveModelConfig("models", allModelInfos);
                 configurationProvider.refresh();
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
+        }),
+        vscode.commands.registerCommand('extension.toolModel.selectedChange', async (id: string) => {
+            const toolModelInfo = allModelInfos.find(info => info.id === id);
+            if (!toolModelInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${id} 的模型。`);
+                return;
+            }
+            const selectedModelId = getGlobalConfigValue<string>(extensionName, 'selectedModel', '');
+            const modelInfo = allModelInfos.find(info => info.id === selectedModelId);
+            if (!modelInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${selectedModelId} 的模型。`);
+                return;
+            }
+            if (toolModelInfo.codeName != modelInfo.codeName) {
+                vscode.window.showErrorMessage(`当前工具模型${toolModelInfo.name}与当前模型${modelInfo.name}不匹配。`);
+                return;
+            }
+            await customConfig.update('selectedToolModel', id, vscode.ConfigurationTarget.Global);
         }),
         vscode.commands.registerCommand('extension.aiCharacter.editInfo', async (id: string, data: object) => {
             const infos = getGlobalConfigValue<any[]>(extensionName, 'aiCharacterInfos', []) || [];

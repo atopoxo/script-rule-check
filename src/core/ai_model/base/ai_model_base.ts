@@ -54,6 +54,9 @@ export abstract class AIModelBase {
         const modelConfig = inputData.modelConfig;
         const modelName = modelConfig.modelName;
         const maxTokens = modelConfig.maxTokens || 8192;
+        const toolModelConfig = inputData.toolModelConfig;
+        const toolModelName = toolModelConfig.modelName;
+        const toolMaxTokens = toolModelConfig.maxTokens || 8192;
         const cache = inputData.cache;
         let messageReplace = false;
         let hasTask = true;
@@ -68,7 +71,7 @@ export abstract class AIModelBase {
                 if (toolsOn) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    yield* this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
+                    yield* this.streamGenerator(signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace);
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     yield* this.reportToolInfos(tools, contentMap.conclusion_content);

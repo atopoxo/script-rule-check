@@ -50,16 +50,28 @@ export class Storage {
         return null;
     }
 
-    public async setAIInstanceModelID(userId: string, instanceName: string, modelID: string) {
+    public async setAIInstanceModelId(userId: string, instanceName: string, modelId: string) {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         if (aiInstance) {
-            aiInstance.modelId = modelID;
+            aiInstance.modelId = modelId;
         }
     }
 
-    public async getAIInstanceModelID(userId: string, instanceName: string): Promise<string | undefined> {
+    public async getAIInstanceModelId(userId: string, instanceName: string): Promise<string | undefined> {
         const aiInstance = await this.getAIIInstance(userId, instanceName);
         return (aiInstance && aiInstance.modelId) ? aiInstance.modelId : undefined;
+    }
+
+    public async setAIInstanceToolModelId(userId: string, instanceName: string, modelId: string) {
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        if (aiInstance) {
+            aiInstance.toolModelId = modelId;
+        }
+    }
+
+    public async getAIInstanceToolModelId(userId: string, instanceName: string): Promise<string | undefined> {
+        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        return (aiInstance && aiInstance.toolModelId) ? aiInstance.toolModelId : undefined;
     }
 
     public async createUserInfo(userId: string, timestamp: number) {

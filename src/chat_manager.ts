@@ -12,17 +12,19 @@ export class ChatManager {
     private aiModelMgr: AIModelMgr;
     private userID: string = "";
     private storage: Storage;
-    private defaultModelID: string = "";
+    private defaultModelId: string = "";
+    private defaultToolModelId: string = "";
     public ready: Promise<void>;
 
-    private constructor(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr) {
+    private constructor(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelId: string, defaultToolModelId: string, aiModelMgr: AIModelMgr) {
         this.context = context;
         this.extensionName = extensionName;
         this.userID = userID;
-        this.defaultModelID = defaultModelID;
+        this.defaultModelId = defaultModelId;
+        this.defaultToolModelId = defaultToolModelId;
         this.storage = storage;
         this.aiModelMgr = aiModelMgr;
-        this.ready = this.aiModelMgr.setSelectedModel(defaultModelID, userID).then(() => {
+        this.ready = this.aiModelMgr.setSelectedModels(defaultModelId, defaultToolModelId, userID, 'chat').then(() => {
         }).catch(err => {
             throw err;
         });
@@ -45,9 +47,9 @@ export class ChatManager {
         return state;
     }
 
-    public static getInstance(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr): ChatManager {
+    public static getInstance(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelId: string, defaultToolModelId: string, aiModelMgr: AIModelMgr): ChatManager {
         if (!ChatManager.instance) {
-            ChatManager.instance = new ChatManager(context, extensionName, userID, storage, defaultModelID, aiModelMgr);
+            ChatManager.instance = new ChatManager(context, extensionName, userID, storage, defaultModelId, defaultToolModelId, aiModelMgr);
         }
         return ChatManager.instance;
     }
@@ -94,8 +96,10 @@ export class ChatManager {
 
     public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number, contextOption?: any[], contextExpand?: boolean) {
         const history = await this.getMessages(this.userID, 'chat', session.sessionId, query, index, contextOption, contextExpand);
-        let modelID = await this.storage.getAIInstanceModelID(this.userID, 'chat');
-        modelID = this.getValidModelID(modelID);
+        let modelId = await this.storage.getAIInstanceModelId(this.userID, 'chat');
+        modelId = this.getValidModelId(modelId);
+        let toolModelId = await this.storage.getAIInstanceToolModelId(this.userID, 'chat');
+        toolModelId = this.getValidToolModelId(toolModelId);
 
         const data: InputData = {
             userID: this.userID,
@@ -105,10 +109,11 @@ export class ChatManager {
             index: index,
             toolsOn: toolsOn,
             useKnowledge: useKnowledge,
-            modelConfig: this.aiModelMgr.getModelConfig(modelID),
+            modelConfig: this.aiModelMgr.getModelConfig(modelId),
+            toolModelConfig: this.aiModelMgr.getModelConfig(toolModelId),
             cache: await this.storage.getAIInstanceCache(this.userID, 'chat')
         };
-        return this.aiModelMgr.chatStream(signal, modelID, data);
+        return this.aiModelMgr.chatStream(signal, modelId, data);
     }
 
     private async getMessages(userID: string, instanceName: string, sessionId?: string, query?: string, index?: number, contextOption?: any[], contextExpand?: boolean): Promise<Message[]> {
@@ -171,11 +176,19 @@ export class ChatManager {
         }
     }
 
-    private getValidModelID(id?: string | undefined): string {
+    private getValidModelId(id?: string | undefined): string {
         if (id) {
             return id;
         } else {
-            return this.defaultModelID;
+            return this.defaultModelId;
+        }
+    }
+
+    private getValidToolModelId(id?: string | undefined): string {
+        if (id) {
+            return id;
+        } else {
+            return this.defaultModelId;
         }
     }
 

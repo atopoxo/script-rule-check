@@ -192,6 +192,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
                 this.createCustomCheckRuleSelectorItem(),
                 this.createModeSelectorItem(),
                 this.createModelSelectorItem(),
+                this.createToolModelSelectorItem(),
                 this.createAICharacterSelectorItem(),
                 this.createSearchEngineSelectorItem()
             ];
@@ -202,6 +203,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             return this.createModeItems();
         } else if (element.contextValue === 'modelSelector') {
             return this.createModelItems();
+        } else if (element.contextValue === 'toolModelSelector') {
+            return this.createToolModelItems();
         } else if (element.contextValue === 'aiCharacterSelector') {
             return this.createAICharacterItems();
         } else if (element.contextValue === 'searchEngineSelector') {
@@ -245,9 +248,21 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private createModelSelectorItem(): vscode.TreeItem {
-        const selectedModel = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '');
-        const item = new vscode.TreeItem(`当前模型: ${selectedModel}`);
+        const id = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '');
+        const models = this.allModelInfos.filter(info => info.id === id);
+        const name = models.length > 0 ? models[0].name : '';
+        const item = new vscode.TreeItem(`当前模型: ${name}`);
         item.contextValue = 'modelSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createToolModelSelectorItem(): vscode.TreeItem {
+        const id = getGlobalConfigValue<string>(this.extensionName, 'selectedToolModel', '');
+        const models = this.allModelInfos.filter(info => info.id === id);
+        const name = models.length > 0 ? models[0].name : '';
+        const item = new vscode.TreeItem(`当前工具预判模型: ${name}`);
+        item.contextValue = 'toolModelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
     }
@@ -322,6 +337,10 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return this.allModelInfos.map(item => this.createModelItem(item));
     }
 
+    private createToolModelItems(): vscode.TreeItem[] {
+        return this.allModelInfos.map(item => this.createToolModelItem(item));
+    }
+
     private createAICharacterItems(): vscode.TreeItem[] {
         return this.allAICharacterInfos.map(item => this.createAICharacterItem(item));
     }
@@ -336,12 +355,22 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         item.id = info.id;
         item.contextValue = info.showConfig ? 'modelInfo': '';
         item.collapsibleState = info.showConfig ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
-        // item.command = {
-        //     command: 'extension.toggleModelInfo',
-        //     title: info.name,
-        //     arguments: [info.id]
-        // };
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        return item;
+    }
+
+    private createToolModelItem(info: ModelInfo): vscode.TreeItem {
+        const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedToolModel', '') === info.id;
+        const item = new vscode.TreeItem(info.name);
+        item.id = info.id;
+        item.contextValue = '';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        item.command = {
+            command: 'extension.toolModel.selectedChange',
+            title: '选择工具预判模型',
+            arguments: [item.id]
+        };
         return item;
     }
 

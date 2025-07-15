@@ -919,9 +919,20 @@ export default defineComponent({
     };
 
     const scrollToBottom = () => {
-      const container = document.querySelector('.chat-container');
-      if (container) {
-        container.scrollTop = container.scrollHeight;
+      if (messagesContainerRef.value) {
+        nextTick(() => {
+          const container = messagesContainerRef.value;
+          if (container) {
+            const scrollHeight = container?.scrollHeight || 0;
+            const clientHeight = container?.clientHeight || 0;
+            if (scrollHeight > clientHeight) {
+              container.scrollTo({
+                top: container.scrollHeight,
+                behavior: "smooth"
+              });
+            }
+          }
+        });
       }
     };
 

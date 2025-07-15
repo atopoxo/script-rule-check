@@ -98,6 +98,7 @@ export interface AIInstance {
     sessions: Record<string, Session>;
     selectedSessionId: string;
     modelId?: string;
+    toolModelId?: string;
 }
 
 export interface UserInfo {
@@ -115,6 +116,7 @@ export interface InputData {
     toolsOn?: boolean;
     useKnowledge?: boolean;
     modelConfig?: any;
+    toolModelConfig?: any;
 }
 
 export interface ContentMap {

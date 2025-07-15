@@ -1,4 +1,5 @@
 {
+    "defaultToolModel": "online/volcengine-deepseek-chat",
     "models": [
         {
             "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",

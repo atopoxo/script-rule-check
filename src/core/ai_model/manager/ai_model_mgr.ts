@@ -13,72 +13,98 @@ import { setGlobalConfigValue } from '../../function/base_function';
 export class AIModelMgr {
     private jsonParser = getJsonParser();
     private models = new Map<string, AIModelBase>();
-    private modelconfigs = new Map<string, any>();
+    private modelConfigs = new Map<string, any>();
+    private defaultToolModelId: any;
 
     constructor(private config: any, private extensionName: string, private storage: Storage, private contextMgr: ContextMgr) {
-        const modelConfigList = this.getAvailableModels();
-        this.setModelConfigs(modelConfigList);
+        const modelConfig = this.getConfigFromFile();
+        this.defaultToolModelId = modelConfig['defaultToolModel'];
+        this.setModelConfigs(modelConfig["models"]);
     }
 
     async getSelectedModel(): Promise<ModelInfo | undefined> {
         const config = vscode.workspace.getConfiguration(this.extensionName)
-        const selectedModelID = await config.get('selectedModel', '');
-        let selectedModel = this.modelconfigs.get(selectedModelID);
+        const id = await config.get('selectedModel', '');
+        let selectedModel = this.modelConfigs.get(id);
         if (!selectedModel) {
-            const currentModel = this.modelconfigs.values().next().value;
+            const currentModel = this.modelConfigs.values().next().value;
             await config.update('selectedModel', currentModel.id, vscode.ConfigurationTarget.Global);
             selectedModel = currentModel;
         }
         return selectedModel;
     }
 
-    async setSelectedModel(id: string, userID: string) {
-        let selectedModel = this.modelconfigs.get(id);
+    public async setSelectedModels(defaultModelId: string, defaultToolModelId: string, userId: string, instanceName: string) {
+        await this.setSelectedModel(defaultModelId, userId, instanceName);
+        await this.setSelectedToolModel(defaultToolModelId, userId, instanceName);
+    }
+
+    public async setSelectedModel(id: string, userID: string, instanceName: string) {
+        let selectedModel = this.modelConfigs.get(id);
         if (selectedModel) {
             await setGlobalConfigValue(this.extensionName, 'selectedModel', id);
-            await this.storage.setAIInstanceModelID(userID, 'chat', id);
+            await this.storage.setAIInstanceModelId(userID, instanceName, id);
         }
     }
 
-    getModelInfos(): ModelInfo[] {
-        return Array.from(this.modelconfigs.values());
+    public async setSelectedToolModel(id: string, userID: string, instanceName: string) {
+        let selectedModel = this.modelConfigs.get(id);
+        if (selectedModel) {
+            await setGlobalConfigValue(this.extensionName, 'selectedToolModel', id);
+            await this.storage.setAIInstanceToolModelId(userID, instanceName, id);
+        }
     }
 
-    getAvailableModels():  any[] {
+    public async getSelectedToolModel() {
+        const config = vscode.workspace.getConfiguration(this.extensionName)
+        const id = await config.get('selectedToolModel', '');
+        let selectedModel = this.modelConfigs.get(id);
+        if (!selectedModel) {
+            const currentModel = this.modelConfigs.get(this.defaultToolModelId);
+            await config.update('selectedToolModel', currentModel.id, vscode.ConfigurationTarget.Global);
+            selectedModel = currentModel;
+        }
+        return selectedModel;
+    }
+
+    getModelInfos(): ModelInfo[] {
+        return Array.from(this.modelConfigs.values());
+    }
+
+    getConfigFromFile(): any {
         try {
             const configPath = path.join(__dirname, '../../../', '../../assets/config/model_config.json');
             const rawConfig = fs.readFileSync(configPath, 'utf-8');
             if (rawConfig) {
                 const obj = this.jsonParser.parse(rawConfig);
-                return obj["models"] as any[];
+                return obj;
             } else {
-                return [];
+                return {};
             }
         } catch (error) {
             console.error('加载模型配置失败:', error);
-            return [];
+            return {};
         }
     }
 
-    saveModelConfig(models: ModelInfo[]) {
+    saveModelConfig(key: string, value: any) {
         try {
+            const configData = this.getConfigFromFile();
+            configData[key] = value;
             const configPath = path.join(__dirname, '../../../', '../../assets/config/model_config.json');
-            const configData = {
-                models: models
-            };
             const jsonString = this.jsonParser.toJsonStr(configData, 4);
             fs.writeFileSync(configPath, jsonString, { encoding: 'utf8' });
-            const modelConfigList = this.getAvailableModels();
-            this.setModelConfigs(modelConfigList);
+            const modelConfig = this.getConfigFromFile();
+            this.setModelConfigs(modelConfig["models"]);
             console.log('模型配置已成功更新');
         } catch (error) {
             console.error('更新模型配置失败:', error);
-            return [];
+            return;
         }
     }
 
     getModelConfig(id: string): any {
-        return this.modelconfigs.get(id);
+        return this.modelConfigs.get(id);
     }
 
     setModelConfigs(configs: any[]): void {
@@ -88,7 +114,7 @@ export class AIModelMgr {
     }
 
     setModelConfig(id: string, config: any): void {
-        this.modelconfigs.set(id, config);
+        this.modelConfigs.set(id, config);
     }
 
     public async chatStream(signal: AbortSignal, modelID: string, inputData: any): Promise<any> {
