@@ -41,7 +41,7 @@ export abstract class AIModelBase {
         throw new Error("Method not implemented.");
     }
 
-    async *streamGeneratorFramework(signal: AbortSignal, inputData: InputData): AsyncGenerator<string, void, unknown> {
+    public async *streamGeneratorFramework(signal: AbortSignal, inputData: InputData): AsyncGenerator<string, void, unknown> {
         const needSave = true;
         const toolsOn = inputData.toolsOn || false;
         const userId = inputData.userID;
@@ -60,6 +60,7 @@ export abstract class AIModelBase {
         let streamContent = "";
         let currentIndex = index;
 
+        this.resetCache(cache);
         while (hasTask) {
             try {
                 this.handleReferences(messages, cache, currentIndex);
@@ -67,13 +68,13 @@ export abstract class AIModelBase {
                 if (toolsOn) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    for await (const _ of this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace)) {}
+                    yield* this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     yield* this.reportToolInfos(tools, contentMap.conclusion_content);
                     const returnToAi = await this.handleToolCalls(tools, messages, cache, currentIndex);
-                    if (!returnToAi) {
-                        streamContent = `最终结论如下：${cache.returns.ai.ai_conclusion}`;
+                    if (!returnToAi && cache.returns.ai.ai_conclusion) {
+                        streamContent = `${cache.returns.ai.ai_conclusion}`;
                         yield streamContent;
                         break;
                     }
@@ -92,10 +93,16 @@ export abstract class AIModelBase {
                 messageReplace = true;
             }
         }
-        cache.tools_describe = { tools_usage: "", tools_describe: "" };
+        this.resetCache(cache);
+        await this.saveCache(needSave, cache, userId, instanceName, sessionId);
+    }
+
+    private resetCache(cache: any) {
+        cache.tools_usage = "";
+        cache.tools_describe = "";
         cache.context = "";
         cache.knowledge = "";
-        await this.saveCache(needSave, cache, userId, instanceName, sessionId);
+        cache.returns = { ai: { ai_conclusion: "" } };
     }
 
     private checkToolTips(messages: Message[], cache: any, begin: boolean, index: number): number {
@@ -105,7 +112,7 @@ export abstract class AIModelBase {
             const toolTips = this.toolsMgr.getAIUsageTips(preToolTips, cache.tool_calls);
             toolTips.tools_usage = `${this.additional_tips.begin}${toolTips.tools_usage}${this.additional_tips.end}`;
             
-            if (!preToolTips) {
+            if (preToolTips.length <= 0) {
                 cache.tools_describe = toolTips.tools_describe;
                 messages[0].content += toolTips.tools_describe;
                 cache.backup = copy(messages[index].content);
@@ -135,10 +142,9 @@ export abstract class AIModelBase {
 
     private *reportToolInfos(tools: any[][], content: string): Generator<string, void, unknown> {
         if (tools.length > 0) {
-            yield `经过分析需要调用如下工具：${content}`;
-        } else {
-            yield "经过分析暂不需要调用工具";
+            yield `经过分析需要调用第三方工具\n${content}`;
         }
+        yield "进一步分析结果如下\n";
     }
 
     private async *streamGenerator(signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean): AsyncGenerator<string, void, unknown> {
@@ -159,7 +165,7 @@ export abstract class AIModelBase {
         yield* this.handleStreamNormalCalls(undefined, contentMap);
     }
 
-    private handleToolCalls(tools: ToolCall[][], messages: Message[], cache: any, index: number): string | null {
+    private async handleToolCalls(tools: ToolCall[][], messages: Message[], cache: any, index: number): Promise<string | null> {
         let currentTools: ToolCall[] = [];
         const toolSet = new Set<string>();
         
@@ -217,7 +223,7 @@ export abstract class AIModelBase {
             }
 
             try {
-                const result = this.toolsMgr.callTool(moduleName, className, functionName, args);
+                const result = await this.toolsMgr.callTool(moduleName, className, functionName, args);
                 if (result) {
                     for (const [variable, item] of Object.entries(result)) {
                         const returnType = this.toolsMgr.getToolReturnType(moduleName, className, functionName, variable); 

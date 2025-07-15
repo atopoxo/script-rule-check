@@ -1,15 +1,25 @@
 <!-- MessageRenderer.vue -->
 <template>
-  <div v-if="contentType === 'html'" class="html-content" v-html="contentValue" ref="contentRef"></div>
-  <div v-if="contentType === 'text' && textEditable === false" class="text-content" 
-    :style="{
-        maxWidth: maxWidth + 'px',
-        height: nonEditHeight + 'px',
-        overflowX: textOverflowX,
-        overflowY: textOverflowY
-    }"  
-    ref="contentRef">{{ contentValue }}</div>
-  <div v-if="contentType === 'text' && textEditable === true" class="textarea-container" :style="{ height: containerHeight + 'px' }">
+  <div v-if="contentType === 'html'" class="html-block" v-html="contentValue" ref="contentRef"></div>
+  <div v-if="contentType === 'text' && textEditable === false" class="text-block" ref="contentRef">
+    <div class="result-block expanded">
+      <div class="block-header">
+          <button class="icon-button content-header">
+              <img class="expand-icon" src=""/>
+              <div class="content-header-content">问题</div>
+          </button>
+      </div>
+      <div class="content-wrapper">
+        <div class="text-content" :style="{
+            maxWidth: maxWidth + 'px',
+            // height: nonEditHeight + 'px',
+            overflowX: textOverflowX,
+            overflowY: textOverflowY
+        }">{{ contentValue }}</div>
+      </div>
+    </div>
+  </div>
+  <div v-if="contentType === 'text' && textEditable === true" class="textarea-block" :style="{ height: containerHeight + 'px' }">
     <textarea class="textarea-content" :style="`width: ${maxWidth}px;`"
         :value="contentValue"
         ref="contentRef"
@@ -21,7 +31,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick, computed } from 'vue';
+import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick } from 'vue';
 import { throttle, md2html } from '../functions/BaseFunctions';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 
@@ -167,7 +177,7 @@ export default defineComponent({
     };
 
     type OverflowType = 'visible' | 'hidden' | 'scroll' | 'auto' | 'inherit';
-    const nonEditHeight = ref(0);
+    // const nonEditHeight = ref(0);
     const textOverflowX = ref<OverflowType>('auto');
     const textOverflowY = ref<OverflowType>('auto');
     const calculateNonEditHeight = () => {
@@ -177,8 +187,8 @@ export default defineComponent({
       
       const element = contentRef.value as HTMLElement;
       element.style.height = 'auto';
-      const contentHeight = element.scrollHeight;
-      nonEditHeight.value = contentHeight;
+      // const contentHeight = element.scrollHeight;
+      // nonEditHeight.value = contentHeight;
       element.style.height = '';
 
       textOverflowX.value = element.scrollWidth > props.maxWidth ? 'auto' : 'hidden';
@@ -358,63 +368,98 @@ export default defineComponent({
         emit('finish-edit', value, index);
     }
 
-    let thinkExpand = true;
-    const getContextIconPath = computed(() => {
-      try {
-          let iconPath = '';
-          let relativePath = props.isDark ? 'dark' : 'light';
-          if (thinkExpand) {
-            iconPath = 'arrow-down.svg';
-          } else {
-            iconPath = 'arrow-left.svg';
-          }
-          return new URL(`${iconRoot}${relativePath}/${iconPath}`, currentModuleUrl).href;
-      } catch (error) {
-          console.error('图标加载失败:', error);
-          return '';
+    const blockStates = ref<Record<string, boolean>>({});
+    const getBlockSelector = (block: Element): string | null => {
+      const parent = block.parentElement;
+      if (!parent) {
+        return null;
       }
-    });
+      const index = Array.from(parent.children).indexOf(block);
+      return `:nth-child(${index + 1})`;
+    };
+    const getBlockIconPath = (isExpanded: boolean) => {
+      try {
+        const relativePath = props.isDark ? 'dark' : 'light';
+        const iconFile = isExpanded ? 'arrow-down.svg' : 'arrow-right.svg';
+        return new URL(`${iconRoot}${relativePath}/${iconFile}`, currentModuleUrl).href;
+      } catch (error) {
+        console.error('图标加载失败:', error);
+        return '';
+      }
+    };
+
     const expandContext = (event: any) => {
-      const block = event.target.closest('.think-block');
-      if (thinkExpand) {
+      const header = event.currentTarget as HTMLElement;
+      const block = header.closest('.result-block');
+      if (!block) {
+        return;
+      }
+      const selector = getBlockSelector(block);
+      if (!selector) {
+        return;
+      }
+      if (blockStates.value[selector]) {
         block.classList.remove('expanded');
-        const content = block.querySelector('.think-content-wrapper');
+        const content = block.querySelector('.content-wrapper') as HTMLElement;
         if (content) {
           content.style.maxHeight = '0';
         }
       } else {
         block.classList.add('expanded');
-        const content = block.querySelector('.think-content-wrapper');
+        const content = block.querySelector('.content-wrapper') as HTMLElement;
         if (content) {
           content.style.maxHeight = content.scrollHeight + 'px';
         }
       }
-      thinkExpand = !thinkExpand;
+      blockStates.value[selector] = !blockStates.value[selector];
+      const icon = header.querySelector('.expand-icon') as HTMLImageElement;
+      if (icon) {
+        icon.src = getBlockIconPath(blockStates.value[selector]);
+      }
     };
+
+    const createExpandState = () => {
+      contentRef.value?.querySelectorAll('.result-block').forEach((block: Element) => {
+        const selector = getBlockSelector(block);
+        if (!selector) {
+          return;
+        }
+        if (blockStates.value[selector] === undefined) {
+          blockStates.value[selector] = true;
+        }
+        const header = block.querySelector('.content-header');
+        if (header) {
+          header.removeEventListener('click', expandContext);
+          header.addEventListener('click', expandContext);
+          const icon = header.querySelector('.expand-icon') as HTMLImageElement;
+          if (icon) {
+            icon.src = getBlockIconPath(blockStates.value[selector]);
+          }
+        }
+      });
+    }
 
     watchEffect(async () => {
         themeInit();
         contentType.value = props.contentType;
         textEditable.value = props.textEditable;
         if (props.contentType === 'html') {
-            contentValue.value = md2html(props.content, getContextIconPath.value);
-            await nextTick();
-            contentRef.value?.querySelectorAll('.content-header').forEach((header: any) => {
-                header.removeEventListener('click', expandContext);
-                header.addEventListener('click', expandContext);
-            });
+          contentValue.value = md2html(props.content);
+          await nextTick();
+          createExpandState();
         } else if (props.contentType === 'text') {
-            contentValue.value = props.content;
-            if (textEditable.value) {
-                maxWidth.value = props.maxWidth - textareaStyles.value.paddingLeft - textareaStyles.value.paddingRight -
-                textareaStyles.value.borderLeftWidth - textareaStyles.value.borderRightWidth;
-                await nextTick();
-                adjustTextareaHeight();
-            } else {
-                maxWidth.value = props.maxWidth - 16;
-                await nextTick();
-                calculateNonEditHeight();
-            }
+          contentValue.value = props.content;
+          if (textEditable.value) {
+              maxWidth.value = props.maxWidth - textareaStyles.value.paddingLeft - textareaStyles.value.paddingRight -
+              textareaStyles.value.borderLeftWidth - textareaStyles.value.borderRightWidth;
+              await nextTick();
+              adjustTextareaHeight();
+          } else {
+              maxWidth.value = props.maxWidth - 16;
+              await nextTick();
+              createExpandState();
+              calculateNonEditHeight();
+          }
         }
     });
 
@@ -436,7 +481,7 @@ export default defineComponent({
         contentRef, 
         contentType, 
         textEditable,
-        nonEditHeight,
+        // nonEditHeight,
         textOverflowX,
         textOverflowY,
         handleKeyDown,
@@ -446,7 +491,6 @@ export default defineComponent({
         textEditPadding,
         maxWidth,
         containerHeight,
-        getContextIconPath,
         expandContext
     };
   }
@@ -454,9 +498,9 @@ export default defineComponent({
 </script>
 
 <style>
-.think-header {
+.block-header {
     display: inline-flex;
-    color: var(--vscode-tab-inactiveForeground);;
+    color: var(--vscode-tab-inactiveForeground);
     font-size: 11px;
     height: 16px;
     line-height: 12px;
@@ -467,21 +511,20 @@ export default defineComponent({
     user-select: none;
     align-items: center;
 }
-.think-content-wrapper {
+.content-wrapper {
     border-radius: 6px;
     padding: 0;
     margin-top: 0;
     overflow: hidden;
 }
-.think-block.expanded .think-content-wrapper {
+.result-block.expanded .content-wrapper {
   padding: 0px 8px 8px 8px;
   margin-top: 8px;
+}
+.think-content {
   border: 1px solid var(--vscode-commandCenter-inactiveBorder);
 }
-.conclusion-content-wrapper {
-  border-radius: 6px;
-  padding: 0px 8px 8px 8px;
-  margin-top: 8px;
+.conclusion-content {
   border: 1px transparent;
 }
 .icon-button {
@@ -582,16 +625,16 @@ export default defineComponent({
     background: transparent !important;
     color: inherit !important;
 }
-.html-content {
+.html-block {
   backdrop-filter: blur(10px);
   /* white-space: pre-wrap; */
   word-wrap: break-word;
   word-break: normal;
   background-color: transparent;
-  padding: 8px 8px;
+  padding: 8px;
   border-radius: 5px;
 }
-.text-content {
+.text-block {
     backdrop-filter: blur(10px);
     /* white-space: pre-wrap; */
     word-wrap: break-word;
@@ -599,13 +642,15 @@ export default defineComponent({
     background-color: transparent;
     padding: 8px;
     border-radius: 5px;
-    box-sizing: border-box;
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    transition: height 0.3s ease;
-    color: var(--vscode-editor-foreground);
 }
-.textarea-container {
+.text-content {
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  transition: height 0.3s ease;
+  color: var(--vscode-editor-foreground);
+}
+.textarea-block {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -638,10 +683,10 @@ export default defineComponent({
 .textarea-content:focus {
   outline: none;
 }
-.textarea-container:focus-within {
+.textarea-block:focus-within {
   box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
 }
-.textarea-container:hover {
+.textarea-block:hover {
   box-shadow: 0 0 15px rgba(238, 168, 255, 0.5);
 }
 </style>

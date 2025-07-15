@@ -64,7 +64,7 @@ export async function activate(context: vscode.ExtensionContext) {
     await storage.ready;
     customConfig = vscode.workspace.getConfiguration(extensionName);
     const configurationProvider = new ConfigurationProvider(extensionName);
-    await configurationProvider.initAICharacterInfos();
+    await configurationProvider.init();
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     const productDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
     context.subscriptions.push(
@@ -207,7 +207,7 @@ function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
 async function registerAICommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider) {
     contextMgr = new ContextMgr(extensionName);
     await contextMgr.init();
-    aiModelMgr = new AIModelMgr({}, extensionName, storage, contextMgr);
+    aiModelMgr = new AIModelMgr(configurationProvider.getConfig(), extensionName, storage, contextMgr);
     const defaultModel = await aiModelMgr.getSelectedModel();
     const defaultModelID = defaultModel ? defaultModel.id : '';
     chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelID, aiModelMgr);
@@ -245,37 +245,37 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
         }),
-        vscode.commands.registerCommand('extension.aiCharacter.editInfo', async (aiCharacterId: string, data: object) => {
-            const aiCharacterInfos = getGlobalConfigValue<any[]>(extensionName, 'aiCharacterInfos', []) || [];
-            const characterInfo = aiCharacterInfos.find(info => info.id === aiCharacterId);
-            if (!characterInfo) {
-                vscode.window.showErrorMessage(`未找到 ID 为 ${aiCharacterId} 的AI角色。`);
+        vscode.commands.registerCommand('extension.aiCharacter.editInfo', async (id: string, data: object) => {
+            const infos = getGlobalConfigValue<any[]>(extensionName, 'aiCharacterInfos', []) || [];
+            const currentInfo = infos.find(info => info.id === id);
+            if (!currentInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${id} 的AI角色。`);
                 return;
             }
             const entries = Object.entries(data);
             await entries.forEach(async ([key, value]) => {
                 const newValue = await vscode.window.showInputBox({
-                    prompt: `请输入角色"${characterInfo.name}"的新属性"${key}"`,
+                    prompt: `请输入角色"${currentInfo.name}"的新属性"${key}"`,
                     value: value || ''
                 });
                 if (newValue === undefined) {
                     return;
                 }
-                (characterInfo as any)[key] = newValue;
-                const index = aiCharacterInfos.findIndex((info: any) => info.id === aiCharacterId);
+                (currentInfo as any)[key] = newValue;
+                const index = infos.findIndex((info: any) => info.id === id);
                 if (index !== -1) {
-                    aiCharacterInfos[index] = characterInfo;
+                    infos[index] = currentInfo;
                 } else {
-                    aiCharacterInfos.push(characterInfo);
+                    infos.push(currentInfo);
                 }
-                await customConfig.update('aiCharacterInfos', aiCharacterInfos, vscode.ConfigurationTarget.Global);
-                configurationProvider.setAICharacterInfos(aiCharacterInfos);
+                await customConfig.update('aiCharacterInfos', infos, vscode.ConfigurationTarget.Global);
+                configurationProvider.setAICharacterInfos(infos);
                 configurationProvider.refresh();
-                vscode.window.showInformationMessage(`模型"${characterInfo.name}"的"${key}"已更新为"${newValue}"`);
+                vscode.window.showInformationMessage(`ai角色"${currentInfo.name}"的"${key}"已更新为"${newValue}"`);
             })
         }),
         vscode.commands.registerCommand('extension.aiCharacter.add', async () => {
-            await configurationProvider.addNewAICharacter();
+            await configurationProvider.addAICharacter();
             chatViewProvider.selectAICharacter();
         }),
         vscode.commands.registerCommand('extension.aiCharacter.remove', async (item: vscode.TreeItem) => {
@@ -291,9 +291,56 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 }
             }
         }),
-        vscode.commands.registerCommand('extension.aiCharacter.selectedChange', async (aiCharacterId: string) => {
-            await customConfig.update('selectedAICharacter', aiCharacterId, vscode.ConfigurationTarget.Global);
+        vscode.commands.registerCommand('extension.aiCharacter.selectedChange', async (id: string) => {
+            await customConfig.update('selectedAICharacter', id, vscode.ConfigurationTarget.Global);
             chatViewProvider.selectAICharacter();
+        }),
+        vscode.commands.registerCommand('extension.searchEngine.editInfo', async (id: string, data: object) => {
+            const infos = getGlobalConfigValue<any[]>(extensionName, 'searchEngineInfos', []) || [];
+            const currentInfo = infos.find(info => info.id === id);
+            if (!currentInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${id} 的搜索引擎。`);
+                return;
+            }
+            const entries = Object.entries(data);
+            await entries.forEach(async ([key, value]) => {
+                const newValue = await vscode.window.showInputBox({
+                    prompt: `请输入搜索引擎"${currentInfo.name}"的新属性"${key}"`,
+                    value: value || ''
+                });
+                if (newValue === undefined) {
+                    return;
+                }
+                (currentInfo as any)[key] = newValue;
+                const index = infos.findIndex((info: any) => info.id === id);
+                if (index !== -1) {
+                    infos[index] = currentInfo;
+                } else {
+                    infos.push(currentInfo);
+                }
+                await customConfig.update('searchEngineInfos', infos, vscode.ConfigurationTarget.Global);
+                configurationProvider.setSearchEngineInfos(infos);
+                configurationProvider.refresh();
+                vscode.window.showInformationMessage(`搜索引擎"${currentInfo.name}"的"${key}"已更新为"${newValue}"`);
+            })
+        }),
+        vscode.commands.registerCommand('extension.searchEngine.add', async () => {
+            await configurationProvider.addSearchEngine();
+        }),
+        vscode.commands.registerCommand('extension.searchEngine.remove', async (item: vscode.TreeItem) => {
+            if (item.id) {
+                const confirm = await vscode.window.showWarningMessage(
+                    `确定要删除搜索引擎 "${item.label}" 吗?`, 
+                    { modal: true }, 
+                    '确定'
+                );
+                if (confirm === '确定') {
+                    await configurationProvider.removeSearchEngine(item.id);
+                }
+            }
+        }),
+        vscode.commands.registerCommand('extension.searchEngine.selectedChange', async (id: string) => {
+            await customConfig.update('selectedSearchEngine', id, vscode.ConfigurationTarget.Global);
         }),
         vscode.window.onDidChangeActiveTextEditor(editor => {
             if (editor) {

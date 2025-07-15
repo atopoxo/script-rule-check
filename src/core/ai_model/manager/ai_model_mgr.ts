@@ -115,7 +115,8 @@ export class AIModelMgr {
         const modelDir = path.join(path.dirname(__dirname), `${platform}/models`);
         const modelPath = path.join(modelDir, `${name}/modeling`);
         const modelModule = await require(modelPath);
-        const instance = modelModule.getClass(modelConfig, {storage: this.storage, contextMgr: this.contextMgr});
+        this.config.model = modelConfig;
+        const instance = modelModule.getClass(this.config, {storage: this.storage, contextMgr: this.contextMgr});
         if (instance instanceof AIModelBase) {
             this.models.set(id, instance);
         }

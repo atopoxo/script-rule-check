@@ -25,6 +25,17 @@ export class AICharacterInfo {
     ) {}
 }
 
+export class SearchEngineInfo {
+    constructor(
+        public id: string,
+        public name: string,
+        public engineId: string,
+        public url: string,
+        public apiKey: string,
+        public showConfig: boolean
+    ) {}
+}
+
 export interface ContextItem {
     type: string;
     name: string;
@@ -57,7 +68,8 @@ export interface Message {
 }
 
 export interface Cache {
-    tools_describe: ToolTip;
+    tools_usage: string;
+    tools_describe: string;
     tool_calls: ToolCall[][];
     context: string;
     knowledge: string;
@@ -108,11 +120,6 @@ export interface InputData {
 export interface ContentMap {
     think_content: string;
     conclusion_content: string;
-}
-
-export interface ToolTip {
-    tools_usage: string;
-    tools_describe: string;
 }
 
 export interface Delta {

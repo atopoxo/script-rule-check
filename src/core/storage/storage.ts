@@ -5,7 +5,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Mutex } from 'async-mutex';
-import { Cache, ToolTip } from '../ai_model/base/ai_types';
+import { Cache } from '../ai_model/base/ai_types';
 import { getJsonParser } from '../json/json_parser';
 import { Message, Session, AIInstance, UserInfo } from '../ai_model/base/ai_types'
 
@@ -629,9 +629,9 @@ export class Storage {
     }
 
     private getDefaultCache(): Cache {
-        const toolsDescribe: ToolTip = { tools_usage: "", tools_describe: "" };
         return {
-            tools_describe: toolsDescribe,
+            tools_usage: "", 
+            tools_describe: "",
             tool_calls: [],
             context: "",
             knowledge: "",

@@ -70,7 +70,7 @@ export class ToolsMgr {
         this.loadTools(this.toolsConfig);
     }
 
-    public getAIUsageTips(toolTips: boolean, toolCalls: ToolCall[][]): AIUsageTips {
+    public getAIUsageTips(toolTips: any, toolCalls: ToolCall[][]): AIUsageTips {
         const result: AIUsageTips = {
             tools_describe: null,
             tools_usage: null
@@ -88,7 +88,8 @@ export class ToolsMgr {
                                 "class": "Browser",
                                 "name": "search",
                                 "arguments": {
-                                    "query": "需要搜索的关键词或问题，例如：'今日A股走势分析', '杭州天气'"
+                                    "query": "需要搜索的关键词或问题，例如：'今日A股走势分析', '杭州天气'",
+                                    "domain": "weather"
                                 }
                         }
                     ],
@@ -100,7 +101,8 @@ export class ToolsMgr {
                                 "class": "Browser",
                                 "name": "search",
                                 "arguments": {
-                                    "query": "需要搜索的关键词或问题，例如：'今日A股走势分析', '杭州天气'"
+                                    "query": "需要搜索的关键词或问题，例如：'今日A股走势分析', '杭州天气'",
+                                    "domain": "weather"
                                 }
                         }
                     ]
@@ -180,7 +182,7 @@ export class ToolsMgr {
         };
     }
 
-    public callTool(moduleName: string, className: string, functionName: string, args: Record<string, any>): any {
+    public async callTool(moduleName: string, className: string, functionName: string, args: Record<string, any>): Promise<any> {
         moduleName = moduleName || '';
         if (!this.tools[moduleName]) {
             return null;
@@ -200,8 +202,28 @@ export class ToolsMgr {
             return null;
         }
         const functionCall = classMap.cache[functionName];
-
-        return classCall ? classCall[functionName](args) : functionCall(args);
+        const targetFunc = classCall ? classCall[functionName] : functionCall;
+        const { paramNames, defaults } = this.getFunctionParamNames(targetFunc);
+        const params = paramNames.map((name, index) => {
+            if (args.hasOwnProperty(name)) {
+                return args[name];
+            }
+            if (index < defaults.length && defaults[index] !== undefined) {
+                return defaults[index];
+            }
+            return undefined;
+        });
+        try {
+            const result = targetFunc.apply(classCall || null, params);
+            if (result instanceof Promise) {
+                return await result;
+            }
+            
+            return result;
+        } catch (error) {
+            console.error(`工具调用失败: ${moduleName}.${className}.${functionName}`, error);
+            throw error;
+        }
     }
 
     public getToolsConfig(): any {
@@ -278,6 +300,86 @@ export class ToolsMgr {
         } catch (error) {
             console.error("Tools parse failed");
             return [];
+        }
+    }
+
+    private getFunctionParamNames(func: Function): { paramNames: string[]; defaults: any[] } {
+        let paramNames: string[] = [];
+        let defaults: any[] = [];
+        const funcStr = func.toString();
+        const patterns = [
+            // 匹配 __awaiter 转译模式
+            /__awaiter\([^)]*\)\s*{\s*return\s*[^;]*?\s*function\*\s*\(([^)]*)\)/,
+            // 匹配生成器函数
+            /function\*\s*\(([^)]*)\)/,
+            // 匹配普通函数
+            /function\s*\w*\s*\(([^)]*)\)/,
+            // 匹配箭头函数
+            /(?:async\s*)?\(?([^)=]*)\)?\s*=>/,
+            // 匹配方法简写
+            /(\w+)\s*\(([^)]*)\)\s*{/
+        ];
+        for (const pattern of patterns) {
+            const match = funcStr.match(pattern);
+            if (match) {
+                const paramList = match[1] || match[2];
+                if (paramList) {
+                    return this.parseParamListWithDefaults(paramList);
+                }
+            }
+        }
+        
+        console.warn("无法解析函数参数:", funcStr.slice(0, 100) + "...");
+        return { paramNames: [], defaults: [] };
+    }
+
+    private parseParamListWithDefaults(paramList: string): { paramNames: string[]; defaults: any[] } {
+        const paramNames: string[] = [];
+        const defaults: any[] = [];
+        
+        paramList.split(',')
+            .map(p => p.trim())
+            .filter(p => p && !p.startsWith('/')) // 过滤掉注释
+            .forEach(p => {
+                // 处理带默认值的参数 (param = value)
+                const equalIndex = p.indexOf('=');
+                if (equalIndex > 0) {
+                    const name = p.substring(0, equalIndex).trim();
+                    const defaultValueStr = p.substring(equalIndex + 1).trim();
+                    
+                    paramNames.push(name);
+                    defaults.push(this.parseDefaultValue(defaultValueStr));
+                } else {
+                    paramNames.push(p);
+                    defaults.push(undefined); // 没有默认值
+                }
+            });
+        
+        return { paramNames, defaults };
+    }
+
+    private parseDefaultValue(valueStr: string): any {
+        try {
+            if (!isNaN(Number(valueStr))) {
+                return Number(valueStr);
+            }
+            if (valueStr === 'true') {
+                return true;
+            }
+            if (valueStr === 'false') {
+                return false;
+            }
+            const stringMatch = valueStr.match(/^['"](.*)['"]$/);
+            if (stringMatch) {
+                return stringMatch[1];
+            }
+            if (valueStr.startsWith('{') || valueStr.startsWith('[')) {
+                return JSON.parse(valueStr);
+            }
+            return valueStr;
+        } catch (e) {
+            console.warn(`无法解析默认值: ${valueStr}`, e);
+            return valueStr;
         }
     }
 }

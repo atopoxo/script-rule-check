@@ -53,6 +53,19 @@
           "default": "tree",
           "description": "结果展示模式：树形结构(tree)/平铺列表(flat)/规则结构(rule)"
         },
+        "script-rule-check.searchEngineInfos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "搜索引擎列表"
+        },
+        "script-rule-check.selectedSearchEngine": {
+          "type": "string",
+          "default": "",
+          "description": "当前选中的搜索引擎"
+        },
         "script-rule-check.selectedModel": {
           "type": "string",
           "default": "",
@@ -70,6 +83,11 @@
           "type": "string",
           "default": "",
           "description": "当前选中的ai角色"
+        },
+        "script-rule-check.toolsOn": {
+          "type": "boolean",
+          "default": false,
+          "description": "工具集的开启状态"
         }
       }
     },
@@ -176,6 +194,14 @@
         "title": "▶ 场景对应脚本检查"
       },
       {
+        "command": "extension.searchEngine.selectedChange",
+        "title": "选择搜索引擎"
+      },
+      {
+        "command": "extension.searchEngine.remove",
+        "title": "删除搜索引擎"
+      },
+      {
         "command": "extension.model.editInfo",
         "title": "修改模型配置"
       },
@@ -260,6 +286,11 @@
         {
           "command": "extension.aiCharacter.remove",
           "when": "viewItem == aiCharacterInfo",
+          "group": "action"
+        },
+        {
+          "command": "extension.searchEngine.remove",
+          "when": "viewItem == searchEngineInfo",
           "group": "action"
         }
       ],
@@ -442,6 +473,7 @@
     "tree-sitter-python": "^0.23.4",
     "tree-sitter-typescript": "^0.23.2",
     "tsyringe": "^4.10.0",
-    "web-tree-sitter": "^0.25.6"
+    "web-tree-sitter": "^0.25.6",
+    "wordnet": "^2.0.0"
   }
 }

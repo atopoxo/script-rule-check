@@ -123,6 +123,7 @@
             <div class="ref-tooltip">选择上下文</div>
           </div>
           <div class="input-functions-right">
+            <button class="icon-button tools-flag" :class="{'on': isToolsOn}" @click="toolsOn">工具集</button>
             <button class="icon-button model-select" @click="selectModel">{{ selectedModel }}</button>
             <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector" ref="modelSelector"
               title="选择模型"
@@ -297,6 +298,11 @@ export default defineComponent({
         records: [item]
       });
     }
+
+    const isToolsOn = ref<boolean>(false);
+    const toolsOn = () => {
+      vscode.postMessage({ type: 'toolsOn'});
+    };
 
     const selectModel = () => {
       showModelSelector.value = showModelSelector.value? false : true;
@@ -1005,6 +1011,7 @@ export default defineComponent({
             switch (type) {
               case 'initSession':
                   isDark.value = data.isDark;
+                  isToolsOn.value = data.toolsOn;
                   titleBarText.value = data.aiCharacter.name || titleBarText.value;
                   selectedSession.value = getSelectedSession(data.selectedSession);
                   selectedModel.value = data.selectedModel.name;
@@ -1017,6 +1024,9 @@ export default defineComponent({
                   break;
               case 'selectAICharacter':
                   titleBarText.value = data.aiCharacter.name || titleBarText.value;
+                  break;
+              case 'toolsOn':
+                  isToolsOn.value = data.toolsOn;
                   break;
               case 'selectModel':
                   selectedModel.value = data.selectedModel.name;
@@ -1139,6 +1149,8 @@ export default defineComponent({
       showModelSelector,
       modelOptions,
       selectedModel,
+      isToolsOn,
+      toolsOn,
       selectModel,
       handleModelSelectorClose,
       handleModelSelect
@@ -1512,6 +1524,21 @@ export default defineComponent({
   align-items: center;
   height: 100%;
 }
+.input-functions-right .icon-button.tools-flag {
+  height: 22px;
+  padding: 2px 4px;
+  margin: 0;
+  line-height: 18px;
+  text-align: center;
+  font-size: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--vscode-widget-border);
+  margin-right: 3px;
+}
+.input-functions-right .icon-button.tools-flag.on {
+  color: #4caf50;
+  border-color: #4caf50;
+} 
 .input-functions-right .icon-button.model-select {
   height: 22px;
   padding: 2px 4px;

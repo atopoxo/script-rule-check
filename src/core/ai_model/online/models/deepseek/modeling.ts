@@ -7,9 +7,10 @@ export class DeepSeek extends AIModelOnlineBase {
 
     constructor(config: any, helper: any) {
         super(config, helper);
+        const modelConfig = config.model;
         this.client = new OpenAI({
-            apiKey: config.apiKey,
-            baseURL: config.url,
+            apiKey: modelConfig.apiKey,
+            baseURL: modelConfig.url,
         });
     }
 

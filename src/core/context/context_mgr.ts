@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import fs from 'fs';
 import path from 'path';
 import { Deque } from '@datastructures-js/deque';
-import { Trie } from '../function/trie'
 import {ContextOption, ContextTreeNode, ContextItem} from '../ai_model/base/ai_types'
 import {ContextBase} from './base/context_base';
 import type {IdentifierType} from './base/context_base';

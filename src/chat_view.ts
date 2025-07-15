@@ -5,7 +5,7 @@ import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ContextMgr } from './core/context/context_mgr';
-import { getEncoding } from './core/function/base_function';
+import { getEncoding, getGlobalConfigValue } from './core/function/base_function';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private viewCreatedPromise: Promise<boolean>;
@@ -94,6 +94,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                         this.viewCreatedResolve(true);
                     }
                     break;
+                case 'toolsOn':
+                    await this.toolsOn();
+                    break;
                 case 'selectModel':
                     await this.selectModel(data.id);
                     break;
@@ -178,6 +181,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         selectedSession.isAIStreamTransfer = false;
         const data = {
             isDark: theme === vscode.ColorThemeKind.Dark,
+            toolsOn: this.chatManager.getToolsOnState(),
             aiCharacter: this.chatManager.getSelectedAICharacter(),
             modelInfos: this.aiModelMgr.getModelInfos(),
             selectedModel: await this.aiModelMgr.getSelectedModel(),
@@ -216,6 +220,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private async updateTheme(theme: vscode.ColorThemeKind) {
         this.updateWebview('themeUpdate', {isDark: theme === vscode.ColorThemeKind.Dark});
+    }
+
+    private async toolsOn() {
+        const state = await this.chatManager.toolsOn();
+        const data = {
+            toolsOn: state
+        }
+        this.updateWebview('toolsOn', data);
     }
 
     public async selectModel(id: string) {
@@ -279,7 +291,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (this.view && this.isWebviewReady && !currentSession.isAIStreamTransfer) {
                 const port = this.view.webview;
                 const abortController = new AbortController();
-                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, false, query, index, contextOption, contextExpand);
+                const toolsOn = this.chatManager.getToolsOnState();
+                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, toolsOn, query, index, contextOption, contextExpand);
                 currentSession.isAIStreamTransfer = true;
                 port.postMessage({
                     type: 'aiStreamStart',

@@ -3,7 +3,7 @@ import { Message, InputData } from './core/ai_model/base/ai_types';
 import { Storage } from './core/storage/storage';
 import { Session } from './core/ai_model/base/ai_types';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
-import { getGlobalConfigValue } from './core/function/base_function';
+import { getGlobalConfigValue, setGlobalConfigValue } from './core/function/base_function';
 
 export class ChatManager {
     private static instance: ChatManager;
@@ -30,6 +30,19 @@ export class ChatManager {
 
     public getUserID(): string {
         return this.userID;
+    }
+
+    public async toolsOn(): Promise<boolean> {
+        let state = getGlobalConfigValue(this.extensionName, 'toolsOn', false);
+        state = !state;
+        await setGlobalConfigValue(this.extensionName, 'toolsOn', state);
+        state = getGlobalConfigValue(this.extensionName, 'toolsOn', false);
+        return state;
+    }
+
+    public getToolsOnState(): boolean {
+        let state = getGlobalConfigValue(this.extensionName, 'toolsOn', false);
+        return state;
     }
 
     public static getInstance(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelID: string, aiModelMgr: AIModelMgr): ChatManager {

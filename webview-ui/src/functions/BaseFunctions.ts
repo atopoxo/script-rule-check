@@ -38,7 +38,7 @@ const replaceOutsideCode = (source: string, pattern: RegExp, replacement: string
     return result;
 };
 
-export const md2html = (content: string, iconPath: string) => {
+export const md2html = (content: string) => {
     let text = String(content)
     text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
     const codeStyleBegin = `<pre class="hljs"><code>`;
@@ -88,15 +88,16 @@ export const md2html = (content: string, iconPath: string) => {
         },
         render: function(tokens: any, idx: any) {
             return tokens[idx].nesting === 1 
-                ? `<div class="think-block expanded">
-                        <div class="think-header">
+                ? `<div class="result-block expanded">
+                        <div class="block-header">
                             <button class="icon-button content-header">
-                                <img class="think-icon" src="${iconPath}"/>
+                                <img class="expand-icon" src=""/>
                                 <div class="content-header-content">思考过程</div>
                             </button>
                         </div>
-                        <div class="think-content-wrapper">`
-                : `</div></div>`;
+                        <div class="content-wrapper">
+                            <div class="think-content">`
+                : `</div></div></div>`;
         }
     })
     .use(markdownItContainer, 'conclusion', {
@@ -105,9 +106,16 @@ export const md2html = (content: string, iconPath: string) => {
         },
         render: function(tokens: any, idx: any) {
             return tokens[idx].nesting === 1 
-                ? `<div class="conclusion-block">
-                        <div class="conclusion-content-wrapper">` 
-                : '</div></div>';
+                ? `<div class="result-block expanded">
+                        <div class="block-header">
+                            <button class="icon-button content-header">
+                                <img class="expand-icon" src=""/>
+                                <div class="content-header-content">结论</div>
+                            </button>
+                        </div>
+                        <div class="content-wrapper">
+                            <div class="conclusion-content">` 
+                : '</div></div></div>';
         }
     })
     .use(MarkdownItMathjax());

@@ -1,0 +1,18 @@
+{
+    "extensionName": "script-rule-check",
+    "tools": {
+        "searchEngine": {
+            "default": "google search engine",
+            "items": [
+                {
+                    "id": "google search engine",
+                    "name": "google搜索引擎",
+                    "engineId": "26b0febeef29f46a8",
+                    "url": "https://customsearch.googleapis.com/customsearch/v1",
+                    "apiKey": "AIzaSyCjIhwUAZHWR5xPtRz-Kgk1-iU7af7dDBM",
+                    "showConfig": false
+                }
+            ]
+        }
+    }
+}
