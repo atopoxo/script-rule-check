@@ -20,10 +20,6 @@ interface SearchResultItem {
     authority: number;
 }
 
-interface SearchResult {
-    ai_data: string | null;
-}
-
 @singleton()
 export class Browser {
     private jsonParser = getJsonParser();
@@ -44,21 +40,17 @@ export class Browser {
         medical: [
             'who.int', 'cdc.gov', 'nih.gov', 'webmd.com', 'mayoclinic.org',
             'healthline.com', 'medscape.com', 'nejm.org'
-        ],
-        technology: [
-            'techcrunch.com', 'wired.com', 'theverge.com', 'arstechnica.com',
-            'ieee.org', 'acm.org', 'mit.edu', 'nature.com'
         ]
     };
-    private wordNet: any;
+    // private wordNet: any;
 
     constructor(config: any) {
         this.extensionName = config.extensionName;
         this.segmenter = new TextSegmenter();
-        this.wordNet = require('wordnet');
+        // this.wordNet = require('wordnet');
     }
 
-    public async search(query: string, domain: string, numResults: number = 10): Promise<SearchResult> {
+    public async search(query: string, domain: string, numResults: number = 10): Promise<any> {
         const info = this.getConfig();
         const engineId = info.engineId;
         const baseUrl = info.url;
@@ -106,7 +98,7 @@ export class Browser {
             item.snippet.length > 30  // 排除过短摘要
         ).slice(0, numResults);
 
-        return { ai_data: filteredResults.length > 0 ? this.jsonParser.toJsonStr(filteredResults) : null };
+        return { ai_data: filteredResults };
     }
 
     private getConfig(): any {
@@ -139,7 +131,6 @@ export class Browser {
             case 'programming':
             case 'finance':
             case 'medical':
-            case 'technology':
                 result = domain;
                 break;
             default:

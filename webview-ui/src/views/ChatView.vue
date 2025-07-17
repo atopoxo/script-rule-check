@@ -875,7 +875,8 @@ export default defineComponent({
 
     const handleAIStreamStart = (data: any) => {
       selectedSession.value = getSelectedSession(data.selectedSession);
-      if (data.messageIndex === -1) {
+      const historyLength = selectedSession.value?.history.length as number;
+      if (data.messageIndex === -1 || data.messageIndex >= historyLength) {
         aiStreamMessage = reactive({
           role: "assistant",
           content: "正在等待回复..."

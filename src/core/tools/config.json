@@ -17,7 +17,7 @@
                         },
                         "domain": {
                             "type": "string",
-                            "description": "查询问题所属的领域，目前只支持：'programming', 'finance', 'medical', 'technology', 'else'这5种参数"
+                            "description": "查询问题所属的领域，目前只支持：'programming', 'finance', 'medical', 'else'这5种参数"
                         },
                         "num_results": {
                             "type": "integer",
@@ -32,9 +32,10 @@
                 "type": "object",
                 "properties": {
                     "ai_data": {
-                        "type": "string",
+                        "type": "object",
                         "description": "需要返回给大模型的分析结果",
-                        "return_type": "ai_tips"
+                        "returnType": "ai_tips",
+                        "showType": "browser_list"
                     }
                 },
                 "required": ["ai_data"]

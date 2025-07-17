@@ -23,23 +23,55 @@ export const throttle = (func: Function, limit: number) => {
     }
 };
 
-const replaceOutsideCode = (source: string, pattern: RegExp, replacement: string) => {
+const replaceOutsideCode = (source: string, pattern: RegExp) => {
     const codeBlockRegex = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
     let lastIndex = 0;
     let result = '';
+    const stack: string[] = [];
+    const maxDepth = 3;
     
+    const replacer = (tag: string) => {
+        const isClose = tag.startsWith('</');
+        const tagName = isClose ? tag.slice(2, -1) : tag.slice(1, -1);
+        if (isClose) {
+            if (stack.length > 0 && stack[stack.length - 1] === tagName) {
+                const depth = maxDepth - stack.length + 3;
+                const tips = ":".repeat(depth);
+                stack.pop();
+                return `\n${tips}\n`; // 正确闭合标签
+            } else {
+                return tag; // 不匹配则保留原标签
+            }
+        } else {
+            stack.push(tagName);
+            const depth = maxDepth - stack.length + 3;
+            const tips = ":".repeat(depth);
+            return `\n${tips} ${tagName}\n`; // 开启新标签
+        }
+    };
+    const processSegment = (segment: string) => {
+        return segment.replace(pattern, replacer);
+    };
     source.replace(codeBlockRegex, (match, offset) => {
-        result += source.slice(lastIndex, offset).replace(pattern, replacement);
+        const segment = source.slice(lastIndex, offset);
+        result += processSegment(segment);
         result += match;
         lastIndex = offset + match.length;
         return match;
     });
-    result += source.slice(lastIndex).replace(pattern, replacement);
+    const finalSegment = source.slice(lastIndex);
+    result += processSegment(finalSegment);
+    while (stack.length > 0) {
+        const depth = maxDepth - stack.length + 3;
+        const tips = ":".repeat(depth);
+        result += `\n${tips}\n`;
+        stack.pop();
+    }
     return result;
 };
 
 export const md2html = (content: string) => {
-    let text = String(content)
+    let text = String(content);
     text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
     const codeStyleBegin = `<pre class="hljs"><code>`;
     const codeStyleEnd = `</code></pre>`;
@@ -81,49 +113,83 @@ export const md2html = (content: string) => {
                 return `<div class="code-block-wrapper">${toolbar}${codeWithStyle}</div>`;
             }
         }
-    })
-    .use(markdownItContainer, 'think', {
-        validate: function(params: any) {
-            return params.trim() === 'think'
-        },
-        render: function(tokens: any, idx: any) {
-            return tokens[idx].nesting === 1 
-                ? `<div class="result-block expanded">
-                        <div class="block-header">
-                            <button class="icon-button content-header">
-                                <img class="expand-icon" src=""/>
-                                <div class="content-header-content">思考过程</div>
-                            </button>
-                        </div>
-                        <div class="content-wrapper">
-                            <div class="think-content">`
-                : `</div></div></div>`;
-        }
-    })
-    .use(markdownItContainer, 'conclusion', {
-        validate: function(params: any) {
-            return params.trim() === 'conclusion'
-        },
-        render: function(tokens: any, idx: any) {
-            return tokens[idx].nesting === 1 
-                ? `<div class="result-block expanded">
-                        <div class="block-header">
-                            <button class="icon-button content-header">
-                                <img class="expand-icon" src=""/>
-                                <div class="content-header-content">结论</div>
-                            </button>
-                        </div>
-                        <div class="content-wrapper">
-                            <div class="conclusion-content">` 
-                : '</div></div></div>';
-        }
-    })
-    .use(MarkdownItMathjax());
-    text = replaceOutsideCode(text, /<think>/g, '::: think\n');
-    text = replaceOutsideCode(text, /<\/think>/g, '\n:::\n');
-    text = replaceOutsideCode(text, /<conclusion>/g, '::: conclusion\n');
-    text = replaceOutsideCode(text, /<\/conclusion>/g, '\n:::\n');
+    });
+    const createContainer = (name: string, renderFn: (depth: number) => string) => {
+        md.use(markdownItContainer, name, {
+            validate: (params: string) => params.trim() === name,
+            render: (tokens: any[], idx: number) => {
+                const depth = tokens[idx].nesting;
+                return renderFn(depth);
+            }
+        });
+    };
+    createContainer('ToolCalls', (depth) => {
+        return depth === 1 
+            ? `<div class="tools-block expanded">
+                    <div class="block-header">
+                        <button class="icon-button content-header">
+                            <img class="expand-icon" src=""/>
+                            <div class="content-header-content">工具调用详情</div>
+                        </button>
+                    </div>`
+            : `</div>`;
+    });
+    createContainer('ToolCall', (depth) => {
+        return depth === 1 
+            ? `<div class="tool-block">`
+            : `</div>`;
+    });
+    createContainer('ToolCallId', (depth) => {
+        return depth === 1 
+            ? `<div class="block-header">
+                    <button class="icon-button content-header">
+                        <img class="expand-icon" src=""/>
+                        <div class="content-header-content">`
+            : `</div></button></div>`;
+    });
+    createContainer('ToolCallInput', (depth) => {
+        return depth === 1 
+            ? `<div class="json-wrapper expanded">`
+            : `</div>`;
+    });
+    createContainer('ToolCallOutput', (depth) => {
+        return depth === 1 
+            ? `<div class="json-wrapper expanded">`
+            : `</div>`;
+    });
+    createContainer('think', (depth) => {
+        return depth === 1 
+            ? `<div class="result-block expanded">
+                    <div class="block-header">
+                        <button class="icon-button content-header">
+                            <img class="expand-icon" src=""/>
+                            <div class="content-header-content">思考过程</div>
+                        </button>
+                    </div>
+                    <div class="content-wrapper">
+                        <div class="think-content">`
+            : `</div></div></div>`;
+    });
+    createContainer('conclusion', (depth) => {
+        return depth === 1 
+            ? `<div class="result-block expanded">
+                    <div class="block-header">
+                        <button class="icon-button content-header">
+                            <img class="expand-icon" src=""/>
+                            <div class="content-header-content">结论</div>
+                        </button>
+                    </div>
+                    <div class="content-wrapper">
+                        <div class="conclusion-content">` 
+            : '</div></div></div>';
+    });
+    md.use(MarkdownItMathjax());
+
+    text = replaceOutsideCode(text, /<\/?(ToolCalls|ToolCall|ToolCallId|ToolCallInput|ToolCallOutput|think|conclusion)>/g);
+
     text = text.replace(/\r\n/g, '\n');
+    text = text.replace(/(\S)\n:::/g, '$1\n\n:::');
+    text = text.replace(/:::\n(\S)/g, ':::\n\n$1');
     text = text.replace(/^(\s+)/gm, (match) => {
         return match.replace(/ /g, '\u00A0').replace(/\t/g, '\u00A0\u00A0\u00A0\u00A0');
     });
@@ -138,16 +204,3 @@ export const md2html = (content: string) => {
     }
     // text = text.replace(/<code>/g, '<pre class="code-block"><code>').replace(/<\/code>/g, '</code></pre>');
 };
-
-// const content2html = (content: string) => {
-//     let escaped = content
-//         .replace(/&/g, "&amp;")
-//         .replace(/</g, "&lt;")
-//         .replace(/>/g, "&gt;")
-//         .replace(/"/g, "&quot;")
-//         .replace(/'/g, "&#039;")
-//     escaped = escaped.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-//     escaped = escaped.replace(/ /g, '&nbsp;').replace(/\t/g, '&emsp;');
-//     escaped = escaped.replace(/\n/g, '<br>');
-//     return escaped;
-// }

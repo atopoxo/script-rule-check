@@ -4,7 +4,7 @@ const copy = require('lodash/cloneDeep');
 import { getJsonParser } from '../../json/json_parser';
 import { ContextMgr } from '../../context/context_mgr';
 import { ToolsMgr } from '../../tools/tools_mgr';
-import type { ToolCall } from '../../tools/tools_mgr';
+import type { ToolCall, ToolCallInfo } from '../../tools/tools_mgr';
 import type { ContentMap, Delta, InputData, Session, Message } from './ai_types';
 
 export abstract class AIModelBase {
@@ -74,23 +74,31 @@ export abstract class AIModelBase {
                     yield* this.streamGenerator(signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace);
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
-                    yield* this.reportToolInfos(tools, contentMap.conclusion_content);
-                    const returnToAi = await this.handleToolCalls(tools, messages, cache, currentIndex);
+                    // yield* this.reportToolInfos(tools, contentMap.conclusion_content);
+                    const toolResult = await this.handleToolCalls(tools, messages, cache, currentIndex);
+                    const returnToAi = toolResult.ai;
+                    const toolCalls = toolResult.toolCalls;
+                    if (toolCalls.length > 0) {
+                        const toolContext = this.reportToolUseInfos(toolCalls);
+                        yield toolContext;
+                        streamContent += toolContext;
+                    }
                     if (!returnToAi && cache.returns.ai.ai_conclusion) {
-                        streamContent = `${cache.returns.ai.ai_conclusion}`;
+                        streamContent += `${cache.returns.ai.ai_conclusion}`;
                         yield streamContent;
                         break;
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
                 yield* this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
-                streamContent = contentMap.think_content + contentMap.conclusion_content;
+                streamContent += contentMap.think_content + contentMap.conclusion_content;
                 cache.returns.ai.ai_conclusion = contentMap.conclusion_content;
                 hasTask = cache.tool_calls.length > 0;
             } catch (ex) {
                 streamContent = "无法响应您的请求，请稍后再试...";
                 yield streamContent;
                 console.error(ex as Error);
+                break;
             } finally {
                 await this.saveMessages(needSave, streamContent, messages, userId, instanceName, sessionId, messageReplace, currentIndex);
                 messageReplace = true;
@@ -105,6 +113,7 @@ export abstract class AIModelBase {
         cache.tools_describe = "";
         cache.context = "";
         cache.knowledge = "";
+        cache.tool_calls = [];
         cache.returns = { ai: { ai_conclusion: "" } };
     }
 
@@ -135,7 +144,7 @@ export abstract class AIModelBase {
                 cache.backup = undefined;
             } else {
                 if (messages[returnIndex].role === "user") {
-                    messages.pop();
+                    messages.splice(returnIndex, 1);
                     returnIndex -= 2;
                 }
             }
@@ -143,11 +152,30 @@ export abstract class AIModelBase {
         return returnIndex;
     }
 
-    private *reportToolInfos(tools: any[][], content: string): Generator<string, void, unknown> {
-        if (tools.length > 0) {
-            yield `经过分析需要调用第三方工具\n${content}`;
+    // private *reportToolInfos(tools: any[][], content: string): Generator<string, void, unknown> {
+    //     if (tools.length > 0) {
+    //         yield `经过分析需要调用第三方工具\n${content}`;
+    //     }
+    //     yield "进一步分析结果如下\n";
+    // }
+
+    private reportToolUseInfos(toolCalls: any[]) {
+        let result = "<ToolCalls>";
+        for (const toolCall of toolCalls) {
+            result += "<ToolCall>";
+            result += "<ToolCallId>";
+            result += `${toolCall.id}`;
+            result += "</ToolCallId>"
+            result += "<ToolCallInput>";
+            result += "```json\n" + `${this.jsonParser.toJsonStr(toolCall.input, 4)}` + "\n```";
+            result += "</ToolCallInput>"
+            result += "<ToolCallOutput>";
+            result += "```json\n" + `${this.jsonParser.toJsonStr(toolCall.output.data, 4)}` + "\n```";
+            result += "</ToolCallOutput>"
+            result += "</ToolCall>"
         }
-        yield "进一步分析结果如下\n";
+        result += "</ToolCalls>";
+        return result;
     }
 
     private async *streamGenerator(signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean): AsyncGenerator<string, void, unknown> {
@@ -168,8 +196,9 @@ export abstract class AIModelBase {
         yield* this.handleStreamNormalCalls(undefined, contentMap);
     }
 
-    private async handleToolCalls(tools: ToolCall[][], messages: Message[], cache: any, index: number): Promise<string | null> {
+    private async handleToolCalls(tools: ToolCall[][], messages: Message[], cache: any, index: number): Promise<any> {
         let currentTools: ToolCall[] = [];
+        let currentToolCalls: ToolCallInfo[] = [];
         const toolSet = new Set<string>();
         
         if (tools.length === 0) {
@@ -228,15 +257,49 @@ export abstract class AIModelBase {
             try {
                 const result = await this.toolsMgr.callTool(moduleName, className, functionName, args);
                 if (result) {
+                    const currentReturns = [];
                     for (const [variable, item] of Object.entries(result)) {
-                        const returnType = this.toolsMgr.getToolReturnType(moduleName, className, functionName, variable); 
-                        if (returnType === "ai_tips") {
-                            this.buildToolsMessages(toolsMessages, call.id, item as string);
-                        } else if (returnType === "ai_conclusion") {
-                            cache.returns.ai.ai_conclusion = item;
+                        const prop = this.toolsMgr.getToolReturnProperty(moduleName, className, functionName, variable);
+                        if (!prop) {
+                            continue;
+                        }
+                        if (prop.returnType === "ai_tips") {
+                            let itemStr = '';
+                            if (!(item instanceof String)) {
+                                itemStr = this.jsonParser.toJsonStr(item);
+                            }
+                            this.buildToolsMessages(toolsMessages, call.id, itemStr);
+                        } else if (prop.returnType === "ai_conclusion") {
+                            let itemStr = '';
+                            if (!(item instanceof String)) {
+                                itemStr = this.jsonParser.toJsonStr(item);
+                            }
+                            cache.returns.ai.ai_conclusion = itemStr;
                         } else {
                             cache.returns[id] = item;
                         }
+                        if (item) {
+                            const currentReturn = {
+                                showType: prop.showType,
+                                value: item
+                            }
+                            currentReturns.push(currentReturn);
+                        }
+                    }
+                    if (currentReturns.length > 0) {
+                        const currentToolCall = {
+                            id: id,
+                            input: {
+                                module: moduleName,
+                                class: className,
+                                name: functionName,
+                                arguments: args
+                            },
+                            output: {
+                                data: currentReturns
+                            }
+                        }
+                        currentToolCalls.push(currentToolCall);
                     }
                 }
             } catch (ex) {
@@ -260,7 +323,11 @@ export abstract class AIModelBase {
         }
 
         cache.tool_calls = tools;
-        return toolsMessages.return_to_ai;
+        const result = {
+            ai: toolsMessages.return_to_ai,
+            toolCalls: currentToolCalls
+        }
+        return result;
     }
 
     private parseArguments(args: any): any {

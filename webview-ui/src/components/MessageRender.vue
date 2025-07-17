@@ -1,7 +1,11 @@
 <!-- MessageRenderer.vue -->
 <template>
-  <div v-if="contentType === 'html'" class="html-block" v-html="contentValue" ref="contentRef"></div>
-  <div v-if="contentType === 'text' && textEditable === false" class="text-block" ref="contentRef">
+  <div v-if="contentType === 'html'" class="html-block" v-html="contentValue" ref="contentRef" :style="{
+      maxWidth: maxWidth + 'px'
+    }"></div>
+  <div v-if="contentType === 'text' && textEditable === false" class="text-block" ref="contentRef" :style="{
+      maxWidth: maxWidth + 'px'
+    }">
     <div class="result-block expanded">
       <div class="block-header">
           <button class="icon-button content-header">
@@ -11,7 +15,6 @@
       </div>
       <div class="content-wrapper">
         <div class="text-content" :style="{
-            maxWidth: maxWidth + 'px',
             // height: nonEditHeight + 'px',
             overflowX: textOverflowX,
             overflowY: textOverflowY
@@ -19,7 +22,9 @@
       </div>
     </div>
   </div>
-  <div v-if="contentType === 'text' && textEditable === true" class="textarea-block" :style="{ height: containerHeight + 'px' }">
+  <div v-if="contentType === 'text' && textEditable === true" class="textarea-block" :style="{ 
+      height: containerHeight + 'px' 
+    }">
     <textarea class="textarea-content" :style="`width: ${maxWidth}px;`"
         :value="contentValue"
         ref="contentRef"
@@ -202,21 +207,21 @@ export default defineComponent({
       fontFamily: 'inherit',
       lineHeight: textAreaLineHeight,
       paddingTop: props.textAreaPadding,
-      paddingBottom: props.textAreaPadding,
-      paddingLeft: props.textAreaPadding,
-      paddingRight: props.textAreaPadding,
-      borderTopWidth: props.textAreaBorder,
-      borderBottomWidth: props.textAreaBorder,
-      borderLeftWidth: props.textAreaBorder,
-      borderRightWidth: props.textAreaBorder,
+      paddingBottom: props.textAreaPadding as number,
+      paddingLeft: props.textAreaPadding as number,
+      paddingRight: props.textAreaPadding as number,
+      borderTopWidth: props.textAreaBorder as number,
+      borderBottomWidth: props.textAreaBorder as number,
+      borderLeftWidth: props.textAreaBorder as number,
+      borderRightWidth: props.textAreaBorder as number,
       boxSizing: 'content-box'
     });
     const maxTextAreaHeight = textAreaLineHeight * maxTextLines;
     const isComposing = ref(false);
     const pendingInput = ref('');
-    const defaultInputContainerHeight = textareaStyles.value.borderTopWidth + textareaStyles.value.borderBottomWidth +
+    const defaultInputContainerHeight = (textareaStyles.value.borderTopWidth + textareaStyles.value.borderBottomWidth +
         textareaStyles.value.paddingTop + textareaStyles.value.paddingBottom +
-        textAreaLineHeight;
+        textAreaLineHeight) as number;
     const containerHeight = ref(defaultInputContainerHeight);
 
     const handleInput = (event: Event) => {
@@ -369,13 +374,21 @@ export default defineComponent({
     }
 
     const blockStates = ref<Record<string, boolean>>({});
-    const getBlockSelector = (block: Element): string | null => {
-      const parent = block.parentElement;
-      if (!parent) {
-        return null;
+    const getBlockSelector = (block: Element, key: string = 'item-name'): string | null => {
+      let name: any;
+      if (!block.getAttribute(key)) {
+        const parent = block.parentElement;
+        if (!parent) {
+          return null;
+        }
+        let parentName = parent.getAttribute(key);
+        parentName = parentName ? parentName : '';
+        const index = Array.from(parent.children).indexOf(block);
+        name = `${parentName}:nth-child(${index + 1})`;
+        block.setAttribute(key, name);
       }
-      const index = Array.from(parent.children).indexOf(block);
-      return `:nth-child(${index + 1})`;
+      name = block.getAttribute(key);
+      return name;
     };
     const getBlockIconPath = (isExpanded: boolean) => {
       try {
@@ -390,7 +403,23 @@ export default defineComponent({
 
     const expandContext = (event: any) => {
       const header = event.currentTarget as HTMLElement;
-      const block = header.closest('.result-block');
+      let block: HTMLElement | null = null;
+      let blockType = '';
+      let currentElement: HTMLElement | null = header.parentElement;
+      while (currentElement && !block) {
+        if (currentElement.classList.contains('result-block')) {
+          block = currentElement;
+          blockType = 'result';
+        } else if (currentElement.classList.contains('tool-block')) {
+          block = currentElement;
+          blockType = 'tool';
+        } else if (currentElement.classList.contains('tools-block')) {
+          block = currentElement;
+          blockType = 'tools';
+        } else {
+          currentElement = currentElement.parentElement;
+        }
+      }
       if (!block) {
         return;
       }
@@ -399,16 +428,53 @@ export default defineComponent({
         return;
       }
       if (blockStates.value[selector]) {
-        block.classList.remove('expanded');
-        const content = block.querySelector('.content-wrapper') as HTMLElement;
-        if (content) {
-          content.style.maxHeight = '0';
+        if (blockType === 'result') {
+          block.classList.remove('expanded');
+          const content = block.querySelector('.content-wrapper') as HTMLElement;
+          if (content) {
+            content.style.maxHeight = '0';
+          }
+        } else if (blockType === 'tools') {
+          block.classList.remove('expanded');
+          const children = Array.from(block.children) as HTMLElement[];
+          children.forEach(child => {
+            if (!child.classList.contains('block-header')) {
+              child.style.maxHeight = '0';
+            }
+          });
+        } else if (blockType === 'tool') {
+          const children = Array.from(block.children) as HTMLElement[];
+          children.forEach(child => {
+            if (!child.classList.contains('block-header')) {
+              child.classList.remove('expanded');
+              child.style.maxHeight = '0';
+            }
+          });
         }
       } else {
-        block.classList.add('expanded');
-        const content = block.querySelector('.content-wrapper') as HTMLElement;
-        if (content) {
-          content.style.maxHeight = content.scrollHeight + 'px';
+        if (blockType === 'result') {
+          block.classList.add('expanded');
+          const content = block.querySelector('.content-wrapper') as HTMLElement;
+          if (content) {
+            content.style.maxHeight = content.scrollHeight + 'px';
+          }
+        } else if (blockType === 'tools') {
+          block.classList.add('expanded');
+          const children = Array.from(block.children) as HTMLElement[];
+          children.forEach(child => {
+            if (!child.classList.contains('block-header')) {
+              child.style.maxHeight = child.scrollHeight + 'px';
+            }
+          });
+        } else if (blockType === 'tool') {
+          const children = Array.from(block.children) as HTMLElement[];
+          children.forEach(child => {
+            if (!child.classList.contains('block-header')) {
+              child.classList.add('expanded');
+              child.style.maxHeight = child.scrollHeight + 'px';
+            }
+          });
+          block.style.maxHeight = block.scrollHeight + 'px';
         }
       }
       blockStates.value[selector] = !blockStates.value[selector];
@@ -419,23 +485,26 @@ export default defineComponent({
     };
 
     const createExpandState = () => {
-      contentRef.value?.querySelectorAll('.result-block').forEach((block: Element) => {
-        const selector = getBlockSelector(block);
-        if (!selector) {
-          return;
-        }
-        if (blockStates.value[selector] === undefined) {
-          blockStates.value[selector] = true;
-        }
-        const header = block.querySelector('.content-header');
-        if (header) {
-          header.removeEventListener('click', expandContext);
-          header.addEventListener('click', expandContext);
-          const icon = header.querySelector('.expand-icon') as HTMLImageElement;
-          if (icon) {
-            icon.src = getBlockIconPath(blockStates.value[selector]);
+      const blockTypes = ['.result-block', '.tools-block', '.tool-block'];
+      blockTypes.forEach(type => {
+        contentRef.value?.querySelectorAll(type).forEach((block: Element) => {
+          const selector = getBlockSelector(block);
+          if (!selector) {
+            return;
           }
-        }
+          if (blockStates.value[selector] === undefined) {
+            blockStates.value[selector] = true;
+          }
+          const header = block.querySelector('.content-header');
+          if (header) {
+            header.removeEventListener('click', expandContext);
+            header.addEventListener('click', expandContext);
+            const icon = header.querySelector('.expand-icon') as HTMLImageElement;
+            if (icon) {
+              icon.src = getBlockIconPath(blockStates.value[selector]);
+            }
+          }
+        });
       });
     }
 
@@ -444,6 +513,7 @@ export default defineComponent({
         contentType.value = props.contentType;
         textEditable.value = props.textEditable;
         if (props.contentType === 'html') {
+          maxWidth.value = props.maxWidth - 16;
           contentValue.value = md2html(props.content);
           await nextTick();
           createExpandState();
@@ -499,27 +569,47 @@ export default defineComponent({
 
 <style>
 .block-header {
-    display: inline-flex;
-    color: var(--vscode-tab-inactiveForeground);
-    font-size: 11px;
-    height: 16px;
-    line-height: 12px;
-    font-weight: 500;
-    padding: 2px;
-    border-radius: 5px;
-    cursor: pointer;
-    user-select: none;
-    align-items: center;
+  display: inline-flex;
+  color: var(--vscode-tab-inactiveForeground);
+  font-size: 11px;
+  height: 16px;
+  line-height: 12px;
+  font-weight: 500;
+  padding: 2px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+  align-items: center;
 }
 .content-wrapper {
-    border-radius: 6px;
-    padding: 0;
-    margin-top: 0;
-    overflow: hidden;
+  border-radius: 6px;
+  padding: 0;
+  margin-top: 0;
+  overflow: hidden;
 }
 .result-block.expanded .content-wrapper {
   padding: 0px 8px 8px 8px;
   margin-top: 8px;
+}
+.tools-block.expanded .content-wrapper {
+  padding: 0px 8px 8px 8px;
+  margin-top: 8px;
+}
+.tool-block {
+  border-radius: 6px;
+  padding: 0;
+  margin: 0px 0px 0px 6px;
+  overflow: hidden;
+}
+.json-wrapper {
+  border-radius: 6px;
+  padding: 0;
+  margin-top: 0;
+  overflow: hidden;
+}
+.json-wrapper.expanded {
+  margin-left: 18px;
+  padding: 0px 2px 0px 2px;
 }
 .think-content {
   border: 1px solid var(--vscode-commandCenter-inactiveBorder);
@@ -569,6 +659,8 @@ export default defineComponent({
     border: 1px solid var(--line-01);
     border-radius: 5px;
     overflow: hidden;
+    overflow-x: auto;
+    overflow-y: auto;
 }
 .code-toolbar {
     display: flex;

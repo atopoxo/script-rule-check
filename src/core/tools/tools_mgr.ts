@@ -9,7 +9,7 @@ interface ToolConfig {
     next_tool_id?: string;
     returns?: {
         type: string;
-        properties: Record<string, { return_type: string }>;
+        properties: Record<string, { returnType: string }>;
         required: string[];
     };
 }
@@ -49,6 +49,19 @@ interface ToolsMap {
     [module: string]: {
         [className: string]: ToolModuleCache;
     };
+}
+
+export interface ToolCallInfo {
+    id: string;
+    input: {
+        module: string;
+        class: string;
+        name: string;
+        arguments: Record<string, any>;
+    };
+    output: {
+        data: any;
+    }
 }
 
 interface AIUsageTips {
@@ -230,7 +243,7 @@ export class ToolsMgr {
         return this.toolsConfig;
     }
 
-    public getToolReturnType(moduleName: string, className: string, functionName: string, variable: string): string | null {
+    public getToolReturnProperty(moduleName: string, className: string, functionName: string, variable: string): any {
         const tool = this.toolsConfig.find(tool => {
             const type = tool.type;
             const call = tool[type] as ToolFunctionCall;
@@ -244,7 +257,7 @@ export class ToolsMgr {
         }
         
         const returnProp = tool.returns.properties[variable];
-        return returnProp ? returnProp.return_type : null;
+        return returnProp ? returnProp : null;
     }
 
     private loadToolsConfig(filePath: string): any {
