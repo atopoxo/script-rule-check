@@ -36,11 +36,15 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick } from 'vue';
+import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick, createApp } from 'vue';
 import { throttle, md2html } from '../functions/BaseFunctions';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
+import BrowserList from './BrowserList.vue';
 
 export default defineComponent({
+  components: {
+    BrowserList
+  },
   props: {
     isDark: {
       type: Boolean,
@@ -508,14 +512,35 @@ export default defineComponent({
       });
     }
 
+    const componentInstances = ref<any[]>([]);
+    const mountComponents = async (components: any[]) => {
+      await nextTick();
+      componentInstances.value.forEach(app => app.unmount());
+      componentInstances.value = [];
+      components.forEach(comp => {
+        const container = document.getElementById(`component-${comp.index}`);
+        if (!container) {
+          return;
+        }
+        const app = createApp(BrowserList, {
+          isDark: props.isDark,
+          data: comp.data
+        });
+        app.mount(container);
+        componentInstances.value.push(app);
+      });
+    };
+
     watchEffect(async () => {
         themeInit();
         contentType.value = props.contentType;
         textEditable.value = props.textEditable;
         if (props.contentType === 'html') {
           maxWidth.value = props.maxWidth - 16;
-          contentValue.value = md2html(props.content);
+          const { html, components } = md2html(props.content);
+          contentValue.value = html;
           await nextTick();
+          mountComponents(components);
           createExpandState();
         } else if (props.contentType === 'text') {
           contentValue.value = props.content;
@@ -544,6 +569,7 @@ export default defineComponent({
       if (contentRef.value) {
         contentRef.value.removeEventListener('click', handleCopyClick);
       }
+      componentInstances.value.forEach(app => app.unmount());
     });
     
     return { 
@@ -608,6 +634,26 @@ export default defineComponent({
   overflow: hidden;
 }
 .json-wrapper.expanded {
+  margin-left: 18px;
+  padding: 0px 2px 0px 2px;
+}
+.output-wrapper {
+  border-radius: 6px;
+  padding: 0;
+  margin-top: 0;
+  overflow: hidden;
+}
+.output-wrapper.expanded {
+  margin-left: 18px;
+  padding: 0px 2px 0px 2px;
+}
+.output-wrapper {
+  border-radius: 6px;
+  padding: 0;
+  margin-top: 0;
+  overflow: hidden;
+}
+.output-wrapper.expanded {
   margin-left: 18px;
   padding: 0px 2px 0px 2px;
 }

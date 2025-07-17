@@ -70,7 +70,20 @@ const replaceOutsideCode = (source: string, pattern: RegExp) => {
     return result;
 };
 
+export type RenderResult = {
+  html: string;
+  components: {
+    type: string;       // 组件类型，如 'browser-list'
+    data: any;          // 组件所需数据
+    index: number;
+  }[];
+};
+
 export const md2html = (content: string) => {
+    const result = {
+        html: '',
+        components: []
+    }
     let text = String(content);
     text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
     const codeStyleBegin = `<pre class="hljs"><code>`;
@@ -114,16 +127,16 @@ export const md2html = (content: string) => {
             }
         }
     });
-    const createContainer = (name: string, renderFn: (depth: number) => string) => {
+    const createContainer = (name: string, renderFn: (depth: number, tokens: any[], idx: number) => string) => {
         md.use(markdownItContainer, name, {
             validate: (params: string) => params.trim() === name,
             render: (tokens: any[], idx: number) => {
                 const depth = tokens[idx].nesting;
-                return renderFn(depth);
+                return renderFn(depth, tokens, idx);
             }
         });
     };
-    createContainer('ToolCalls', (depth) => {
+    createContainer('ToolCalls', (depth: number) => {
         return depth === 1 
             ? `<div class="tools-block expanded">
                     <div class="block-header">
@@ -134,12 +147,12 @@ export const md2html = (content: string) => {
                     </div>`
             : `</div>`;
     });
-    createContainer('ToolCall', (depth) => {
+    createContainer('ToolCall', (depth: number) => {
         return depth === 1 
             ? `<div class="tool-block">`
             : `</div>`;
     });
-    createContainer('ToolCallId', (depth) => {
+    createContainer('ToolCallId', (depth: number) => {
         return depth === 1 
             ? `<div class="block-header">
                     <button class="icon-button content-header">
@@ -147,17 +160,17 @@ export const md2html = (content: string) => {
                         <div class="content-header-content">`
             : `</div></button></div>`;
     });
-    createContainer('ToolCallInput', (depth) => {
+    createContainer('ToolCallInput', (depth: number) => {
         return depth === 1 
             ? `<div class="json-wrapper expanded">`
             : `</div>`;
     });
-    createContainer('ToolCallOutput', (depth) => {
+    createContainer('ToolCallOutput', (depth: number) => {
         return depth === 1 
-            ? `<div class="json-wrapper expanded">`
+            ? `<div class="output-wrapper expanded">`
             : `</div>`;
     });
-    createContainer('think', (depth) => {
+    createContainer('think', (depth: number) => {
         return depth === 1 
             ? `<div class="result-block expanded">
                     <div class="block-header">
@@ -170,7 +183,7 @@ export const md2html = (content: string) => {
                         <div class="think-content">`
             : `</div></div></div>`;
     });
-    createContainer('conclusion', (depth) => {
+    createContainer('conclusion', (depth: number) => {
         return depth === 1 
             ? `<div class="result-block expanded">
                     <div class="block-header">
@@ -196,11 +209,76 @@ export const md2html = (content: string) => {
     // text = text.replace(/\n\n/g, '\n<br>\n');
     try {
         let html = md.render(text);
+        html = processOutputContainers(result.components, html);
         html = html.replace(/<p>/g, '<p style="margin:0;">');
-        return html;
+        result.html = html;
     } catch (e) {
         console.error('Markdown渲染失败:', e);
-        return text; // 降级返回原始文本
+        result.html = text;
+    } finally {
+        return result;
     }
-    // text = text.replace(/<code>/g, '<pre class="code-block"><code>').replace(/<\/code>/g, '</code></pre>');
+};
+
+const processOutputContainers = (components: any[], html: string) => {
+    let componentIndex = 0;
+    const beginDiv = `<div class="output-wrapper expanded">`;
+    const endDiv = `</div>`;
+    const outputWrapperRegex = /<div class="output-wrapper expanded">([\s\S]*?)<\/div>/g;   
+    return html.replace(outputWrapperRegex, (match, content) => {
+        const trimmedContent = content.trim();
+        let containerHtml = '';
+        try {
+            const decodedContent = decodeHtmlEntities(trimmedContent);
+            const jsonData = JSON.parse(decodedContent);
+            if (Array.isArray(jsonData)) {
+                for (const item of jsonData) {
+                    if (item.showType === "browser_list") {
+                        // const jsonStr = JSON.stringify(item.value)
+                        //     .replace(/'/g, "\\'")
+                        //     .replace(/"/g, '&quot;');
+                        // containerHtml += `<component :is="'browser-list'" :isDark="isDark" :data='${jsonStr}'></component>`;
+                        const id = `component-${componentIndex++}`;
+                        components.push({
+                            type: 'browser-list',
+                            data: item.value,
+                            index: components.length
+                        });
+                        containerHtml += `${beginDiv}<div id="${id}"></div>${endDiv}`;
+                    } else {
+                        containerHtml += `${beginDiv}<div class="json-content">${JSON.stringify(item.value, null, 2)}</div>${endDiv}`;
+                    }
+                }
+            } else {
+                containerHtml = `${beginDiv}<div class="json-content">${decodedContent}</div>${endDiv}`;
+            }
+        } catch (error) {
+            console.error("JSON 解析失败", error);
+            containerHtml = `${beginDiv}<div class="json-error">无效的 JSON 格式</div>${endDiv}`;
+        } finally {
+            containerHtml;
+            return containerHtml;
+        }
+    });
+};
+
+const decodeHtmlEntities = (str: string) => {
+    let decoded = str
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&#x2F;/g, '/')
+        .replace(/&#x(\w+);/g, (_, code) => 
+            String.fromCharCode(parseInt(code, 16)))
+        .replace(/&#(\d+);/g, (_, code) => 
+            String.fromCharCode(parseInt(code, 10)));
+
+    decoded = decoded
+        .replace(/<br\s*\/?>/gi, '\n')    // <br> → 换行
+        .replace(/<\/p>/gi, '\n\n')       // </p> → 双换行（段落间距）
+        .replace(/<p[^>]*>/gi, '')        // 移除<p>标签本身
+        .replace(/[\u00A0]/g, ' ') 
+    return decoded
 };

@@ -16,8 +16,9 @@ interface SearchResultItem {
     title: string;
     snippet: string;
     link: string;
+    authority: string;
     score: number;
-    authority: number;
+    authorityScore: number;
 }
 
 @singleton()
@@ -228,14 +229,15 @@ export class Browser {
                 const finalSnippet = this.generateContextualSnippet(decodedSnippet, query);
                 const title = this.decodeSnippet(item.title, "无标题");
                 const link = item.link || "";
-                const authority = this.calculateAuthority(link);
+                const authorityData = this.calculateAuthority(link);
 
                 results.push({
                     title: title,
                     snippet: finalSnippet,
                     link: link,
+                    authority: authorityData.name,
                     score: 0, // 临时分数，后续计算
-                    authority: authority
+                    authorityScore: authorityData.score
                 });
             } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
@@ -277,14 +279,20 @@ export class Browser {
         return bestSentence || snippet.substring(0, 150) + (snippet.length > 150 ? '...' : '');
     }
 
-    private calculateAuthority(link: string): number {
+    private calculateAuthority(link: string): any {
+        const result = {
+            name: '',
+            score: 0
+        }
         try {
             const url = new URL(link);
             const domain = url.hostname;
+            result.name = domain;
             for (const [_, domains] of Object.entries(this.domainAuthorities)) {
                 for (const authDomain of domains) {
                     if (domain.includes(authDomain)) {
-                        return 1.0; // 最高权威分数
+                        result.score = 1.0;
+                        return result;
                     }
                 }
             }
@@ -293,14 +301,18 @@ export class Browser {
             const isGovDomain = govPatterns.some(suffix => domain.endsWith(suffix));
             const isEduDomain = eduPatterns.some(suffix => domain.endsWith(suffix));
             if (isGovDomain || isEduDomain) {
-                return 0.8;
+                result.score = 0.8;
+                return result;
             }
             if (domain.includes('wikipedia.org')) {
-                return 0.9;
+                result.score = 0.9;
+                return result;
             }
-            return 0.5; // 默认分数
+            result.score = 0.5;
+            return result;
         } catch {
-            return 0.5;
+            result.score = 0.5;
+            return result;
         }
     }
 
@@ -311,7 +323,7 @@ export class Browser {
                 const content = `${item.title} ${item.snippet}`;
                 const textScore = this.calculateTextSimilarity(query, queryKeywords, content);
                 const traditionalScore = this.calculateRelevance(
-                    query, item.title, item.snippet, item.link, item.authority
+                    query, item.title, item.snippet, item.link, item.authorityScore
                 );
                 const finalScore = (textScore * 0.7) + (traditionalScore * 0.3);
                 return {
@@ -324,7 +336,7 @@ export class Browser {
             console.error('语义重排序失败，使用基础排序', error);
             return results.map(item => ({
                 ...item,
-                score: this.calculateRelevance(query, item.title, item.snippet, item.link, item.authority)
+                score: this.calculateRelevance(query, item.title, item.snippet, item.link, item.authorityScore)
             })).sort((a, b) => b.score - a.score);
         }
     }
@@ -400,7 +412,7 @@ export class Browser {
         }
     }
 
-    private calculateRelevance(query: string, title: string, snippet: string, link: string, authority: number): number {
+    private calculateRelevance(query: string, title: string, snippet: string, link: string, authorityScore: number): number {
         if (!query || !title || !snippet) {
             return 0;
         }
@@ -414,7 +426,7 @@ export class Browser {
             (titleScore * 0.4) + 
             (snippetScore * 0.4) + 
             (linkScore * 0.1) +
-            (authority * 0.1);
+            (authorityScore * 0.1);
         return Math.min(1.0, combinedScore);
     }
 

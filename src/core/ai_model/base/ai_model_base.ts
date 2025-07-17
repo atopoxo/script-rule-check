@@ -170,7 +170,7 @@ export abstract class AIModelBase {
             result += "```json\n" + `${this.jsonParser.toJsonStr(toolCall.input, 4)}` + "\n```";
             result += "</ToolCallInput>"
             result += "<ToolCallOutput>";
-            result += "```json\n" + `${this.jsonParser.toJsonStr(toolCall.output.data, 4)}` + "\n```";
+            result += `${this.jsonParser.toJsonStr(toolCall.output.data, 4)}`;
             result += "</ToolCallOutput>"
             result += "</ToolCall>"
         }
