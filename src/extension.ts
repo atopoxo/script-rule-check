@@ -103,6 +103,9 @@ export async function activate(context: vscode.ExtensionContext) {
                     vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
                 }
             }
+        }),
+        vscode.commands.registerCommand('extension.openExternal', (uri: vscode.Uri) => {
+            vscode.env.openExternal(uri);
         })
     );
     if (!fs.existsSync(productDir)) {

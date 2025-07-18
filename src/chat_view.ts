@@ -145,6 +145,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'setSessionName':
                     await this.setSessionName(data.sessionId, data.sessionName);
                     break;
+                case 'openExternal':
+                    await this.openExternal(data.url);
+                    break;
                 case 'openSettings':
                     await this.openSettings();
                     break;
@@ -479,6 +482,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private async setSessionName(sessionId: string, sessionName: string) {
         const session = await this.chatManager.setSessionName('chat', sessionId, sessionName) as Session;
         this.updateWebview('setSessionName', {sessionName: session.name});
+    }
+
+    private async openExternal(url: string) {
+        await vscode.commands.executeCommand('extension.openExternal', url);
     }
 
     private async openSettings() {

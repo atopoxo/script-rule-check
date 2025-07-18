@@ -103,6 +103,10 @@
         "category": "Script Rule Check"
       },
       {
+        "command": "extension.openExternal",
+        "title": "打开链接"
+      },
+      {
         "command": "extension.checkAllRules",
         "title": "▶ 检查所有用例规则"
       },

@@ -15,7 +15,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watchEffect } from 'vue';
+import { defineComponent, onMounted, ref, watchEffect } from 'vue';
 import type { PropType } from 'vue';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 import type { ContextOption } from '../types/ChatTypes';
@@ -33,7 +33,7 @@ export default defineComponent({
         }
     },
   
-    emits: ['click'],
+    emits: ['open-external'],
   
     setup(props, { emit }) {
         const themeIconRelativePath = ref<string>('');
@@ -57,7 +57,7 @@ export default defineComponent({
         }
 
         const click = (item: any) => {
-            emit('click', item.link);
+            emit('open-external', item.link)
         };
 
         const getIconPath = (iconPath: string) => {
@@ -75,6 +75,9 @@ export default defineComponent({
             } else {
                 themeIconRelativePath.value = 'light';
             }
+        });
+
+        onMounted(() => {
         });
 
         return {
@@ -107,8 +110,7 @@ export default defineComponent({
     justify-content: space-between;
     align-items: flex-start;
     cursor: pointer;
-    margin: 2px 6px;
-    padding: 6px 6px;
+    padding: 6px 12px;
 }
 .list-item:hover {
     background-color: var(--vscode-toolbar-hoverBackground);

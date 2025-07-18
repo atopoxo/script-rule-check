@@ -80,7 +80,7 @@ export default defineComponent({
     }
   },
 
-  emits: ['finish-edit'],
+  emits: ['finish-edit', 'open-external'],
   setup(props,  { emit }) {
     const contentValue = ref('');
     const contentRef = ref<HTMLElement | null>(null);
@@ -524,12 +524,17 @@ export default defineComponent({
         }
         const app = createApp(BrowserList, {
           isDark: props.isDark,
-          data: comp.data
+          data: comp.data,
+          onOpenExternal: handleOpenExternal
         });
         app.mount(container);
         componentInstances.value.push(app);
       });
     };
+
+    const handleOpenExternal = (url: string) => {
+      emit('open-external', url);
+    }
 
     watchEffect(async () => {
         themeInit();
@@ -634,8 +639,11 @@ export default defineComponent({
   overflow: hidden;
 }
 .json-wrapper.expanded {
-  margin-left: 18px;
+  margin-left: 6px;
   padding: 0px 2px 0px 2px;
+}
+.json-wrapper.expanded pre {
+  margin: 0 0 4px 0;
 }
 .output-wrapper {
   border-radius: 6px;
@@ -644,20 +652,12 @@ export default defineComponent({
   overflow: hidden;
 }
 .output-wrapper.expanded {
-  margin-left: 18px;
-  padding: 0px 2px 0px 2px;
-}
-.output-wrapper {
-  border-radius: 6px;
-  padding: 0;
-  margin-top: 0;
-  overflow: hidden;
-}
-.output-wrapper.expanded {
-  margin-left: 18px;
+  margin-left: 6px;
   padding: 0px 2px 0px 2px;
 }
 .think-content {
+  padding: 6px;
+  border-radius: 6px;
   border: 1px solid var(--vscode-commandCenter-inactiveBorder);
 }
 .conclusion-content {

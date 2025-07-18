@@ -60,7 +60,9 @@
                 :maxWidth="contentBlockWidth"
                 :textEditable="modifiedIndex != undefined"
                 :content="msg.content"
-                @finish-edit="finishEdit"></message-render>
+                @finish-edit="finishEdit"
+                @open-external="handleOpenExternal"></message-render>
+
             </div>
             <div v-if="msg.role === 'user'" class="feedback user">
               <button v-if="modifiedIndex" class="icon-button" @click="cancelModify(index)">
@@ -778,6 +780,13 @@ export default defineComponent({
       modifiedIndex.value = undefined;
     }
 
+    const handleOpenExternal = (url: string) => {
+      vscode.postMessage({
+          type: 'openExternal',
+          data: {url: url}
+      });
+    }
+
     const copy = (content: string, event: MouseEvent) => {
       const button = event.target as HTMLElement;
       if (!button) {
@@ -1140,6 +1149,7 @@ export default defineComponent({
       modify,
       cancelModify,
       finishEdit,
+      handleOpenExternal,
       copy,
       removeMessage,
       removeReference,

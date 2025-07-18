@@ -225,7 +225,7 @@ const processOutputContainers = (components: any[], html: string) => {
     const beginDiv = `<div class="output-wrapper expanded">`;
     const endDiv = `</div>`;
     const outputWrapperRegex = /<div class="output-wrapper expanded">([\s\S]*?)<\/div>/g;   
-    return html.replace(outputWrapperRegex, (match, content) => {
+    return html.replace(outputWrapperRegex, (_match, content) => {
         const trimmedContent = content.trim();
         let containerHtml = '';
         try {
