@@ -25,7 +25,7 @@
                             "default": 3
                         }
                     },
-                    "required": ["query"]
+                    "required": ["query", "domain"]
                 }
             },
             "returns": {

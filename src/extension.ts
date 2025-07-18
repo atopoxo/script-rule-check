@@ -266,6 +266,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 vscode.window.showErrorMessage(`当前工具模型${toolModelInfo.name}与当前模型${modelInfo.name}不匹配。`);
                 return;
             }
+            await aiModelMgr.setSelectedToolModel(id, userID, 'chat');
             await customConfig.update('selectedToolModel', id, vscode.ConfigurationTarget.Global);
         }),
         vscode.commands.registerCommand('extension.aiCharacter.editInfo', async (id: string, data: object) => {

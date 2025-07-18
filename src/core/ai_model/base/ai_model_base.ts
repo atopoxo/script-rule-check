@@ -33,7 +33,10 @@ export abstract class AIModelBase {
 
     abstract chatStream(signal: AbortSignal, inputData: any): AsyncGenerator<any, void, unknown>;
 
-    async getResponse(moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
+    public setToolModel(config: any) {
+        throw new Error("Method not implemented.");
+    }
+    public async getResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
         throw new Error("Method not implemented.");
     }
 
@@ -64,6 +67,10 @@ export abstract class AIModelBase {
         let currentIndex = index;
 
         this.resetCache(cache);
+        this.setToolModel({
+            apiKey: toolModelConfig.apiKey,
+            url: toolModelConfig.url
+        })
         while (hasTask) {
             try {
                 this.handleReferences(messages, cache, currentIndex);
@@ -71,7 +78,7 @@ export abstract class AIModelBase {
                 if (toolsOn) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    yield* this.streamGenerator(signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace);
+                    yield* this.streamGenerator(true, signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace);
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     // yield* this.reportToolInfos(tools, contentMap.conclusion_content);
@@ -90,7 +97,7 @@ export abstract class AIModelBase {
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                yield* this.streamGenerator(signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
+                yield* this.streamGenerator(false, signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
                 streamContent += contentMap.think_content + contentMap.conclusion_content;
                 cache.returns.ai.ai_conclusion = contentMap.conclusion_content;
                 hasTask = cache.tool_calls.length > 0;
@@ -178,8 +185,8 @@ export abstract class AIModelBase {
         return result;
     }
 
-    private async *streamGenerator(signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean): AsyncGenerator<string, void, unknown> {
-        const response = await this.getResponse(moduleName, messages, true, maxTokens, index);
+    private async *streamGenerator(toolModel: boolean, signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean): AsyncGenerator<string, void, unknown> {
+        const response = await this.getResponse(toolModel, moduleName, messages, true, maxTokens, index);
         for await (const chunk of response) {
             if (signal.aborted) {
                 return;

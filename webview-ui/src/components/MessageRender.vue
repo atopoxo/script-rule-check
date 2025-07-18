@@ -548,7 +548,6 @@ export default defineComponent({
           mountComponents(components);
           createExpandState();
         } else if (props.contentType === 'text') {
-          contentValue.value = props.content;
           if (textEditable.value) {
               maxWidth.value = props.maxWidth - textareaStyles.value.paddingLeft - textareaStyles.value.paddingRight -
               textareaStyles.value.borderLeftWidth - textareaStyles.value.borderRightWidth;
@@ -568,6 +567,7 @@ export default defineComponent({
       if (contentRef.value) {
         contentRef.value.addEventListener('click', handleCopyClick);
       }
+      contentValue.value = props.content;
     });
 
     onUnmounted(() => {

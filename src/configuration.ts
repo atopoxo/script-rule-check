@@ -352,7 +352,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private createModelItem(info: ModelInfo): vscode.TreeItem {
         const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '') === info.id;
         const item = new vscode.TreeItem(info.name);
-        item.id = info.id;
+        item.id = `Model:${info.id}`;
         item.contextValue = info.showConfig ? 'modelInfo': '';
         item.collapsibleState = info.showConfig ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
@@ -362,14 +362,14 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private createToolModelItem(info: ModelInfo): vscode.TreeItem {
         const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedToolModel', '') === info.id;
         const item = new vscode.TreeItem(info.name);
-        item.id = info.id;
+        item.id = `Tool Model:${info.id}`;
         item.contextValue = '';
         item.collapsibleState = vscode.TreeItemCollapsibleState.None;
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
         item.command = {
             command: 'extension.toolModel.selectedChange',
             title: '选择工具预判模型',
-            arguments: [item.id]
+            arguments: [info.id]
         };
         return item;
     }
@@ -404,8 +404,9 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return item;
     }
 
-    private getModelConfigItems(modelInfo: vscode.TreeItem): vscode.TreeItem[] {
-        const currentModel = this.allModelInfos.find(info => info.id === modelInfo.id);
+    private getModelConfigItems(item: vscode.TreeItem): vscode.TreeItem[] {
+        const id = item.id?.split(":")[1];
+        const currentModel = this.allModelInfos.find(info => info.id === id);
         let key = "";
         if (currentModel) {
             key = currentModel.apiKey;
@@ -421,7 +422,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             configItem.command = {
                 command: 'extension.model.editInfo',
                 title: '修改模型配置',
-                arguments: [modelInfo.id, {[key]: value}]
+                arguments: [id, {[key]: value}]
             };
             return configItem;
         });
@@ -451,7 +452,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     }
 
     private getSearchEngineConfigItems(item: vscode.TreeItem): vscode.TreeItem[] {
-        const currentItem = this.allSearchEngineInfos.find(info => info.id === item.id);
+        const id = item.id?.split(":")[1];
+        const currentItem = this.allSearchEngineInfos.find(info => info.id === id);
         let engineId = "";
         let url = "";
         let apiKey = "";
@@ -473,7 +475,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             configItem.command = {
                 command: 'extension.searchEngine.editInfo',
                 title: '修改搜索引擎配置',
-                arguments: [item.id, {[key]: value}]
+                arguments: [id, {[key]: value}]
             };
             return configItem;
         });

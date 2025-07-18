@@ -3,6 +3,20 @@
     "models": [
         {
             "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
+            "id": "local/volcengine-deepseek-chat",
+            "platform": "online",
+            "codeName": "deepseek",
+            "modelName": "volcengine-deepseek-v3",
+            "name": "volcengine-deepseek-chat",
+            "type": "内网-快速响应",
+            "temperature": 1,
+            "maxTokens": 8192,
+            "showConfig": false,
+            "safe": true,
+            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
+        },
+        {
+            "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
             "id": "online/volcengine-deepseek-chat",
             "platform": "online",
             "codeName": "deepseek",
