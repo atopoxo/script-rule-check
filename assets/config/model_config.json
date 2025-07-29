@@ -41,7 +41,7 @@
             "maxTokens": 8192,
             "showConfig": true,
             "safe": false,
-            "apiKey": "sk-b30b2d7a1f494b6388bf819d8da84664"
+            "apiKey": ""
         },
         {
             "url": "https://api.deepseek.com/v1",
@@ -55,7 +55,7 @@
             "maxTokens": 8192,
             "showConfig": true,
             "safe": false,
-            "apiKey": "sk-b30b2d7a1f494b6388bf819d8da84664"
+            "apiKey": ""
         }
     ]
 }

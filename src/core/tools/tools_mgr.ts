@@ -231,7 +231,7 @@ export class ToolsMgr {
             if (result instanceof Promise) {
                 return await result;
             }
-            
+
             return result;
         } catch (error) {
             console.error(`工具调用失败: ${moduleName}.${className}.${functionName}`, error);
@@ -247,15 +247,15 @@ export class ToolsMgr {
         const tool = this.toolsConfig.find(tool => {
             const type = tool.type;
             const call = tool[type] as ToolFunctionCall;
-            return call.module === moduleName && 
-                   call.class === className && 
-                   call.name === functionName;
+            return call.module === moduleName &&
+                call.class === className &&
+                call.name === functionName;
         });
 
         if (!tool || !tool.returns) {
             return null;
         }
-        
+
         const returnProp = tool.returns.properties[variable];
         return returnProp ? returnProp : null;
     }
@@ -276,12 +276,12 @@ export class ToolsMgr {
 
                 const modulePath = path.join(__dirname, `${moduleName}/${moduleName}`);
                 const toolModule = require(modulePath);
-                
+
                 if (!this.tools[moduleName]) {
                     this.tools[moduleName] = {};
                 }
                 const moduleCache = this.tools[moduleName];
-                
+
                 className = call.class || '';
                 if (!moduleCache[className]) {
                     const classInstance = new toolModule[className](this.config);
@@ -290,10 +290,10 @@ export class ToolsMgr {
                         call: classInstance
                     };
                 }
-                
+
                 const classCache = moduleCache[className].cache;
                 functionName = call.name || '';
-                
+
                 if (!classCache[functionName]) {
                     classCache[functionName] = moduleCache[className].call[functionName].bind(moduleCache[className].call);
                 }
@@ -341,7 +341,7 @@ export class ToolsMgr {
                 }
             }
         }
-        
+
         console.warn("无法解析函数参数:", funcStr.slice(0, 100) + "...");
         return { paramNames: [], defaults: [] };
     }
@@ -349,7 +349,7 @@ export class ToolsMgr {
     private parseParamListWithDefaults(paramList: string): { paramNames: string[]; defaults: any[] } {
         const paramNames: string[] = [];
         const defaults: any[] = [];
-        
+
         paramList.split(',')
             .map(p => p.trim())
             .filter(p => p && !p.startsWith('/')) // 过滤掉注释
@@ -359,7 +359,7 @@ export class ToolsMgr {
                 if (equalIndex > 0) {
                     const name = p.substring(0, equalIndex).trim();
                     const defaultValueStr = p.substring(equalIndex + 1).trim();
-                    
+
                     paramNames.push(name);
                     defaults.push(this.parseDefaultValue(defaultValueStr));
                 } else {
@@ -367,7 +367,7 @@ export class ToolsMgr {
                     defaults.push(undefined); // 没有默认值
                 }
             });
-        
+
         return { paramNames, defaults };
     }
 

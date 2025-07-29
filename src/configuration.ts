@@ -251,7 +251,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '');
         const models = this.allModelInfos.filter(info => info.id === id);
         const name = models.length > 0 ? models[0].name : '';
-        const item = new vscode.TreeItem(`当前模型: ${name}`);
+        const item = new vscode.TreeItem(`当前聊天模型: ${name}`);
         item.contextValue = 'modelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
