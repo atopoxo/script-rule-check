@@ -163,42 +163,50 @@
       },
       {
         "command": "extension.checkSpecificRule.rule2",
-        "title": "▶ scene模块检查"
+        "title": "▶ TimeStat检查"
       },
       {
         "command": "extension.checkSpecificRule.rule3",
-        "title": "▶ player模块检查"
+        "title": "▶ scene模块检查"
       },
       {
         "command": "extension.checkSpecificRule.rule4",
-        "title": "▶ Lua脚本闭包数据修改检查"
+        "title": "▶ player模块检查"
       },
       {
         "command": "extension.checkSpecificRule.rule5",
-        "title": "▶ Doodad脚本检查"
+        "title": "▶ Lua脚本If判断条件检查"
       },
       {
         "command": "extension.checkSpecificRule.rule6",
-        "title": "▶ 任务脚本检查"
+        "title": "▶ Lua脚本闭包数据修改检查"
       },
       {
         "command": "extension.checkSpecificRule.rule7",
-        "title": "▶ 全局检查"
+        "title": "▶ Doodad脚本检查"
       },
       {
         "command": "extension.checkSpecificRule.rule8",
-        "title": "▶ 技能脚本检查"
+        "title": "▶ 任务脚本检查"
       },
       {
         "command": "extension.checkSpecificRule.rule9",
-        "title": "▶ 计时器脚本检查"
+        "title": "▶ 全局检查"
       },
       {
         "command": "extension.checkSpecificRule.rule10",
-        "title": "▶ 道具脚本检查"
+        "title": "▶ 技能脚本检查"
       },
       {
         "command": "extension.checkSpecificRule.rule11",
+        "title": "▶ 计时器脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule12",
+        "title": "▶ 道具脚本检查"
+      },
+      {
+        "command": "extension.checkSpecificRule.rule13",
         "title": "▶ 场景对应脚本检查"
       },
       {
@@ -344,37 +352,56 @@
       ],
       "checkSpecificRules.submenu": [
         {
-          "command": "extension.checkSpecificRule.rule1"
+          "command": "extension.checkSpecificRule.rule1",
+          "group": "navigation@1"
         },
         {
-          "command": "extension.checkSpecificRule.rule2"
+          "command": "extension.checkSpecificRule.rule2",
+          "group": "navigation@2"
         },
         {
-          "command": "extension.checkSpecificRule.rule3"
+          "command": "extension.checkSpecificRule.rule3",
+          "group": "navigation@3"
         },
         {
-          "command": "extension.checkSpecificRule.rule4"
+          "command": "extension.checkSpecificRule.rule4",
+          "group": "navigation@4"
         },
         {
-          "command": "extension.checkSpecificRule.rule5"
+          "command": "extension.checkSpecificRule.rule5",
+          "group": "navigation@5"
         },
         {
-          "command": "extension.checkSpecificRule.rule6"
+          "command": "extension.checkSpecificRule.rule6",
+          "group": "navigation@6"
         },
         {
-          "command": "extension.checkSpecificRule.rule7"
+          "command": "extension.checkSpecificRule.rule7",
+          "group": "navigation@7"
         },
         {
-          "command": "extension.checkSpecificRule.rule8"
+          "command": "extension.checkSpecificRule.rule8",
+          "group": "navigation@8"
         },
         {
-          "command": "extension.checkSpecificRule.rule9"
+          "command": "extension.checkSpecificRule.rule9",
+          "group": "navigation@9"
         },
         {
-          "command": "extension.checkSpecificRule.rule10"
+          "command": "extension.checkSpecificRule.rule10",
+          "group": "navigation@10"
         },
         {
-          "command": "extension.checkSpecificRule.rule11"
+          "command": "extension.checkSpecificRule.rule11",
+          "group": "navigation@11"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule12",
+          "group": "navigation@12"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule13",
+          "group": "navigation@13"
         }
       ]
     },
