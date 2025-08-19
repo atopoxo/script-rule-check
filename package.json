@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -17,7 +17,6 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:extension.forceUpdateAndRestart",
     "onCommand:extension.openChatPanel"
   ],
   "icon": "assets/icons/logo.png",

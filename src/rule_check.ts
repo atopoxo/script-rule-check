@@ -89,6 +89,7 @@ export class RuleOperator {
                         let jsonObj = null;
                         try {
                             jsonPart = jsonPart.replace(/\\/g, '/');
+                            jsonPart = jsonPart.replace(/\/\//g, '/');
                             jsonPart = jsonPart.replace(/\t/g, ''); 
                             jsonObj = JSON.parse(jsonPart);
                         } catch (error) {
@@ -238,25 +239,6 @@ export class RuleOperator {
         });
     }
 
-    getEncoding(buffer: Buffer): string | null {
-        const encoding = chardet.detect(buffer) || 'gbk';
-        // // UTF-8检测（EF BB BF）
-        // if (buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
-        //     return 'utf8';
-        // }
-        // // UTF-16 LE检测（FF FE）
-        // if (buffer[0] === 0xFF && buffer[1] === 0xFE) {
-        //     return 'utf16le';
-        // }
-        // // UTF-16 BE检测（FE FF）
-        // if (buffer[0] === 0xFE && buffer[1] === 0xFF) {
-        //     return 'utf16be';
-        // }
-        // // 其他编码检测逻辑...
-        // return 'gbk';
-        return encoding;
-    }
-
     getTips(tips: string[]): string {
         if (tips.some(tip => tip.includes("提示"))) {
             return "warning";
@@ -270,7 +252,7 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private rootNode?: DirectoryNode;
     private clientPath: string;
-    constructor(public readonly ruleOperator: RuleOperator, rootPath: string, private extensionName: string) {
+    constructor(rootPath: string, private extensionName: string) {
         this.clientPath = path.join(rootPath, 'client').replace(/\\/g, '/');
     }
 

@@ -14,7 +14,7 @@ import { ChatViewProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
-import { getGlobalConfigValue } from "./core/function/base_function"
+import { getEncoding, getGlobalConfigValue } from "./core/function/base_function"
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
@@ -394,7 +394,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
     const ruleDir = path.join(toolDir, "Case");
     ruleOperator = new RuleOperator(productDir);
-	ruleResultProvider = new RuleResultProvider(ruleOperator, productDir, extensionName);
+	ruleResultProvider = new RuleResultProvider(productDir, extensionName);
     allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
 	configurationProvider.setCheckRules(allCheckRules);
     treeView = vscode.window.createTreeView('ruleCheckResults', {
@@ -428,7 +428,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
                 const buffer = fs.readFileSync(path);
-                let encoding = ruleOperator.getEncoding(buffer);
+                let encoding = getEncoding(buffer);
                 await vscode.workspace.getConfiguration().update(
                     'files.encoding', 
                     encoding,

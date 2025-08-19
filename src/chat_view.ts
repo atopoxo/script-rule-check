@@ -5,7 +5,7 @@ import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ContextMgr } from './core/context/context_mgr';
-import { getEncoding, getGlobalConfigValue } from './core/function/base_function';
+import { getEncoding } from './core/function/base_function';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private viewCreatedPromise: Promise<boolean>;
