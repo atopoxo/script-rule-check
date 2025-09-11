@@ -285,8 +285,8 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         return (element as any).parent;
     }
 
-    public printData(results: string[]) {
-        if (this.displayMode === 'tree' && this.rootNode) {
+    public printData(results: string[], displayMode: string) {
+        if (displayMode === 'tree' && this.rootNode) {
             this.collectTreeDataRecursive(this.rootNode, results, 0);
         }
         return results;

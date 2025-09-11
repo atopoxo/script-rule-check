@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
