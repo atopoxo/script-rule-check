@@ -479,7 +479,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
 async function generateExportFile() {
     try {
         let results: string[] = [];
-        ruleResultProvider.printData(results);
+        ruleResultProvider.printData(results, 'tree');
         const json = JSON.stringify(results, null, 2);
         const uri = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file('script_check_result.json'),
