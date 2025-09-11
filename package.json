@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.17",
+  "version": "0.0.20",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -158,6 +158,14 @@
         }
       },
       {
+        "command": "extension.downloadScriptCheckResult",
+        "title": "将结果保存到文件",
+        "icon": {
+          "light": "assets/icons/light/download.svg",
+          "dark": "assets/icons/dark/download.svg"
+        }
+      },
+      {
         "command": "extension.checkSpecificRule.rule1",
         "title": "▶ Trap脚本检查"
       },
@@ -300,6 +308,11 @@
           "command": "extension.setDisplayFlatMode",
           "when": "view == ruleCheckResults",
           "group": "navigation@5"
+        },
+        {
+          "command": "extension.downloadScriptCheckResult",
+          "when": "view == ruleCheckResults",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [

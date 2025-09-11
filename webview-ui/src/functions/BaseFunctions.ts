@@ -3,6 +3,8 @@ import MarkdownItMathjax from 'markdown-it-mathjax';
 import markdownItContainer from 'markdown-it-container';
 import hljs from 'highlight.js';
 
+let componentIndex = 0;
+
 export const throttle = (func: Function, limit: number) => {
     let lastFunc: ReturnType<typeof setTimeout>;
     let lastRan: number;
@@ -221,7 +223,6 @@ export const md2html = (content: string) => {
 };
 
 const processOutputContainers = (components: any[], html: string) => {
-    let componentIndex = 0;
     const beginDiv = `<div class="output-wrapper expanded">`;
     const endDiv = `</div>`;
     const outputWrapperRegex = /<div class="output-wrapper expanded">([\s\S]*?)<\/div>/g;   
@@ -238,11 +239,12 @@ const processOutputContainers = (components: any[], html: string) => {
                         //     .replace(/'/g, "\\'")
                         //     .replace(/"/g, '&quot;');
                         // containerHtml += `<component :is="'browser-list'" :isDark="isDark" :data='${jsonStr}'></component>`;
-                        const id = `component-${componentIndex++}`;
+                        componentIndex++;
+                        const id = `component-${componentIndex}`;
                         components.push({
                             type: 'browser-list',
                             data: item.value,
-                            index: components.length
+                            index: componentIndex
                         });
                         containerHtml += `${beginDiv}<div id="${id}"></div>${endDiv}`;
                     } else {

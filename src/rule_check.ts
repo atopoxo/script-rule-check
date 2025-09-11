@@ -267,9 +267,14 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     clear() {
         this._onDidChangeTreeData.fire();
     }
+
     update(rootNode: DirectoryNode) {
         this.rootNode = rootNode;
         this._onDidChangeTreeData.fire();
+    }
+
+    getData() {
+        return this.rootNode;
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -279,6 +284,30 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
         return (element as any).parent;
     }
+
+    public printData(results: string[]) {
+        if (this.displayMode === 'tree' && this.rootNode) {
+            this.collectTreeDataRecursive(this.rootNode, results, 0);
+        }
+        return results;
+    }
+
+    private collectTreeDataRecursive(node: DirectoryNode, results: string[], depth: number) {
+        const indent = '  '.repeat(depth);
+        for (const [name, child] of node.children) {
+            if (child instanceof DirectoryNode) {
+                results.push(`${indent}${name}/`);
+                this.collectTreeDataRecursive(child, results, depth + 1);
+            } else if (child instanceof FileNode) {
+                results.push(`${indent}${name}`);
+                for (const result of child.results) {
+                    const value = `${indent}  报错类型:'${result.tips}', 报错行:'${result.lines.join(',')}', 报错信息:'${result.info}'`;
+                    results.push(value);
+                }
+            }
+        }
+    }
+    
     async getAllItems(parent?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
         const items = await this.getChildren(parent);
         let allItems = [...items];
@@ -403,7 +432,7 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         for (const [ruleName, checkList] of ruleToCheckList) {
             const rule = ruleMap.get(ruleName);
             if (rule) {
-                const ruleTree = this.generateRuleTree(rule, checkList)
+                const ruleTree = this.generateRuleTree(rule, checkList);
                 ruleTrees.push(ruleTree);
             }
         }

@@ -14,7 +14,7 @@ import { ChatViewProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
-import { getEncoding, getGlobalConfigValue } from "./core/function/base_function"
+import { getEncoding, getGlobalConfigValue } from "./core/function/base_function";
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
@@ -71,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(extensionName)) {
                 customConfig = vscode.workspace.getConfiguration(extensionName);
-                updateDisplayMode(customConfig);
+                updateDisplayMode();
                 const newDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
                 if (fs.existsSync(newDir)) {
                     if (!registered) {
@@ -118,7 +118,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     registerAICommands(context, configurationProvider);
 
-    updateDisplayMode(customConfig);
+    updateDisplayMode();
     // checkAndForceUpdate(context);
 }
 
@@ -201,7 +201,7 @@ async function saveWorkspaceState() {
     await Promise.all(unsavedDocs.map(doc => doc.save()));
 }
 
-function updateDisplayMode(customConfig: vscode.WorkspaceConfiguration) {
+function updateDisplayMode() {
     const displayMode = getGlobalConfigValue<string>(extensionName, 'displayMode', 'tree');
     vscode.commands.executeCommand('setContext', `${extensionName}.displayMode`, displayMode);
     return displayMode;
@@ -460,6 +460,9 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
         }),
         vscode.commands.registerCommand('extension.collapseAllNodes', async () => {
             vscode.commands.executeCommand('workbench.actions.treeView.ruleCheckResults.collapseAll');
+        }),
+        vscode.commands.registerCommand('extension.downloadScriptCheckResult', async () => {
+            await generateExportFile();
         })
 	);
 
@@ -472,6 +475,30 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
         );
     });
 }
+
+async function generateExportFile() {
+    try {
+        let results: string[] = [];
+        ruleResultProvider.printData(results);
+        const json = JSON.stringify(results, null, 2);
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file('script_check_result.json'),
+            filters: {
+                'JSON Files': ['json'],
+                'All Files': ['*']
+            },
+            saveLabel: '保存检查结果'
+        });
+        if (!uri) {
+            return;
+        }
+        fs.writeFileSync(uri.fsPath, json);
+        vscode.window.showInformationMessage(`检查结果已保存到: ${uri.fsPath}`);
+    } catch (error) {
+        vscode.window.showErrorMessage(`保存文件时出错: ${error}`);
+    }
+}
+
 async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 
     await vscode.commands.executeCommand('ruleCheckResults.focus');
     const logDir = path.join(toolDir, "Log");
@@ -481,7 +508,7 @@ async function checkRules(targets: Array<{path: string; isDir: boolean; valid: b
     const luaExe = path.join(toolDir, "lua/5.1/lua.exe");
     const pythonExe = path.join(toolDir, "Python310/python.exe");
     const cwd = ruleDir;
-    const luaParams = "io.stdout:setvbuf('no')"
+    const luaParams = "io.stdout:setvbuf('no')";
 
     ruleResultProvider.clear();
     ruleOperator.clearResults();

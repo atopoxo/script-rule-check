@@ -58,17 +58,17 @@
                 :textAreaBorder=1
                 :textAreaPadding=8
                 :maxWidth="contentBlockWidth"
-                :textEditable="modifiedIndex != undefined"
+                :textEditable="modifiedIndex == index"
                 :content="msg.content"
                 @finish-edit="finishEdit"
                 @open-external="handleOpenExternal"></message-render>
 
             </div>
             <div v-if="msg.role === 'user'" class="feedback user">
-              <button v-if="modifiedIndex" class="icon-button" @click="cancelModify(index)">
+              <button v-if="modifiedIndex == index" class="icon-button" @click="cancelModify(index)">
                 <img :src="getfeedbackIconPath('cancel')" />
               </button>
-              <button v-if="!selectedSession.isAIStreamTransfer && !modifiedIndex" class="icon-button" @click="modify(index)">
+              <button v-if="!selectedSession.isAIStreamTransfer && modifiedIndex != index" class="icon-button" @click="modify(index)">
                 <img :src="getfeedbackIconPath('modify')" />
               </button>
               <button class="icon-button" @click="copy(msg.content, $event)">
