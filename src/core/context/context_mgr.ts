@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 import fs from 'fs';
 import path from 'path';
 import { Deque } from '@datastructures-js/deque';
-import {ContextOption, ContextTreeNode, ContextItem} from '../ai_model/base/ai_types'
+import {ContextOption, ContextTreeNode, ContextItem} from '../ai_model/base/ai_types';
 import {ContextBase} from './base/context_base';
 import type {IdentifierType} from './base/context_base';
 import { getFileContent } from '../function/base_function';
 import { LuaContext } from './lua/lua_context';
 import type { DependencyGraphType, DefinitionMapType, ScopeNode } from './lua/lua_context';
-import { Scope } from '../types/scope'
+import { Scope } from '../types/scope';
 import { SegmentTree } from '../function/segment_tree';
 
 export class ContextMgr extends ContextBase {
@@ -100,13 +100,13 @@ export class ContextMgr extends ContextBase {
     public getOptions(data: object | undefined): ContextOption[] {
         let options = this.getOptionsFromFile();
         options.forEach(option => {
-            if (option.type == 'code-block') {
+            if (option.type === 'code-block') {
                 option.children = this.getCodeContextOptions(data);
-                if (option.children && option.children.length == 0) {
+                if (option.children && option.children.length === 0) {
                     option.children = undefined;
                 }
             }
-        })
+        });
         return options;
     }
 
@@ -372,7 +372,7 @@ export class ContextMgr extends ContextBase {
                 start: startPos,
                 end: startPos + text.length
             }
-        }
+        };
 
         this.findRelatedContext(queue, filePath, identifiers.ast, identifiers.content, result, visited, 0, maxDepth, rangeTree, selected);
         return result;
@@ -408,7 +408,7 @@ export class ContextMgr extends ContextBase {
         }
         while (!queue.isEmpty()) {
             const current = queue.popFront();
-            const definedNode = definitionMap.get(current);
+            const definedNode = definitionMap.get(current!);
             if (definedNode) {
                 const key = `${filePath}:${current}`;
                 if (visited.has(key)) {
@@ -431,14 +431,14 @@ export class ContextMgr extends ContextBase {
                     queue.pushBack(dep);
                 }
             } else {
-                missQueue.pushBack(current);
+                missQueue.pushBack(current!);
             }
         }
         while (!missQueue.isEmpty()) {
             const item = missQueue.popFront();
-            queue.pushBack(item);
+            queue.pushBack(item!);
         }
-        if (selected.filePath == filePath) {
+        if (selected.filePath === filePath) {
             rangeTree.update(selected.range.start, selected.range.end, 0);
         }
         const posList = this.getPosList(content);
@@ -474,7 +474,7 @@ export class ContextMgr extends ContextBase {
                     startLine: this.getLineCount(posList, item[0]),
                     endLine: this.getLineCount(posList, item[1])
                 }
-            }
+            };
             result.push(current);
         }
     }

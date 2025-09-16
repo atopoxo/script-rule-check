@@ -19,6 +19,7 @@
 			"sourceMaps": true,
 			"preLaunchTask": "${defaultBuildTask}",
 			"internalConsoleOptions": "openOnSessionStart",
+            "autoAttachChildProcesses": true,
             "skipFiles": [
                 "<node_internals>/**"
             ],

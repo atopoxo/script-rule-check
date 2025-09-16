@@ -15,11 +15,12 @@ import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { getEncoding, getGlobalConfigValue } from "./core/function/base_function";
+import { GameManager } from './game_manager';
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
 let ruleOperator: RuleOperator;
-let contextMgr: ContextMgr
+let contextMgr: ContextMgr;
 let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
 let treeView: vscode.TreeView<vscode.TreeItem>;
@@ -30,6 +31,8 @@ let registered = false;
 const userID = "admin"
 let storage: Storage;
 let aiModelMgr: AIModelMgr;
+let gameManager: GameManager;
+gameManager = new GameManager();
 // const EXTENSION_ID = `${publisher}.${extensionName}`;
 // const VERSION_CHECK_URL = `https://marketplace.visualstudio.com/manage/publishers/${publisher}`;
 
@@ -424,6 +427,9 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             }
             const rulesToCheck = allCheckRules.filter(rule => selectedRules.includes(rule.id));
             await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, rulesToCheck);
+        }),
+        vscode.commands.registerCommand('extension.reloadScript', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            gameManager.doGMCommand(uriContext, selectedUris);
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ModelInfo, AICharacterInfo, SearchEngineInfo } from './core/ai_model/base/ai_types';
-import { CheckRule } from "./output_format"
-import { getGlobalConfigValue, setGlobalConfigValue } from "./core/function/base_function"
+import { CheckRule } from "./output_format";
+import { getGlobalConfigValue, setGlobalConfigValue } from "./core/function/base_function";
 import { GlobalConfig } from './settings/global_config';
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {

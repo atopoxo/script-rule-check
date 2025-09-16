@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import { Mutex } from 'async-mutex';
 import { Cache } from '../ai_model/base/ai_types';
 import { getJsonParser } from '../json/json_parser';
-import { Message, Session, AIInstance, UserInfo } from '../ai_model/base/ai_types'
+import { Message, Session, AIInstance, UserInfo } from '../ai_model/base/ai_types';
 
 const MAX_SESSION_NAME_LENGTH = 60;
 
@@ -245,7 +245,7 @@ export class Storage {
                 if (messageReplace && messages.length > 0) {
                     messages[index] = message;
                 } else {
-                    if (index == -1 || index >= messages.length) {
+                    if (index === -1 || index >= messages.length) {
                         messages.push(message);
                     } else {
                         messages[index] = message;
@@ -268,7 +268,7 @@ export class Storage {
                 if (messageReplace && messages.length > 0) {
                     messages[index] = message;
                 } else {
-                    if (index == -1 || index >= messages.length) {
+                    if (index === -1 || index >= messages.length) {
                         messages.push(message);
                     } else {
                         messages[index] = message;
@@ -334,12 +334,12 @@ export class Storage {
             fs.mkdirSync(dbDir, { recursive: true });
         }
         try {
-            const wasmBinary = fs.readFileSync(
+            const wasmBuffer = fs.readFileSync(
                 path.join(path.dirname(require.resolve('sql.js')), 'sql-wasm.wasm')
             );
-            
+            const wasmArrayBuffer = wasmBuffer.buffer.slice(wasmBuffer.byteOffset, wasmBuffer.byteOffset + wasmBuffer.length);
             const SQL = await initSqlJs({
-                wasmBinary,
+                wasmBinary: wasmArrayBuffer,
                 locateFile: (file: string) => {
                     if (file === 'sql-wasm.wasm') {
                         return '';
@@ -362,7 +362,7 @@ export class Storage {
         this.setupLocalDatabase();
         const localUsers = this.getAllLocalUsers();
         for (const user of localUsers) {
-            if (this.userID == user.user_id) {
+            if (this.userID === user.user_id) {
                 this.userCache = this.jsonParser.parse(user.data.toString());
             }
         }
@@ -533,7 +533,7 @@ export class Storage {
                 stmt.bind({
                     ':userId': userId,
                     ':data': Buffer.from(serialized)
-                })
+                });
                 stmt.step();
                 stmt.free();
                 await this.persistDatabase();
@@ -637,7 +637,7 @@ export class Storage {
             role: "system", 
             content: this.getTimeText(timestamp),
             timestamp: timestamp
-        }
+        };
     }
 
     private getDefaultCache(): Cache {
@@ -683,7 +683,7 @@ export class Storage {
             second: '2-digit',
             hour12: false
         }).replace(/\//g, '-');
-        return `\n当前时间为：${sendTime}\n`
+        return `\n当前时间为：${sendTime}\n`;
     }
 
     private getMessageName(message: Message): string {
