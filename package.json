@@ -115,7 +115,7 @@
       },
       {
         "command": "extension.reloadScript",
-        "title": "重载当前脚本"
+        "title": "重载当前脚本(包含技能和AI)"
       },
       {
         "command": "extension.setProductDir",
