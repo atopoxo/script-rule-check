@@ -429,6 +429,10 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, rulesToCheck);
         }),
         vscode.commands.registerCommand('extension.reloadScript', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
+            if (!fs.existsSync(dir)) {
+                vscode.window.showErrorMessage(`产品库路径不存在: ${productDir}`);
+            }
             gameManager.doGMCommand(uriContext, selectedUris);
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
