@@ -435,7 +435,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             if (!fs.existsSync(dir)) {
                 vscode.window.showErrorMessage(`产品库路径不存在: ${productDir}`);
             }
-            gameManager.doGMCommand(uriContext, selectedUris);
+            await gameManager.doGMCommand(uriContext, selectedUris);
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {

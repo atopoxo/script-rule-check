@@ -57,7 +57,7 @@ export class GCClient {
         }
     }
 
-    public async close() {
+    public async close(): Promise<void> {
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;

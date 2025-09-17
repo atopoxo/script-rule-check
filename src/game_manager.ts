@@ -5,8 +5,32 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { getFileContent } from "./core/function/base_function";
 
+class Mutex {
+    private mutex = Promise.resolve();
+
+    lock(): PromiseLike<() => void> {
+        let begin: (unlock: () => void) => void = () => {};
+
+        this.mutex = this.mutex.then(() => {
+            return new Promise(begin);
+        });
+
+        return new Promise(res => {
+            begin = res;
+        });
+    }
+
+    async acquire(): Promise<() => void> {
+        return this.lock();
+    }
+}
+
 export class GameManager {
     private client: GCClient | null = null;
+    private taskCount: number = 0;
+    private closePromise: Promise<void> | null = null;
+    private pendingOperations: Promise<void> = Promise.resolve();
+    private readonly mutex = new Mutex();
 
     constructor() {
     }
@@ -18,13 +42,37 @@ export class GameManager {
         return this.client;
     }
 
-    public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) {
+    public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Promise<void> {
+        const release = await this.mutex.acquire();
+        try {
+            if (this.closePromise) {
+                await this.closePromise;
+                this.closePromise = null;
+            }
+            this.addRef();
+        } finally {
+            release();
+        }
+
+        try {
+            await this.executeGMCommand(uriContext, selectedUris);
+        } finally {
+            await this.releaseRef();
+        }
+    }
+
+    public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Promise<void> {
         let client = this.getGCClient();
-        await vscode.window.withProgress({
+        try {
+            await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
                 title: "Script Rule Check Progress",
                 cancellable: true
             }, async (progress, token) => {
+                progress.report({
+                    message: `执行ReloadScript`,
+                    increment: 0
+                });
                 let [rootPath, relativePath] = this.getRelativePath(uriContext, selectedUris);
                 let [functionName, params, key, functionManual, moreOperator] = this.getFunctionName(rootPath, relativePath);
                 const headerString = "vscode,vscode,";
@@ -55,7 +103,9 @@ export class GameManager {
                     }
                 }
             });
-        client.close();
+        } catch (error) {
+            vscode.window.showErrorMessage(`执行ReloadScript失败：${error}`);
+        }
     }
 
     public async findGameProcess(processName: string): Promise<{ host: string; port: number } | null> {
@@ -134,6 +184,35 @@ export class GameManager {
                 });
             });
         });
+    }
+
+    private addRef() {
+        this.taskCount++;
+    }
+
+    private async releaseRef() {
+        const release = await this.mutex.acquire();
+        let shouldClose = false;
+        try {
+            if (this.taskCount > 0) {
+                this.taskCount--;
+            }
+            
+            shouldClose = this.taskCount === 0 && this.client !== null;
+        } finally {
+            release();
+        }
+
+        if (shouldClose) {
+            this.closePromise = this.client!.close().finally(() => {
+                // this.client = null;
+            });
+            await this.closePromise;
+        }
+    }
+
+    private getRef() {
+        return this.taskCount;
     }
 
     private getRelativePath(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): [string, string] {
