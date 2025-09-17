@@ -13,11 +13,11 @@ export class RuleOperator {
     constructor(rootPath: string) {
         this.clientPath = path.join(rootPath, 'client').replace(/\\/g, '/');
     }
-    getIssueCount(): number {
+    public getIssueCount(): number {
         return this.pathToCheckList.size;
     }
 
-    getScriptCheckRules(toolDir: string, ruleDir: string) {
+    public getScriptCheckRules(toolDir: string, ruleDir: string) {
         const tag = "rule";
         let count = 0;
         const ruleFiles = (() => {
@@ -53,7 +53,7 @@ export class RuleOperator {
         return ruleFiles;
     }
 
-    async processRuleFile(rule: CheckRule, logDir: string, luaExe: string, pythonExe: string, luaParams: string, checkPath: string, productDir: string, cwd: string) {
+    public async processRuleFile(rule: CheckRule, logDir: string, luaExe: string, pythonExe: string, luaParams: string, checkPath: string, productDir: string, cwd: string) {
         const ruleFile = rule.taskPath;
         const ext = path.extname(ruleFile);
         const logPath = path.join(logDir, path.basename(ruleFile, ext) + '.log');
@@ -82,7 +82,7 @@ export class RuleOperator {
                     }
                     
                     const tag = trimmed.slice(startCharPos, endCharPos).trim();
-                    let jsonPart = trimmed.slice(endCharPos + 1).trim()
+                    let jsonPart = trimmed.slice(endCharPos + 1).trim();
                     // const match = trimmed.match(/^((?:\[[^\]]+\]\s*)+)\s+(.*?)\s+文件中，第\s+(\d+(?:,\d+)*), ?\s+行,(.*)$/);
                     if (jsonPart) {
                         const tags = [tag];
@@ -103,7 +103,7 @@ export class RuleOperator {
                         const filePath = jsonObj["path"];
                         const lines = jsonObj["lines"].split(',').map((s: string) => parseInt(s.trim())).filter((n: number) => !isNaN(n));
                         const info = jsonObj["detail"].trim();
-                        if (filePath && filePath != '') {
+                        if (filePath && filePath !== '') {
                             this.addResult(rule, tags, filePath, lines, info);
                         }
                     } else {
@@ -117,7 +117,7 @@ export class RuleOperator {
         }
     }
 
-    addResult(rule: CheckRule, tips: string[], path: string, lines: number[], info: string) {
+    public addResult(rule: CheckRule, tips: string[], path: string, lines: number[], info: string) {
         const result: CheckResult = { rule: rule, tips: this.getTips(tips), path: path, lines, info };
         let pathToCheckList = this.pathToCheckList;
         if (!pathToCheckList.has(path)) {
@@ -126,11 +126,11 @@ export class RuleOperator {
         pathToCheckList.get(path)!.push(result);
     }
 
-    clearResults() {
+    public clearResults() {
         this.pathToCheckList.clear();
     }
 
-    getVirtualRoot(showAll: boolean, targets: Array<{path: string; isDir: boolean;}>) {
+    public getVirtualRoot(showAll: boolean, targets: Array<{path: string; isDir: boolean;}>) {
         const showText = showAll ? "检查结果" : "错误检查结果";
         const virtualRoot = new DirectoryNode(showText, "");
 
@@ -146,7 +146,7 @@ export class RuleOperator {
         return virtualRoot;
     }
 
-    getRoot(showAll: boolean, path: string, isDir: boolean) {
+    private getRoot(showAll: boolean, path: string, isDir: boolean) {
         let pathToCheckList = this.pathToCheckList;
         if (isDir) {
             const allFiles = showAll ? this.getAllLuaFiles(path) : Array.from(pathToCheckList.keys());
@@ -256,69 +256,28 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         this.clientPath = path.join(rootPath, 'client').replace(/\\/g, '/');
     }
 
-    private get displayMode(): string {
-        return vscode.workspace.getConfiguration(this.extensionName).get('displayMode', 'tree');
-    }
-
-    refresh() {
+    public refresh() {
         this._onDidChangeTreeData.fire();
     }
 
-    clear() {
+    public clear() {
         this._onDidChangeTreeData.fire();
     }
 
-    update(rootNode: DirectoryNode) {
+    public update(rootNode: DirectoryNode) {
         this.rootNode = rootNode;
         this._onDidChangeTreeData.fire();
     }
 
-    getData() {
-        return this.rootNode;
-    }
-
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    public getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
         return element;
     }
 
-    getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
+    public getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
         return (element as any).parent;
     }
 
-    public printData(results: string[], displayMode: string) {
-        if (displayMode === 'tree' && this.rootNode) {
-            this.collectTreeDataRecursive(this.rootNode, results, 0);
-        }
-        return results;
-    }
-
-    private collectTreeDataRecursive(node: DirectoryNode, results: string[], depth: number) {
-        const indent = '  '.repeat(depth);
-        for (const [name, child] of node.children) {
-            if (child instanceof DirectoryNode) {
-                results.push(`${indent}${name}/`);
-                this.collectTreeDataRecursive(child, results, depth + 1);
-            } else if (child instanceof FileNode) {
-                results.push(`${indent}${name}`);
-                for (const result of child.results) {
-                    const value = `${indent}  报错类型:'${result.tips}', 报错行:'${result.lines.join(',')}', 报错信息:'${result.info}'`;
-                    results.push(value);
-                }
-            }
-        }
-    }
-    
-    async getAllItems(parent?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
-        const items = await this.getChildren(parent);
-        let allItems = [...items];
-        for (const item of items) {
-            const children = await this.getAllItems(item);
-            allItems = [...allItems, ...children];
-        }
-        return allItems;
-    }
-
-    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+    public async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
         if (!element) {
             if (this.displayMode === 'flat') {
                 const allFiles: FileTreeItem[] = [];
@@ -375,7 +334,30 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         return [];
     }
 
-    async setFoldState(treeView: vscode.TreeView<vscode.TreeItem>, state: boolean) {
+    public async generateExportFile() {
+        try {
+            let results: string[] = [];
+            this.printData(results, 'tree');
+            const json = JSON.stringify(results, null, 2);
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.file('script_check_result.json'),
+                filters: {
+                    'JSON Files': ['json'],
+                    'All Files': ['*']
+                },
+                saveLabel: '保存检查结果'
+            });
+            if (!uri) {
+                return;
+            }
+            fs.writeFileSync(uri.fsPath, json);
+            vscode.window.showInformationMessage(`检查结果已保存到: ${uri.fsPath}`);
+        } catch (error) {
+            vscode.window.showErrorMessage(`保存文件时出错: ${error}`);
+        }
+    }
+
+    public async setFoldState(treeView: vscode.TreeView<vscode.TreeItem>, state: boolean) {
         if (!treeView || !state) {
             return;
         }
@@ -395,6 +377,47 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         const items = await this.getChildren();
         for (const item of items) {
             await foldCallback(item);
+        }
+    }
+
+    private get displayMode(): string {
+        return vscode.workspace.getConfiguration(this.extensionName).get('displayMode', 'tree');
+    }
+
+    // private getData() {
+    //     return this.rootNode;
+    // }
+
+    // private async getAllItems(parent?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+    //     const items = await this.getChildren(parent);
+    //     let allItems = [...items];
+    //     for (const item of items) {
+    //         const children = await this.getAllItems(item);
+    //         allItems = [...allItems, ...children];
+    //     }
+    //     return allItems;
+    // }
+
+    private printData(results: string[], displayMode: string) {
+        if (displayMode === 'tree' && this.rootNode) {
+            this.collectTreeDataRecursive(this.rootNode, results, 0);
+        }
+        return results;
+    }
+
+    private collectTreeDataRecursive(node: DirectoryNode, results: string[], depth: number) {
+        const indent = '  '.repeat(depth);
+        for (const [name, child] of node.children) {
+            if (child instanceof DirectoryNode) {
+                results.push(`${indent}${name}/`);
+                this.collectTreeDataRecursive(child, results, depth + 1);
+            } else if (child instanceof FileNode) {
+                results.push(`${indent}${name}`);
+                for (const result of child.results) {
+                    const value = `${indent}  报错类型:'${result.tips}', 报错行:'${result.lines.join(',')}', 报错信息:'${result.info}'`;
+                    results.push(value);
+                }
+            }
         }
     }
 
@@ -449,7 +472,7 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
             relativePath = relativePath.replace(/\\/g, '/');
             const fileNode = new FileNode(relativePath, checkResult.path);
             fileNode.results = [checkResult];
-            directoryNode.children.set(checkResult.path, fileNode)
+            directoryNode.children.set(checkResult.path, fileNode);
         }
         return directoryNode;
     }

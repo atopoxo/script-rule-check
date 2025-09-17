@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as child_process from 'child_process';
+import * as childProcess from 'child_process';
 
 const iconv = require('iconv-lite');
 
@@ -25,7 +25,7 @@ export class GCClient {
     private reconnectTimer: NodeJS.Timeout | null = null;
     private subProcessPath: string;
     private processName: string;
-    private subProcess: child_process.ChildProcess | null = null;
+    private subProcess: childProcess.ChildProcess | null = null;
     
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', 'GCBridgeX64.exe');
@@ -114,7 +114,7 @@ export class GCClient {
                 ? `tasklist /fi "imagename eq ${this.processName}"` 
                 : `ps -A | grep ${this.processName}`;
             
-            child_process.exec(command, (error, stdout, stderr) => {
+            childProcess.exec(command, (error, stdout, stderr) => {
                 if (error) {
                     resolve(false);
                     return;
@@ -131,7 +131,7 @@ export class GCClient {
                 ? `taskkill /f /im ${this.processName}` 
                 : `pkill -f ${this.processName}`;
             
-            child_process.exec(command, (error, stdout, stderr) => {
+            childProcess.exec(command, (error, stdout, stderr) => {
                 if (error) {
                     console.error('Error killing process:', error);
                     resolve(false);
@@ -151,7 +151,7 @@ export class GCClient {
             }
 
             // 启动新的C++进程
-            this.subProcess = child_process.spawn(this.subProcessPath, [], {
+            this.subProcess = childProcess.spawn(this.subProcessPath, [], {
                 stdio: 'ignore',
                 detached: true
             });

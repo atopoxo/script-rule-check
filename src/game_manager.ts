@@ -19,25 +19,42 @@ export class GameManager {
     }
 
     public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) {
-        let [rootPath, relativePath] = this.getRelativePath(uriContext, selectedUris);
-        let [functionName, params, key, functionManual] = this.getFunctionName(rootPath, relativePath);
         let client = this.getGCClient();
-        const headerString = "vscode,vscode,";
-        
-        let paramString = headerString + relativePath;
-        await client.doRemoteLuaCall("OnScriptReloadByGM", paramString);
-        vscode.window.showInformationMessage(`已执行ReloadScript，其参数为${relativePath}`);
-        if (params.length === 0) {
-            vscode.window.showInformationMessage(`已执行ReloadScript，但未匹配到${key}值，请手动执行${functionManual}`);
-        } else if (params.length > 5) {
-            vscode.window.showInformationMessage(`已执行ReloadScript，但匹配到的${key}过多，请手动执行${functionManual}`);
-        } else {
-            for (let param of params) {
-                paramString = headerString + param;
-                await client.doRemoteLuaCall(functionName, paramString);
-                vscode.window.showInformationMessage(`已执行${functionManual}，其参数为${param}`);
-            }
-        }
+        await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Script Rule Check Progress",
+                cancellable: true
+            }, async (progress, token) => {
+                let [rootPath, relativePath] = this.getRelativePath(uriContext, selectedUris);
+                let [functionName, params, key, functionManual, moreOperator] = this.getFunctionName(rootPath, relativePath);
+                const headerString = "vscode,vscode,";
+                const totalTasks = 1 + params.length;
+                let completedTasks = 0;
+                progress.report({
+                    message: `执行ReloadScript (${++completedTasks}/${totalTasks})`,
+                    increment: (100 / totalTasks)
+                });
+                let paramString = headerString + relativePath;
+                await client.doRemoteLuaCall("OnScriptReloadByGM", paramString);
+                vscode.window.showInformationMessage(`已执行ReloadScript，其参数为${relativePath}`);
+                if (moreOperator) {
+                    if (params.length === 0) {
+                        vscode.window.showInformationMessage(`已执行ReloadScript，但未匹配到${key}值，请手动执行${functionManual}`);
+                    } else if (params.length > 5) {
+                        vscode.window.showInformationMessage(`已执行ReloadScript，但匹配到的${key}过多，请手动执行${functionManual}`);
+                    } else {
+                        for (let param of params) {
+                            progress.report({
+                                message: `执行ReloadScript (${++completedTasks}/${totalTasks})`,
+                                increment: (100 / totalTasks)
+                            });
+                            paramString = headerString + param;
+                            await client.doRemoteLuaCall(functionName, paramString);
+                            vscode.window.showInformationMessage(`已执行${functionManual}，其参数为${param}`);
+                        }
+                    }
+                }
+            });
         client.close();
     }
 
@@ -134,7 +151,7 @@ export class GameManager {
             rootPath = fullPath.substring(0, clientIndex);
             relativePath = fullPath.substring(clientIndex + "client\\".length);
         } else if (serverIndex !== -1) {
-            rootPath = fullPath.substring(0, clientIndex);
+            rootPath = fullPath.substring(0, serverIndex);
             relativePath = fullPath.substring(serverIndex + "server\\".length);
         } else {
             rootPath = "";
@@ -146,11 +163,12 @@ export class GameManager {
         return [rootPath, relativePath];
     }
 
-    private getFunctionName(rootPath: string, relativePath: string): [string, string[], string, string] {
+    private getFunctionName(rootPath: string, relativePath: string): [string, string[], string, string, boolean] {
         let functionName = '';
         let params: string[] = [];
         let key = '';
         let functionManual = '';
+        let moreOperator = true;
         if (relativePath.indexOf('/ai/') !== -1) {
             key = 'AIType';
             params = this.getAITypes(rootPath, relativePath, key);
@@ -166,8 +184,10 @@ export class GameManager {
             params = this.getScriptFiles(rootPath, relativePath, 'skill_mobile', key);
             functionName = "OnSkillReloadByGM";
             functionManual = 'ReloadSkillSinceScriptChanged';
+        } else {
+            moreOperator = false;
         }
-        return [functionName, params, key, functionManual];
+        return [functionName, params, key, functionManual, moreOperator];
     }
 
     private getAITypes(rootPath: string, relativePath: string, key: string): string[] {

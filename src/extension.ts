@@ -16,6 +16,8 @@ import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { getEncoding, getGlobalConfigValue } from "./core/function/base_function";
 import { GameManager } from './game_manager';
+const { EventEmitter } = require('events');
+EventEmitter.defaultMaxListeners = 20;
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
@@ -28,7 +30,7 @@ let allCheckRules: CheckRule[] = [];
 let chatManager: ChatManager;
 let chatViewProvider: ChatViewProvider;
 let registered = false;
-const userID = "admin"
+const userID = "admin";
 let storage: Storage;
 let aiModelMgr: AIModelMgr;
 let gameManager: GameManager;
@@ -251,7 +253,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 aiModelMgr.saveModelConfig("models", allModelInfos);
                 configurationProvider.refresh();
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
-            })
+            });
         }),
         vscode.commands.registerCommand('extension.toolModel.selectedChange', async (id: string) => {
             const toolModelInfo = allModelInfos.find(info => info.id === id);
@@ -265,7 +267,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 vscode.window.showErrorMessage(`未找到 ID 为 ${selectedModelId} 的模型。`);
                 return;
             }
-            if (toolModelInfo.codeName != modelInfo.codeName) {
+            if (toolModelInfo.codeName !== modelInfo.codeName) {
                 vscode.window.showErrorMessage(`当前工具模型${toolModelInfo.name}与当前模型${modelInfo.name}不匹配。`);
                 return;
             }
@@ -299,7 +301,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 configurationProvider.setAICharacterInfos(infos);
                 configurationProvider.refresh();
                 vscode.window.showInformationMessage(`ai角色"${currentInfo.name}"的"${key}"已更新为"${newValue}"`);
-            })
+            });
         }),
         vscode.commands.registerCommand('extension.aiCharacter.add', async () => {
             await configurationProvider.addAICharacter();
@@ -349,7 +351,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                 configurationProvider.setSearchEngineInfos(infos);
                 configurationProvider.refresh();
                 vscode.window.showInformationMessage(`搜索引擎"${currentInfo.name}"的"${key}"已更新为"${newValue}"`);
-            })
+            });
         }),
         vscode.commands.registerCommand('extension.searchEngine.add', async () => {
             await configurationProvider.addSearchEngine();
@@ -472,7 +474,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             vscode.commands.executeCommand('workbench.actions.treeView.ruleCheckResults.collapseAll');
         }),
         vscode.commands.registerCommand('extension.downloadScriptCheckResult', async () => {
-            await generateExportFile();
+            await ruleResultProvider.generateExportFile();
         })
 	);
 
@@ -484,29 +486,6 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             })
         );
     });
-}
-
-async function generateExportFile() {
-    try {
-        let results: string[] = [];
-        ruleResultProvider.printData(results, 'tree');
-        const json = JSON.stringify(results, null, 2);
-        const uri = await vscode.window.showSaveDialog({
-            defaultUri: vscode.Uri.file('script_check_result.json'),
-            filters: {
-                'JSON Files': ['json'],
-                'All Files': ['*']
-            },
-            saveLabel: '保存检查结果'
-        });
-        if (!uri) {
-            return;
-        }
-        fs.writeFileSync(uri.fsPath, json);
-        vscode.window.showInformationMessage(`检查结果已保存到: ${uri.fsPath}`);
-    } catch (error) {
-        vscode.window.showErrorMessage(`保存文件时出错: ${error}`);
-    }
 }
 
 async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 

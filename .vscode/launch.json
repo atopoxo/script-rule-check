@@ -11,7 +11,7 @@
 			"request": "launch",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
-                "--enable-proposed-api"  // 添加这个参数以启用 Webview 调试
+                "--enable-proposed-api",  // 添加这个参数以启用 Webview 调试
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
