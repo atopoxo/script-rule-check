@@ -559,4 +559,6 @@ function getParams(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Array<
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+    gameManager.clear();
+}

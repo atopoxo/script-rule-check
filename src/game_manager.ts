@@ -35,6 +35,10 @@ export class GameManager {
     constructor() {
     }
 
+    public async clear() {
+        await this.client?.close();
+    }
+
     public getGCClient(): GCClient {
         if (!this.client) {
             this.client = new GCClient();
@@ -209,10 +213,6 @@ export class GameManager {
             });
             await this.closePromise;
         }
-    }
-
-    private getRef() {
-        return this.taskCount;
     }
 
     private getRelativePath(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): [string, string] {
