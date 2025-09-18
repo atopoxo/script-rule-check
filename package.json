@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -468,7 +468,7 @@
       {
         "command": "extension.reloadScript",
         "key": "alt+y",
-        "when": "editorLangId == lua",
+        "when": "editorLangId == lua || (filesExplorerFocus && explorerResourceIsFolder == false && resourceExtname == .lua)",
         "mac": "alt+y"
       }
     ]
