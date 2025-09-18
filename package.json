@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -116,6 +116,10 @@
       {
         "command": "extension.reloadScript",
         "title": "重载当前脚本(包含技能和AI)"
+      },
+      {
+        "command": "extension.reloadScriptOnly",
+        "title": "只重载当前脚本"
       },
       {
         "command": "extension.setProductDir",
@@ -360,6 +364,10 @@
         {
           "command": "extension.reloadScript",
           "group": "navigation_game@1"
+        },
+        {
+          "command": "extension.reloadScriptOnly",
+          "group": "navigation_game@2"
         },
         {
           "command": "extension.chat.addContext",

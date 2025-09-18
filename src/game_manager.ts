@@ -46,7 +46,7 @@ export class GameManager {
         return this.client;
     }
 
-    public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Promise<void> {
+    public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<void> {
         const release = await this.mutex.acquire();
         try {
             if (this.closePromise) {
@@ -59,13 +59,13 @@ export class GameManager {
         }
 
         try {
-            await this.executeGMCommand(uriContext, selectedUris);
+            await this.executeGMCommand(uriContext, selectedUris, additionOperator);
         } finally {
             await this.releaseRef();
         }
     }
 
-    public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Promise<void> {
+    public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<void> {
         let client = this.getGCClient();
         try {
             await vscode.window.withProgress({
@@ -82,7 +82,7 @@ export class GameManager {
                     increment: 0
                 });
                 let [rootPath, relativePath] = this.getRelativePath(uriContext, selectedUris);
-                let [functionName, params, key, functionManual, moreOperator] = this.getFunctionName(rootPath, relativePath);
+                let [functionName, params, key, functionManual, moreOperator] = this.getFunctionName(rootPath, relativePath, additionOperator!);
                 const headerString = "vscode,vscode,";
                 const totalTasks = 1 + params.length;
                 let completedTasks = 0;
@@ -246,29 +246,34 @@ export class GameManager {
         return [rootPath, relativePath];
     }
 
-    private getFunctionName(rootPath: string, relativePath: string): [string, string[], string, string, boolean] {
+    private getFunctionName(rootPath: string, relativePath: string, additionOperator: boolean): [string, string[], string, string, boolean] {
         let functionName = '';
         let params: string[] = [];
         let key = '';
         let functionManual = '';
-        let moreOperator = true;
-        if (relativePath.indexOf('/ai/') !== -1) {
-            key = 'AIType';
-            params = this.getAITypes(rootPath, relativePath, key);
-            functionName = "OnAIReloadByGM";
-            functionManual = 'ReloadAI';
-        } else if (relativePath.indexOf('scripts/skill/') !== -1) {
-            key = 'SkillID';
-            params = this.getScriptFiles(rootPath, relativePath, 'skill', key);
-            functionName = "OnSkillReloadByGM";
-            functionManual = 'ReloadSkillSinceScriptChanged';
-        } else if (relativePath.indexOf('scripts/skill_mobile/') !== -1) {
-            key = 'SkillID';
-            params = this.getScriptFiles(rootPath, relativePath, 'skill_mobile', key);
-            functionName = "OnSkillReloadByGM";
-            functionManual = 'ReloadSkillSinceScriptChanged';
-        } else {
-            moreOperator = false;
+        let moreOperator = false;
+        if (additionOperator) {
+            if (relativePath.indexOf('/ai/') !== -1) {
+                key = 'AIType';
+                params = this.getAITypes(rootPath, relativePath, key);
+                functionName = "OnAIReloadByGM";
+                functionManual = 'ReloadAI';
+                moreOperator = true;
+            } else if (relativePath.indexOf('scripts/skill/') !== -1) {
+                key = 'SkillID';
+                params = this.getScriptFiles(rootPath, relativePath, 'skill', key);
+                functionName = "OnSkillReloadByGM";
+                functionManual = 'ReloadSkillSinceScriptChanged';
+                moreOperator = true;
+            } else if (relativePath.indexOf('scripts/skill_mobile/') !== -1) {
+                key = 'SkillID';
+                params = this.getScriptFiles(rootPath, relativePath, 'skill_mobile', key);
+                functionName = "OnSkillReloadByGM";
+                functionManual = 'ReloadSkillSinceScriptChanged';
+                moreOperator = true;
+            } else {
+                moreOperator = false;
+            }
         }
         return [functionName, params, key, functionManual, moreOperator];
     }

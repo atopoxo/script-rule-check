@@ -445,7 +445,24 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             if (!fs.existsSync(dir)) {
                 vscode.window.showErrorMessage(`产品库路径不存在: ${productDir}`);
             }
-            await gameManager.doGMCommand(uriContext, selectedUris);
+            await gameManager.doGMCommand(uriContext, selectedUris, true);
+        }),
+        vscode.commands.registerCommand('extension.reloadScriptOnly', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            if (!uriContext && !selectedUris) {
+                const activeEditor = vscode.window.activeTextEditor;
+                if (activeEditor) {
+                    uriContext = activeEditor.document.uri;
+                    selectedUris = [uriContext]; // 假设只处理当前文件
+                } else {
+                    vscode.window.showErrorMessage('请先打开一个文件或在资源管理器中选择文件');
+                    return;
+                }
+            }
+            const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
+            if (!fs.existsSync(dir)) {
+                vscode.window.showErrorMessage(`产品库路径不存在: ${productDir}`);
+            }
+            await gameManager.doGMCommand(uriContext, selectedUris, false);
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
