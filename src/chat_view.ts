@@ -45,6 +45,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             return true;
         }
         if (!this.view) {
+            vscode.window.showWarningMessage('switch to chat view');
             await vscode.commands.executeCommand('chatView.focus');
         }
         const viewCreated = await Promise.race([
@@ -190,14 +191,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             selectedModel: await this.aiModelMgr.getSelectedModel(),
             contextOption: await this.contextMgr.getOptions(undefined),
             selectedSession: selectedSession
-        }
+        };
         this.updateWebview('initSession', data);
     }
 
     public selectAICharacter() {
         const data = {
             aiCharacter: this.chatManager.getSelectedAICharacter()
-        }
+        };
         this.updateWebview('selectAICharacter', data);
     }
 
@@ -229,7 +230,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const state = await this.chatManager.toolsOn();
         const data = {
             toolsOn: state
-        }
+        };
         this.updateWebview('toolsOn', data);
     }
 
@@ -257,14 +258,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         await this.aiModelMgr.setSelectedModel(id, this.chatManager.getUserID(), 'chat');
         const data = {
             selectedModel: await this.aiModelMgr.getSelectedModel()
-        }
+        };
         this.updateWebview('selectModel', data);
     }
 
     public async showContextOptions(data: object | undefined) {
         const result = {
             contextOption: await this.contextMgr.getOptions(data)
-        }
+        };
         this.updateWebview('showContextOptions', result);
     }
 
@@ -272,7 +273,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const result = {
             index: data.index,
             contextOption: await this.contextMgr.selectFiles(data.onlyFiles)
-        }
+        };
         this.updateWebview('updateContext', result);
     }
 
@@ -280,7 +281,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const result = {
             index: data.index,
             contextOption: await this.contextMgr.selectWorkspace()
-        }
+        };
         this.updateWebview('updateContext', result);
     }
 
@@ -426,7 +427,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                         endLine: selection.end.line
                     }
                 }
-            }]
+            }];
             this.updateWebview('updateContext', {index: -1, contextOption: contextOption});
         }
     }

@@ -26,7 +26,8 @@ export class GCClient {
     private subProcessPath: string;
     private processName: string;
     private subProcess: childProcess.ChildProcess | null = null;
-    
+    private isClosing: boolean = false;
+
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', 'GCBridgeX64.exe');
         this.processName = path.basename(this.subProcessPath);
@@ -37,21 +38,18 @@ export class GCClient {
         try {
             if (!this.socket) {
                 const isProcessRunning = await this.checkProcessExists();
-                if (isProcessRunning) {
-                    console.log(`${GC_BRIDGE_NAME} is already running`);
-                } else {
+                if (!isProcessRunning) {
                     const processStarted = this.startProcess();
                     if (!processStarted) {
                         return false;
                     }
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
                 return await this.connectViaSocket();
             } else {
                 return true;
             }
         } catch (error: any) {
-            console.error(`Cannot connect to ${GC_BRIDGE_NAME}:`, error);
             vscode.window.showErrorMessage(`Cannot connect to ${GC_BRIDGE_NAME}: ${error.message}`);
             return false;
         }
@@ -62,58 +60,60 @@ export class GCClient {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
-        
+
         if (this.socket) {
             this.socket.end();
             this.socket = null;
         }
-        
+
         this.isConnected = false;
         console.log(`Disconnected from ${GC_BRIDGE_NAME}`);
 
         const isProcessRunning = await this.checkProcessExists();
         if (isProcessRunning) {
             console.log(`${GC_BRIDGE_NAME} is running try close`);
+            this.isClosing = true;
             await this.killExistingProcess();
             await new Promise(resolve => setTimeout(resolve, 1000));
+            this.isClosing = false;
         }
     }
 
-    public async doRemoteLuaCall(functionName: string, paramString: string): Promise<boolean> {
+    public async tryConnect(): Promise<boolean> {
         if (!this.isConnected) {
             const connected = await this.connect();
             if (!connected) {
-                vscode.window.showErrorMessage(`Not connected to ${GC_BRIDGE_NAME}`);
+                vscode.window.showErrorMessage(`Service closed`);
                 return false;
             }
         }
+        return true;
+    }
 
+    public async doRemoteLuaCall(functionName: string, paramString: string): Promise<boolean> {
+        if (!this.socket) {
+            this.isConnected = false;
+            return false;
+        }
         try {
             const wProtocol = 0;
             const wServer = 1;
             const wSubProtocol = e2l_remote_lua_call_def;
             const packet = this.getRemoteLuaCallPacket(wProtocol, wServer, wSubProtocol, functionName, paramString);
-            
-            if (this.socket) {
-                this.socket.write(packet);
-                console.log(`Lua call sent to ${GC_BRIDGE_NAME} via socket`);
-                return true;
-            } else {
-                this.isConnected = false;
-                return await this.doRemoteLuaCall(functionName, paramString);
-            }
-        } catch (error) {
-            console.error('Error creating packet:', error);
+            this.socket.write(packet);
+            return true;
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
             return false;
         }
     }
 
     private async checkProcessExists(): Promise<boolean> {
         return new Promise((resolve) => {
-            const command = process.platform === 'win32' 
-                ? `tasklist /fi "imagename eq ${this.processName}"` 
+            const command = process.platform === 'win32'
+                ? `tasklist /fi "imagename eq ${this.processName}"`
                 : `ps -A | grep ${this.processName}`;
-            
+
             childProcess.exec(command, (error, stdout, stderr) => {
                 if (error) {
                     resolve(false);
@@ -127,17 +127,17 @@ export class GCClient {
 
     private async killExistingProcess(): Promise<boolean> {
         return new Promise((resolve) => {
-            const command = process.platform === 'win32' 
-                ? `taskkill /f /im ${this.processName}` 
+            const command = process.platform === 'win32'
+                ? `taskkill /f /im ${this.processName}`
                 : `pkill -f ${this.processName}`;
-            
+
             childProcess.exec(command, (error, stdout, stderr) => {
                 if (error) {
                     console.error('Error killing process:', error);
                     resolve(false);
                     return;
                 }
-                
+
                 console.log('Process killed successfully');
                 resolve(true);
             });
@@ -149,32 +149,39 @@ export class GCClient {
             if (!fs.existsSync(this.subProcessPath)) {
                 throw new Error(`${GC_BRIDGE_NAME} executable not found at: ${this.subProcessPath}`);
             }
-
-            // 启动新的C++进程
             this.subProcess = childProcess.spawn(this.subProcessPath, [], {
                 stdio: 'ignore',
-                detached: true
+                detached: true,
+                windowsHide: false
             });
-
-            this.subProcess.on('error', (err) => {
-                console.error(`${GC_BRIDGE_NAME} error:`, err);
+            // const spawnOptions: childProcess.SpawnOptions = {
+            //     stdio: 'pipe',
+            //     detached: true,
+            // };
+            // if (process.platform === 'win32') {
+            //     // 使用 cmd.exe 来启动程序，确保显示控制台
+            //     this.subProcess = childProcess.spawn('cmd.exe', ['/c', 'start', this.subProcessPath], {
+            //         ...spawnOptions,
+            //         windowsHide: false
+            //     });
+            // } else {
+            //     this.subProcess = childProcess.spawn(this.subProcessPath, [], spawnOptions);
+            // }
+            this.subProcess.on('error', (error) => {
+                vscode.window.showErrorMessage(`${GC_BRIDGE_NAME} error:${error.message}`);
                 this.subProcess = null;
             });
-
             this.subProcess.on('exit', (code) => {
-                console.log(`${GC_BRIDGE_NAME} exited with code ${code}`);
+                // console.log(`${GC_BRIDGE_NAME} exited with code ${code}`);
+                if (!this.isClosing) {
+                    vscode.window.showErrorMessage(`GC is not running, now close service...`);
+                }
                 this.subProcess = null;
-                this.isConnected = false;
-                
                 this.close();
             });
-
-            this.isConnected = true;
-            console.log(`Started new ${GC_BRIDGE_NAME} successfully`);
             return true;
         } catch (error: any) {
-            console.error(`Failed to start ${GC_BRIDGE_NAME}:`, error);
-            this.isConnected = false;
+            vscode.window.showErrorMessage(`Failed to start ${GC_BRIDGE_NAME}:${error.message}`);
             this.subProcess = null;
             return false;
         }
@@ -184,20 +191,17 @@ export class GCClient {
         return new Promise((resolve) => {
             this.socket = net.createConnection({ port: SOCKET_PORT, host: SOCKET_HOST }, () => {
                 this.isConnected = true;
-                console.log(`Connected to ${GC_BRIDGE_NAME} via socket`);
-                if (this.reconnectTimer) {
-                    clearTimeout(this.reconnectTimer);
-                    this.reconnectTimer = null;
-                }
+                console.log(`Connected to ${GC_BRIDGE_NAME} socket`);
+                // if (this.reconnectTimer) {
+                //     clearTimeout(this.reconnectTimer);
+                //     this.reconnectTimer = null;
+                // }
                 resolve(true);
             });
-
             this.socket.on('data', (data) => {
-                console.log(`Received from ${GC_BRIDGE_NAME}: ${data}`);
             });
-
-            this.socket.on('error', (err) => {
-                console.error('Socket error:', err);
+            this.socket.on('error', (error) => {
+                console.error(`Socket error:${error}`);
                 this.isConnected = false;
                 resolve(false);
             });
@@ -206,14 +210,12 @@ export class GCClient {
                 console.log('Socket connection closed');
                 this.isConnected = false;
                 this.socket = null;
-                
-                // 尝试重新连接
-                if (!this.reconnectTimer) {
-                    this.reconnectTimer = setTimeout(() => {
-                        console.log('Attempting to reconnect...');
-                        this.connectViaSocket();
-                    }, 3000);
-                }
+                // if (!this.reconnectTimer) {
+                //     this.reconnectTimer = setTimeout(() => {
+                //         vscode.window.showWarningMessage(`Attempting to reconnect...`);
+                //         this.connectViaSocket();
+                //     }, 3000);
+                // }
             });
         });
     }
@@ -226,7 +228,7 @@ export class GCClient {
             this.encodeParameter(param, paramBuffers);
         }
         const paramData = Buffer.concat(paramBuffers);
-        
+
         const headerPackSize = 4;
         const headerSize = headerPackSize + 6;
         const fixedSize = headerSize + 32 + 4;
@@ -252,7 +254,7 @@ export class GCClient {
         const result: any[] = [];
         let current = '';
         let depth = 0;
-        
+
         for (let i = 0; i < paramString.length; i++) {
             const ch = paramString[i];
             if (ch === '{' && depth === 0) {
@@ -289,11 +291,11 @@ export class GCClient {
                 current += ch;
             }
         }
-        
+
         if (current) {
             result.push(current);
         }
-        
+
         return result;
     }
 
@@ -311,13 +313,13 @@ export class GCClient {
             buffers.push(Buffer.from([LuaValueDef.eLuaPackNill]));
         } else if (typeof param === 'object') {
             buffers.push(Buffer.from([LuaValueDef.eLuaPackTable]));
-            
+
             // 写入表元素数量
             const keyCount = Object.keys(param).length;
             const countBuf = Buffer.alloc(4);
             countBuf.writeUInt32LE(keyCount);
             buffers.push(countBuf);
-            
+
             // 递归编码每个键值对
             for (const key in param) {
                 if (param.hasOwnProperty(key)) {
@@ -330,7 +332,7 @@ export class GCClient {
         } else {
             const strValue = String(param);
             buffers.push(Buffer.from([LuaValueDef.eLuaPackString]));
-            
+
             // const lenBuf = Buffer.alloc(4);
             // lenBuf.writeUInt32LE(strBuf.length + 1); // 包含null终止符
             // buffers.push(lenBuf);

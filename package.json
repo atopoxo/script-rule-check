@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -464,6 +464,12 @@
         "key": "alt+q",
         "when": "editorTextFocus && editorLangId == lua",
         "mac": "alt+q"
+      },
+      {
+        "command": "extension.reloadScript",
+        "key": "alt+y",
+        "when": "editorLangId == lua",
+        "mac": "alt+y"
       }
     ]
   },

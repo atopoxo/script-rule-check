@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import fs from 'fs';
 import path from 'path';
-import { Trie } from '../../function/trie'
-import {ContextOption, ContextItem, ContextTreeNode} from '../../ai_model/base/ai_types'
+import { Trie } from '../../function/trie';
+import {ContextOption, ContextItem, ContextTreeNode} from '../../ai_model/base/ai_types';
 import { getFileContent } from '../../function/base_function';
 import { Parser, Language } from 'web-tree-sitter';
 
@@ -74,8 +74,9 @@ export class ContextBase {
             const result = parser(content, types, startPos);
             
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`解析文件失败: ${filePath}`, error);
+            vscode.window.showWarningMessage(`解析文件失败: ${filePath}, ${error.message}`);
             return undefined;
         }
     }
@@ -88,7 +89,7 @@ export class ContextBase {
         if (!context.range) {
             return;
         }
-        if (context.name != 'global' && startPos <= context.range.start && context.range.end <= endPos) {
+        if (context.name !== 'global' && startPos <= context.range.start && context.range.end <= endPos) {
             result.push(context);
             return;
         }
@@ -592,7 +593,7 @@ export class ContextBase {
                 start: start,
                 end: end
             }
-        }
+        };
         return result;
     }
 
@@ -640,7 +641,7 @@ export class ContextBase {
     }
 
     protected traversePython(node: any, parentName: string, types: IdentifierType[], parent: ContextTreeNode | undefined, content: string, startPos: number) {
-        let current: ContextTreeNode | undefined = undefined
+        let current: ContextTreeNode | undefined = undefined;
         switch (node.type) {
             case 'function_definition':
                 current = this.pythonFunctionDefinition(node, parentName, types, content, startPos);
@@ -763,7 +764,7 @@ export class ContextBase {
                 case 'function':
                     const nameNode = node.childForFieldName('name');
                     if (nameNode) {
-                        const item = this.createContextItem(nameNode, parentName, startPos, node.type, content, node)
+                        const item = this.createContextItem(nameNode, parentName, startPos, node.type, content, node);
                         current = {value: item, children: []};
                     }
                     break;
@@ -778,7 +779,7 @@ export class ContextBase {
             switch (type) {
                 case 'function':
                     const functionName = this.getArrowFunctionName(node) || 'anonymous';
-                    const item = this.createContextItem(node, parentName, startPos, node.type, content, node, functionName)
+                    const item = this.createContextItem(node, parentName, startPos, node.type, content, node, functionName);
                     current = {value: item, children: []};
                     break;
             }
@@ -804,7 +805,7 @@ export class ContextBase {
                                     if (methodNameNode) {
                                         const methodName = methodNameNode.text;
                                         const fullMethodName = `${className}.${methodName}`;
-                                        const item = this.createContextItem(methodNameNode, parentName, startPos, child.type, content, child, fullMethodName)
+                                        const item = this.createContextItem(methodNameNode, parentName, startPos, child.type, content, child, fullMethodName);
                                         current.children.push({value: item, children: []});
                                     }
                                 } else if (child.type === 'public_field_definition') {
@@ -833,7 +834,7 @@ export class ContextBase {
                 case 'function':
                     const nameNode = node.childForFieldName('name');
                     const functionName = nameNode ? nameNode.text : this.getFunctionExpressionName(node) || 'anonymous';
-                    const item = this.createContextItem(node, parentName, startPos, node.type, content, node, functionName)
+                    const item = this.createContextItem(node, parentName, startPos, node.type, content, node, functionName);
                     current = {value: item, children: []};
                     break;
             }
@@ -875,7 +876,7 @@ export class ContextBase {
                     if (declarator) {
                         const functionNameNode = this.findFunctionNameInDeclarator(declarator);
                         if (functionNameNode) {
-                            const item = this.createContextItem(functionNameNode, parentName, startPos, node.type, content, node)
+                            const item = this.createContextItem(functionNameNode, parentName, startPos, node.type, content, node);
                             current = {value: item, children: []};
                         }
                     }
@@ -904,7 +905,7 @@ export class ContextBase {
                                         const functionNameNode = this.findFunctionNameInDeclarator(declarator);
                                         if (functionNameNode) {
                                             const fullMethodName = `${className}::${functionNameNode.text}`;
-                                            const item = this.createContextItem(functionNameNode, parentName, startPos, child.type, content, child, fullMethodName)
+                                            const item = this.createContextItem(functionNameNode, parentName, startPos, child.type, content, child, fullMethodName);
                                             current.children.push({value: item, children: []});
                                         }
                                     }
@@ -914,7 +915,7 @@ export class ContextBase {
                                         const fullName = (nameNode.text === className) 
                                             ? `${className}::${className}` // 构造函数
                                             : `${className}::~${className}`; // 析构函数
-                                        const item = this.createContextItem(nameNode, parentName, startPos, child.type, content, child, fullName)
+                                        const item = this.createContextItem(nameNode, parentName, startPos, child.type, content, child, fullName);
                                         current.children.push({value: item, children: []});
                                     }
                                 }
@@ -932,7 +933,7 @@ export class ContextBase {
         for (const type of types) {
             switch (type) {
                 case 'function':
-                    const item = this.createContextItem(node, parentName, startPos, node.type, content, node, 'lambda')
+                    const item = this.createContextItem(node, parentName, startPos, node.type, content, node, 'lambda');
                     current = {value: item, children: []};
                     break;
             }
@@ -1125,7 +1126,7 @@ export class ContextBase {
 
     protected getLineCount(posList: number[], pos: number) {
         let left = 0;
-        let right = posList.length - 1
+        let right = posList.length - 1;
         let mid = 0;
         while (left < right) {
             mid = Math.floor((left + right) / 2);

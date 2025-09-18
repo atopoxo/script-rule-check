@@ -17,7 +17,7 @@ import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { getEncoding, getGlobalConfigValue } from "./core/function/base_function";
 import { GameManager } from './game_manager';
 const { EventEmitter } = require('events');
-EventEmitter.defaultMaxListeners = 20;
+// EventEmitter.defaultMaxListeners = 20;
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
@@ -381,7 +381,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
             if (isWebViewCreated) {
                 await chatViewProvider.addContext();
             } else {
-                console.log("聊天视图未创建，请重试...");
+                vscode.window.showWarningMessage('聊天视图未创建，请重试...');
             }
         }),
         vscode.commands.registerCommand('extension.chat.checkCode', async () => {
@@ -389,7 +389,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
             if (isWebViewCreated) {
                 await chatViewProvider.checkCode();
             } else {
-                console.log("聊天视图未创建，请重试...");
+                vscode.window.showWarningMessage('聊天视图未创建，请重试...');
             }
         })
     );

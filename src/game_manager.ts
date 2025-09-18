@@ -1,4 +1,4 @@
-import {GCClient} from "./logic/network/gc_client";
+import { GCClient } from "./logic/network/gc_client";
 import { exec } from 'child_process';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -9,7 +9,7 @@ class Mutex {
     private mutex = Promise.resolve();
 
     lock(): PromiseLike<() => void> {
-        let begin: (unlock: () => void) => void = () => {};
+        let begin: (unlock: () => void) => void = () => { };
 
         this.mutex = this.mutex.then(() => {
             return new Promise(begin);
@@ -73,6 +73,10 @@ export class GameManager {
                 title: "Script Rule Check Progress",
                 cancellable: true
             }, async (progress, token) => {
+                if (!await client.tryConnect()) {
+                    vscode.window.showErrorMessage(`执行ReloadScript失败：无法连接到后台服务`);
+                    return;
+                }
                 progress.report({
                     message: `执行ReloadScript`,
                     increment: 0
@@ -201,7 +205,7 @@ export class GameManager {
             if (this.taskCount > 0) {
                 this.taskCount--;
             }
-            
+
             shouldClose = this.taskCount === 0 && this.client !== null;
         } finally {
             release();
@@ -272,7 +276,7 @@ export class GameManager {
     private getAITypes(rootPath: string, relativePath: string, key: string): string[] {
         let result = [];
         let searchPath = path.join(rootPath, 'client', 'settings', 'AIType');
-        let files = fs.readdirSync(searchPath, {recursive: true});
+        let files = fs.readdirSync(searchPath, { recursive: true });
         for (let file of files) {
             if (result.length >= 5) {
                 break;
