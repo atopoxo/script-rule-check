@@ -88,10 +88,13 @@
           "default": "",
           "description": "当前选中的ai角色"
         },
-        "script-rule-check.toolsOn": {
-          "type": "boolean",
-          "default": false,
-          "description": "工具集的开启状态"
+        "script-rule-check.toolsSelected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "开启的工具集"
         }
       }
     },

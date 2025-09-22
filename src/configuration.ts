@@ -43,7 +43,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
                 id: this.defaultAICharacterId,
                 name: '通用聊天角色',
                 describe: ''
-            }]
+            }];
             await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', infos);
             await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', infos[0].id);
         }
@@ -54,7 +54,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         let infos = getGlobalConfigValue<any[]>(this.extensionName, 'searchEngineInfos', []) || [];
         if (infos.length <= 0) {
             const defaultId = this.config.tools.searchEngine.default;
-            infos = this.config.tools.searchEngine.items.filter((item: any) => item.id == defaultId);
+            infos = this.config.tools.searchEngine.items.filter((item: any) => item.id === defaultId);
             await setGlobalConfigValue(this.extensionName, 'searchEngineInfos', infos);
             await setGlobalConfigValue(this.extensionName, 'selectedSearchEngine', infos[0].id);
         }
@@ -116,11 +116,11 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const selectedId = getGlobalConfigValue(this.extensionName, 'selectedAICharacter', '');
         const index = infos.findIndex((item) => item.id === id);
         if (index !== -1) {
-            if (infos[index].id != this.defaultAICharacterId) {
+            if (infos[index].id !== this.defaultAICharacterId) {
                 infos.splice(index, 1);
             }
         }
-        if (id == selectedId) {
+        if (id === selectedId) {
             await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', this.defaultAICharacterId);
         }
         this.setAICharacterInfos(infos);
@@ -170,11 +170,11 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const index = infos.findIndex((item) => item.id === id);
         const defaultId = this.config.tools.searchEngine.default;
         if (index !== -1) {
-            if (infos[index].id != defaultId) {
+            if (infos[index].id !== defaultId) {
                 infos.splice(index, 1);
             }
         }
-        if (id == selectedId) {
+        if (id === selectedId) {
             await setGlobalConfigValue(this.extensionName, 'selectedSearchEngine', defaultId);
         }
         this.setSearchEngineInfos(infos);
@@ -189,40 +189,57 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (!element) {
             return [
                 this.createConfigItem(),
-                this.createCustomCheckRuleSelectorItem(),
-                this.createModeSelectorItem(),
-                this.createModelSelectorItem(),
-                this.createToolModelSelectorItem(),
-                this.createAICharacterSelectorItem(),
-                this.createSearchEngineSelectorItem()
+                this.createAIConfigItem(),
+                this.createToolSet()
             ];
         }
-        if (element.contextValue === 'customCheckRuleSelector') {
-            return this.createCustomCheckRuleItems();
-        } else if (element.contextValue === 'modeSelector') {
-            return this.createModeItems();
+        if (element.contextValue === 'configItem') {
+            return this.createConfigItems();
+        } else if (element.contextValue === 'aiConfigItem') {
+            return this.createAIConfigItems();
         } else if (element.contextValue === 'modelSelector') {
             return this.createModelItems();
         } else if (element.contextValue === 'toolModelSelector') {
             return this.createToolModelItems();
         } else if (element.contextValue === 'aiCharacterSelector') {
             return this.createAICharacterItems();
-        } else if (element.contextValue === 'searchEngineSelector') {
-            return this.createSearchEngineItems();
         } else if (element.contextValue === 'modelInfo') {
             return this.getModelConfigItems(element);
         } else if (element.contextValue === 'aiCharacterInfo') {
             return this.getAICharacterConfigItems(element);
+        } else if (element.contextValue === 'toolSet') {
+            return this.createToolSetItems();
+        } else if (element.contextValue === 'searchEngineSelector') {
+            return this.createSearchEngineItems();
+        } else if (element.contextValue === 'scriptCheckSelector') {
+            return this.createScriptCheckItems();
         } else if (element.contextValue === 'searchEngineInfo') {
             return this.getSearchEngineConfigItems(element);
+        } else if (element.contextValue === 'customCheckRuleSelector') {
+            return this.createCustomCheckRuleItems();
+        } else if (element.contextValue === 'modeSelector') {
+            return this.createModeItems();
         }
         
         return [];
     }
 
     private createConfigItem(): vscode.TreeItem {
-        const item = new vscode.TreeItem(`产品库目录: ${getGlobalConfigValue<string>(this.extensionName, 'productDir', '')}`);
+        const item = new vscode.TreeItem('Config');
         item.contextValue = 'configItem';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createConfigItems(): vscode.TreeItem[] {
+        return [
+            this.createProductDirConfigItem()
+        ];
+    }
+
+    private createProductDirConfigItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem(`产品库目录: ${getGlobalConfigValue<string>(this.extensionName, 'productDir', '')}`);
+        item.contextValue = 'productDirConfigItem';
         item.command = {
             command: 'extension.setProductDir',
             title: '设置产品库目录'
@@ -231,27 +248,26 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return item;
     }
 
-    private createCustomCheckRuleSelectorItem(): vscode.TreeItem {
-        const item = new vscode.TreeItem('自定义检查规则');
-        item.contextValue = 'customCheckRuleSelector';
+    private createAIConfigItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem('AI');
+        item.contextValue = 'aiConfigItem';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
     }
 
-    private createModeSelectorItem(): vscode.TreeItem {
-        const currentMode = getGlobalConfigValue<string>(this.extensionName, 'displayMode', 'tree');
-        const item = new vscode.TreeItem(`显示模式: ${currentMode}`);
-        item.contextValue = 'modeSelector';
-        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-        item.iconPath = new vscode.ThemeIcon(currentMode === 'tree' ? 'list-tree' : 'list-flat');
-        return item;
+    private createAIConfigItems(): vscode.TreeItem[] {
+        return [
+            this.createModelSelectorItem(),
+            this.createToolModelSelectorItem(),
+            this.createAICharacterSelectorItem()
+        ];
     }
 
     private createModelSelectorItem(): vscode.TreeItem {
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '');
         const models = this.allModelInfos.filter(info => info.id === id);
         const name = models.length > 0 ? models[0].name : '';
-        const item = new vscode.TreeItem(`当前聊天模型: ${name}`);
+        const item = new vscode.TreeItem(`当前'AI Chat'模型: ${name}`);
         item.contextValue = 'modelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
@@ -261,7 +277,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedToolModel', '');
         const models = this.allModelInfos.filter(info => info.id === id);
         const name = models.length > 0 ? models[0].name : '';
-        const item = new vscode.TreeItem(`当前工具预判模型: ${name}`);
+        const item = new vscode.TreeItem(`当前'AI Chat'中，决定工具调用的模型: ${name}`);
         item.contextValue = 'toolModelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
@@ -281,6 +297,20 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return item;
     }
 
+    private createToolSet(): vscode.TreeItem {
+        const item = new vscode.TreeItem('Tools');
+        item.contextValue = 'toolSet';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createToolSetItems(): vscode.TreeItem[] {
+        return [
+            this.createSearchEngineSelectorItem(),
+            this.createScriptCheckSelectorItem()
+        ];
+    }
+    
     private createSearchEngineSelectorItem(): vscode.TreeItem {
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedSearchEngine', '');
         const info = this.allSearchEngineInfos.find(info => info.id === id) || {name: ''};
@@ -292,6 +322,53 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             command: 'extension.searchEngine.add',
             title: '添加新搜索引擎'
         };
+        return item;
+    }
+
+    private createScriptCheckSelectorItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem('脚本检查工具');
+        item.contextValue = 'scriptCheckSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createScriptCheckItems(): vscode.TreeItem[] {
+        return [
+            this.createCustomCheckRuleSelectorItem(),
+            this.createModeSelectorItem()
+        ];
+    }
+
+    private createCustomCheckRuleSelectorItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem('自定义检查规则');
+        item.contextValue = 'customCheckRuleSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createCustomCheckRuleItems(): vscode.TreeItem[] {
+        return this.allCheckRules.map(rule => this.createCustomCheckRuleItem(rule));
+    }
+    private createCustomCheckRuleItem(rule: CheckRule): vscode.TreeItem {
+        const isSelected = getGlobalConfigValue<string[]>(this.extensionName, 'customCheckRules', []).includes(rule.id);
+        const item = new vscode.TreeItem(rule.taskName);
+        item.id = rule.id;
+        item.contextValue = 'customCheckRule';
+        item.command = {
+            command: 'extension.toggleCustomCheckRules',
+            title: rule.taskName,
+            arguments: [rule.id]
+        };
+        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        return item;
+    }
+
+    private createModeSelectorItem(): vscode.TreeItem {
+        const currentMode = getGlobalConfigValue<string>(this.extensionName, 'displayMode', 'tree');
+        const item = new vscode.TreeItem(`显示模式: ${currentMode}`);
+        item.contextValue = 'modeSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        item.iconPath = new vscode.ThemeIcon(currentMode === 'tree' ? 'list-tree' : 'list-flat');
         return item;
     }
 
@@ -313,23 +390,6 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (isCurrent) {
             item.iconPath = new vscode.ThemeIcon('check');
         }
-        return item;
-    }
-
-    private createCustomCheckRuleItems(): vscode.TreeItem[] {
-        return this.allCheckRules.map(rule => this.createCustomCheckRuleItem(rule));
-    }
-    private createCustomCheckRuleItem(rule: CheckRule): vscode.TreeItem {
-        const isSelected = getGlobalConfigValue<string[]>(this.extensionName, 'customCheckRules', []).includes(rule.id);
-        const item = new vscode.TreeItem(rule.taskName);
-        item.id = rule.id;
-        item.contextValue = 'customCheckRule';
-        item.command = {
-            command: 'extension.toggleCustomCheckRules',
-            title: rule.taskName,
-            arguments: [rule.id]
-        };
-        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
         return item;
     }
 
@@ -413,7 +473,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         }
         const config = {
             "apiKey": key
-        }
+        };
 
         return Object.entries(config).map(([key, value]) => {
             const configItem = new vscode.TreeItem(`${key}: ${value}`);
@@ -436,7 +496,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         }
         const config = {
             "describe": describe
-        }
+        };
 
         return Object.entries(config).map(([key, value]) => {
             const configItem = new vscode.TreeItem(`${key}: ${value}`);
@@ -466,7 +526,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             "engineId": engineId,
             "url": url,
             "apiKey": apiKey
-        }
+        };
 
         return Object.entries(config).map(([key, value]) => {
             const configItem = new vscode.TreeItem(`${key}: ${value}`);

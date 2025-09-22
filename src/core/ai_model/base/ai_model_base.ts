@@ -46,7 +46,7 @@ export abstract class AIModelBase {
 
     public async *streamGeneratorFramework(signal: AbortSignal, inputData: InputData): AsyncGenerator<string, void, unknown> {
         const needSave = true;
-        const toolsOn = inputData.toolsOn || false;
+        const toolsSelected = inputData.toolsSelected || [];
         const userId = inputData.userID;
         const instanceName = inputData.instanceName;
         const session = inputData.session as Session;
@@ -70,16 +70,16 @@ export abstract class AIModelBase {
         this.setToolModel({
             apiKey: toolModelConfig.apiKey,
             url: toolModelConfig.url
-        })
+        });
         while (hasTask) {
             try {
                 this.handleReferences(messages, cache, currentIndex);
                 this.handleKnowledge(useKnowledge, messages, cache, currentIndex);
-                if (toolsOn) {
-                    currentIndex = this.checkToolTips(messages, cache, true, currentIndex);
+                if (toolsSelected.length > 0) {
+                    currentIndex = this.checkToolTips(messages, cache, true, currentIndex, toolsSelected);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
                     yield* this.streamGenerator(true, signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace);
-                    currentIndex = this.checkToolTips(messages, cache, false, currentIndex);
+                    currentIndex = this.checkToolTips(messages, cache, false, currentIndex, toolsSelected);
                     const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     // yield* this.reportToolInfos(tools, contentMap.conclusion_content);
                     const toolResult = await this.handleToolCalls(tools, messages, cache, currentIndex);
@@ -124,11 +124,11 @@ export abstract class AIModelBase {
         cache.returns = { ai: { ai_conclusion: "" } };
     }
 
-    private checkToolTips(messages: Message[], cache: any, begin: boolean, index: number): number {
+    private checkToolTips(messages: Message[], cache: any, begin: boolean, index: number, toolsSelected: any[]): number {
         let returnIndex = index;
         if (begin) {
             const preToolTips = cache.tools_describe;
-            const toolTips = this.toolsMgr.getAIUsageTips(preToolTips, cache.tool_calls);
+            const toolTips = this.toolsMgr.getAIUsageTips(preToolTips, cache.tool_calls, toolsSelected);
             toolTips.tools_usage = `${this.additional_tips.begin}${toolTips.tools_usage}${this.additional_tips.end}`;
             
             if (preToolTips.length <= 0) {
@@ -172,14 +172,14 @@ export abstract class AIModelBase {
             result += "<ToolCall>";
             result += "<ToolCallId>";
             result += `${toolCall.id}`;
-            result += "</ToolCallId>"
+            result += "</ToolCallId>";
             result += "<ToolCallInput>";
             result += "```json\n" + `${this.jsonParser.toJsonStr(toolCall.input, 4)}` + "\n```";
-            result += "</ToolCallInput>"
+            result += "</ToolCallInput>";
             result += "<ToolCallOutput>";
             result += `${this.jsonParser.toJsonStr(toolCall.output.data, 4)}`;
-            result += "</ToolCallOutput>"
-            result += "</ToolCall>"
+            result += "</ToolCallOutput>";
+            result += "</ToolCall>";
         }
         result += "</ToolCalls>";
         return result;
@@ -289,7 +289,7 @@ export abstract class AIModelBase {
                             const currentReturn = {
                                 showType: prop.showType,
                                 value: item
-                            }
+                            };
                             currentReturns.push(currentReturn);
                         }
                     }
@@ -305,7 +305,7 @@ export abstract class AIModelBase {
                             output: {
                                 data: currentReturns
                             }
-                        }
+                        };
                         currentToolCalls.push(currentToolCall);
                     }
                 }
@@ -333,7 +333,7 @@ export abstract class AIModelBase {
         const result = {
             ai: toolsMessages.return_to_ai,
             toolCalls: currentToolCalls
-        }
+        };
         return result;
     }
 
@@ -475,6 +475,6 @@ export abstract class AIModelBase {
         let configPath = path.join(path.dirname(__dirname), this.mode);
         configPath = path.join(path.join(configPath, this.name), "config.json");
         const data = this.jsonParser.readJsonFile(configPath);
-        return data
+        return data;
     }
 }

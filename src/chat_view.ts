@@ -5,6 +5,7 @@ import { Session, ContextOption } from './core/ai_model/base/ai_types';
 import { ChatManager } from './chat_manager';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ContextMgr } from './core/context/context_mgr';
+import { ToolsMgr } from './core/tools/tools_mgr';
 import { getEncoding } from './core/function/base_function';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -18,6 +19,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         private context: vscode.ExtensionContext,
         private chatManager: ChatManager,
         private aiModelMgr: AIModelMgr,
+        private toolsMgr: ToolsMgr,
         private contextMgr: ContextMgr
     ) {
         this._extensionUri = context.extensionUri;
@@ -95,8 +97,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                         this.viewCreatedResolve(true);
                     }
                     break;
-                case 'toolsOn':
-                    await this.toolsOn();
+                case 'showToolsOptions':
+                    await this.showToolsOptions(data.toolsSelected);
                     break;
                 case 'selectModel':
                     await this.selectModel(data.id);
@@ -185,14 +187,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         selectedSession.isAIStreamTransfer = false;
         const data = {
             isDark: theme === vscode.ColorThemeKind.Dark,
-            toolsOn: this.chatManager.getToolsOnState(),
             aiCharacter: this.chatManager.getSelectedAICharacter(),
             modelInfos: this.aiModelMgr.getModelInfos(),
             selectedModel: await this.aiModelMgr.getSelectedModel(),
             contextOption: await this.contextMgr.getOptions(undefined),
+            toolsOptions: this.getToolsOptions(),
+            toolsSelected: this.chatManager.getToolsSelected(),
             selectedSession: selectedSession
         };
         this.updateWebview('initSession', data);
+    }
+
+    private getToolsOptions(): ContextOption[] {
+        let tools = this.toolsMgr.getAllTools();
+        return tools.map(tool => ({
+            type: tool.type,
+            id: tool.id,
+            name: tool.name ? tool.name : tool.id,
+            describe: tool.describe ? tool.describe : ''
+        }));
     }
 
     public selectAICharacter() {
@@ -226,12 +239,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('themeUpdate', {isDark: theme === vscode.ColorThemeKind.Dark});
     }
 
-    private async toolsOn() {
-        const state = await this.chatManager.toolsOn();
+    private async showToolsOptions(toolsSelected: ContextOption[]) {
+        await this.chatManager.setToolsSelected(toolsSelected);
         const data = {
-            toolsOn: state
+            toolsOptions: this.getToolsOptions(),
+            toolsSelected: this.chatManager.getToolsSelected(),
         };
-        this.updateWebview('toolsOn', data);
+        this.updateWebview('showToolsOptions', data);
     }
 
     public async selectModel(id: string) {
@@ -295,8 +309,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (this.view && this.isWebviewReady && !currentSession.isAIStreamTransfer) {
                 const port = this.view.webview;
                 const abortController = new AbortController();
-                const toolsOn = this.chatManager.getToolsOnState();
-                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, toolsOn, query, index, contextOption, contextExpand);
+                const toolsSelected = this.chatManager.getToolsSelected();
+                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, toolsSelected, query, index, contextOption, contextExpand);
                 currentSession.isAIStreamTransfer = true;
                 port.postMessage({
                     type: 'aiStreamStart',

@@ -14,6 +14,7 @@ import { ChatViewProvider } from './chat_view';
 import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
+import { ToolsMgr } from './core/tools/tools_mgr';
 import { getEncoding, getGlobalConfigValue } from "./core/function/base_function";
 import { GameManager } from './game_manager';
 const { EventEmitter } = require('events');
@@ -33,6 +34,7 @@ let registered = false;
 const userID = "admin";
 let storage: Storage;
 let aiModelMgr: AIModelMgr;
+let toolsMgr: ToolsMgr;
 let gameManager: GameManager;
 gameManager = new GameManager();
 // const EXTENSION_ID = `${publisher}.${extensionName}`;
@@ -85,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     }
                     ruleResultProvider.refresh();
                 } else {
-                    vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
+                    vscode.window.showErrorMessage(`产品库路径'${newDir}'不存在,或路径错误`);
                 }
                 configurationProvider.refresh();
             }
@@ -102,10 +104,9 @@ export async function activate(context: vscode.ExtensionContext) {
                         registerNormalCommands(context, configurationProvider, newDir);
                         registered = true;
                     }
-                    // await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Workspace);
                     await customConfig.update('productDir', newDir, vscode.ConfigurationTarget.Global);
                 } else {
-                    vscode.window.showErrorMessage(`配置路径不存在: ${newDir}`);
+                    vscode.window.showErrorMessage(`产品库路径'${newDir}'不存在,或路径错误`);
                 }
             }
         }),
@@ -114,7 +115,7 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
     if (!fs.existsSync(productDir)) {
-        vscode.window.showErrorMessage(`配置路径不存在: ${productDir}`);
+        vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
     } else {
         if (!registered) {
             registerNormalCommands(context, configurationProvider, productDir);
@@ -220,9 +221,10 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     const defaultModelId = defaultModel ? defaultModel.id : '';
     const defaultToolModel = await aiModelMgr.getSelectedToolModel();
     const defaultToolModelId = defaultToolModel ? defaultToolModel.id : '';
+    toolsMgr = new ToolsMgr(configurationProvider.getConfig());
     chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelId, defaultToolModelId, aiModelMgr);
     await chatManager.ready;
-    chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, contextMgr);
+    chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, toolsMgr, contextMgr);
     // chatViewProvider.createWebview();
 	const allModelInfos = aiModelMgr.getModelInfos();
     configurationProvider.setModelInfos(allModelInfos);
@@ -443,7 +445,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             }
             const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
             if (!fs.existsSync(dir)) {
-                vscode.window.showErrorMessage(`产品库路径不存在: ${productDir}`);
+                vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
             }
             await gameManager.doGMCommand(uriContext, selectedUris, true);
         }),
@@ -460,7 +462,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             }
             const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
             if (!fs.existsSync(dir)) {
-                vscode.window.showErrorMessage(`产品库路径不存在: ${productDir}`);
+                vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
             }
             await gameManager.doGMCommand(uriContext, selectedUris, false);
         }),

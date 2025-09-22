@@ -125,7 +125,18 @@
             <div class="ref-tooltip">选择上下文</div>
           </div>
           <div class="input-functions-right">
-            <button class="icon-button tools-flag" :class="{'on': isToolsOn}" @click="toolsOn">工具集</button>
+            <button class="icon-button tools-flag" :class="{'on': toolsSelectedOptions.length > 0}" @click="showToolsOptions">Tools</button>
+            <sy-selector v-if="showToolsSelector" :visible="showToolsSelector" class="tools-selector" ref="toolsSelector"
+              title="工具集"
+              :width="300"
+              :isDark = isDark
+              :items="toolsOptions"
+              :mutiSelect="true"
+              :showChoice="true"
+              :selectedItems="toolsSelectedOptions"
+              @close="handleToolsSelectorClose"
+              @select="handleToolsSelect"
+            />
             <button class="icon-button model-select" @click="selectModel">{{ selectedModel }}</button>
             <sy-selector v-if="showModelSelector" :visible="showModelSelector" class="model-selector" ref="modelSelector"
               title="选择模型"
@@ -190,6 +201,7 @@ export default defineComponent({
     const currentContextSelectors = ref<Map<number, InstanceType<typeof SySelector>>>(new Map());
     const referenceSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const modelSelector = ref<InstanceType<typeof SySelector> | null>(null);
+    const toolsSelector = ref<InstanceType<typeof SySelector> | null>(null);
     const isInHistoryView = ref(false);
     const sessionTagFontSize = "11px";
     const historySessions = ref<SessionRecordList[]>([]);
@@ -202,6 +214,9 @@ export default defineComponent({
     const selectedModel = ref('');
     const modelOptions = ref<SelectorItem[]>([]);
     const contextOption = ref<SelectorItem[]>([]);
+    const showToolsSelector = ref(false);
+    const toolsOptions = ref<SelectorItem[]>([]);
+    const toolsSelectedOptions = ref<SelectorItem[]>([]);
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const placeholderText = ref(isMac ? '「↑↓」切换历史输入，「⌘+⏎」换行' : '「↑↓」切换历史输入，「Ctrl+⏎」换行');
     const messageInput = ref('');
@@ -299,11 +314,6 @@ export default defineComponent({
         timestamp: tagTime,
         records: [item]
       });
-    }
-
-    const isToolsOn = ref<boolean>(false);
-    const toolsOn = () => {
-      vscode.postMessage({ type: 'toolsOn'});
     };
 
     const selectModel = () => {
@@ -479,6 +489,51 @@ export default defineComponent({
     const getContextDescription = (contextOption: ContextOption[]): string => {
       const result = `${contextOption.length} 个上下文信息`;
       return result;
+    }
+
+    const showToolsOptions = () => {
+      showToolsSelector.value = showToolsSelector.value ? false : true;
+    }
+
+    const handleToolsSelectorClose = (items: any[] | undefined, _index: number) => {
+      if (items) {
+        toolsSelectedOptions.value = items;
+      }
+      showToolsSelector.value = false;
+    }
+    const handleToolsSelect = (selected: any[], _index: number) => {
+      if (selected.length > 0) {
+        let items = toRaw(selected);
+        vscode.postMessage({ type: 'showToolsOptions', data: {toolsSelected: items}} );
+      }
+    };
+
+    const getToolsOptions = (options: ContextOption[]): SelectorItem[] => {
+      const themeFolder = isDarkTheme() ? 'dark' : 'light';
+      const selectTagfontSize = "9px";
+      return options.map((item) => ({
+        type: item.type,
+        id: item.id,
+        name: item.name,
+        icon: item.icon ? `${themeFolder}/${item.icon}` : undefined,
+        tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+        contextItem: item.contextItem,
+        children: (item.children && item.children.length > 0) ? getToolsOptions(item.children) : undefined
+      }));
+    }
+
+    const getToolsSelectedOptions = (options: ContextOption[], selectedItems: any[]): SelectorItem[] => {
+      const themeFolder = isDarkTheme() ? 'dark' : 'light';
+      const selectTagfontSize = "9px";
+      return options.filter(item => selectedItems.some(selected => selected === item.id)).map((item) => ({
+        type: item.type,
+        id: item.id,
+        name: item.name,
+        icon: item.icon ? `${themeFolder}/${item.icon}` : undefined,
+        tag: {text: item.describe, fontSize: selectTagfontSize, border: false},
+        contextItem: item.contextItem,
+        children: (item.children && item.children.length > 0) ? getToolsSelectedOptions(item.children, selectedItems) : undefined
+      }));
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1012,6 +1067,14 @@ export default defineComponent({
         }
     });
 
+    watch(showToolsSelector, (newVal, oldVal) => {
+        if (oldVal === true && newVal === false) {
+            if (toolsSelector.value) {
+                toolsSelector.value.confirmSelection();
+            }
+        }
+    });
+
     onMounted(() => {
         if (contextBar.value) {
             referencesBarResizeObserver = new ResizeObserver((entries) => {
@@ -1032,12 +1095,13 @@ export default defineComponent({
             switch (type) {
               case 'initSession':
                   isDark.value = data.isDark;
-                  isToolsOn.value = data.toolsOn;
                   titleBarText.value = data.aiCharacter.name || titleBarText.value;
                   selectedSession.value = getSelectedSession(data.selectedSession);
                   selectedModel.value = data.selectedModel.name;
                   modelOptions.value = getModels(data.modelInfos);
-                  contextOption.value = getReferenceOptions(data.contextOption)
+                  contextOption.value = getReferenceOptions(data.contextOption);
+                  toolsOptions.value = getToolsOptions(data.toolsOptions);
+                  toolsSelectedOptions.value = getToolsSelectedOptions(data.toolsOptions, data.toolsSelected);
                   isInHistoryView.value = false;
                   break;
               case 'themeUpdate':
@@ -1045,9 +1109,6 @@ export default defineComponent({
                   break;
               case 'selectAICharacter':
                   titleBarText.value = data.aiCharacter.name || titleBarText.value;
-                  break;
-              case 'toolsOn':
-                  isToolsOn.value = data.toolsOn;
                   break;
               case 'selectModel':
                   selectedModel.value = data.selectedModel.name;
@@ -1061,6 +1122,10 @@ export default defineComponent({
                   } else {
                     updateContext(data.contextOption, data.index);
                   }
+                  break;
+              case 'showToolsOptions':
+                  toolsOptions.value = getToolsOptions(data.toolsOptions);
+                  toolsSelectedOptions.value = getToolsSelectedOptions(data.toolsOptions, data.toolsSelected);
                   break;
               case 'aiStreamStart':
                   handleAIStreamStart(data);
@@ -1126,6 +1191,7 @@ export default defineComponent({
       contentBlockWidth,
       contextBar,
       contextItems,
+      toolsSelectedOptions,
       currentContext,
       expandContext,
       getContextIconPath,
@@ -1168,11 +1234,15 @@ export default defineComponent({
       handleReferenceSelect,
       handleReferenceSelectFiles,
       handleReferenceSelectWorkspace,
+      showToolsSelector,
+      toolsSelector,
+      toolsOptions,
+      showToolsOptions,
+      handleToolsSelectorClose,
+      handleToolsSelect,
       showModelSelector,
       modelOptions,
       selectedModel,
-      isToolsOn,
-      toolsOn,
       selectModel,
       handleModelSelectorClose,
       handleModelSelect
@@ -1594,6 +1664,10 @@ export default defineComponent({
 }
 .vscode-dark .message-send.ai-stream-transfering {
   background-image: url('@assets/icons/dark/pause.svg');
+}
+.tools-selector {
+  bottom: 100%;
+  right: 0;
 }
 .model-selector {
   bottom: 100%;

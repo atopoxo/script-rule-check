@@ -83,7 +83,7 @@ export class ToolsMgr {
         this.loadTools(this.toolsConfig);
     }
 
-    public getAIUsageTips(toolTips: any, toolCalls: ToolCall[][]): AIUsageTips {
+    public getAIUsageTips(toolTips: any, toolCalls: ToolCall[][], toolsSelected: any[]): AIUsageTips {
         const result: AIUsageTips = {
             tools_describe: null,
             tools_usage: null
@@ -148,7 +148,7 @@ export class ToolsMgr {
             }
             result.tools_usage = toolsUsage;
         } else {
-            const tools = this.getToolsConfig();
+            const tools = this.getToolsConfig(toolsSelected);
             const toolsStr = this.jsonParser.toJsonStr(tools);
             result.tools_describe = `\n## 在生成时请注意，你有如下工具可以调用：
                 ${toolsStr}
@@ -163,6 +163,10 @@ export class ToolsMgr {
             result.tools_usage = `\n## 当你发现回答用户的问题需要调用工具时，${toolCallCheckStr}\n`;
         }
         return result;
+    }
+
+    public getAllTools(): any[] {
+        return this.toolsConfig;
     }
 
     public getTools(content: string): ToolCall[][] {
@@ -239,8 +243,12 @@ export class ToolsMgr {
         }
     }
 
-    public getToolsConfig(): any {
-        return this.toolsConfig;
+    public getToolsConfig(toolsSelected: any[]): any {
+        if (toolsSelected.length > 0) {
+            return this.toolsConfig.filter(tool => toolsSelected.some(selectedId => selectedId === tool.id));
+        } else {
+            return this.toolsConfig;
+        }
     }
 
     public getToolReturnProperty(moduleName: string, className: string, functionName: string, variable: string): any {

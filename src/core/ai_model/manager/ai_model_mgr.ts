@@ -23,7 +23,7 @@ export class AIModelMgr {
     }
 
     async getSelectedModel(): Promise<ModelInfo | undefined> {
-        const config = vscode.workspace.getConfiguration(this.extensionName)
+        const config = vscode.workspace.getConfiguration(this.extensionName);
         const id = await config.get('selectedModel', '');
         let selectedModel = this.modelConfigs.get(id);
         if (!selectedModel) {
@@ -56,7 +56,7 @@ export class AIModelMgr {
     }
 
     public async getSelectedToolModel() {
-        const config = vscode.workspace.getConfiguration(this.extensionName)
+        const config = vscode.workspace.getConfiguration(this.extensionName);
         const id = await config.get('selectedToolModel', '');
         let selectedModel = this.modelConfigs.get(id);
         if (!selectedModel) {

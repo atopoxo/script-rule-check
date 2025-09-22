@@ -113,7 +113,7 @@ export interface InputData {
     userID?: string;
     instanceName?: string;
     session?: Session;
-    toolsOn?: boolean;
+    toolsSelected?: any[];
     useKnowledge?: boolean;
     modelConfig?: any;
     toolModelConfig?: any;

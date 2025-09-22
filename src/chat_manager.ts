@@ -34,17 +34,14 @@ export class ChatManager {
         return this.userID;
     }
 
-    public async toolsOn(): Promise<boolean> {
-        let state = getGlobalConfigValue(this.extensionName, 'toolsOn', false);
-        state = !state;
-        await setGlobalConfigValue(this.extensionName, 'toolsOn', state);
-        state = getGlobalConfigValue(this.extensionName, 'toolsOn', false);
-        return state;
+    public async setToolsSelected(toolsSelected: any[]): Promise<void> {
+        let ids = toolsSelected.map(item => item.id);
+        await setGlobalConfigValue(this.extensionName, 'toolsSelected', ids);
     }
 
-    public getToolsOnState(): boolean {
-        let state = getGlobalConfigValue(this.extensionName, 'toolsOn', false);
-        return state;
+    public getToolsSelected(): any[] {
+        let tools = getGlobalConfigValue(this.extensionName, 'toolsSelected', []);
+        return tools;
     }
 
     public static getInstance(context: vscode.ExtensionContext, extensionName: string, userID: string, storage: Storage, defaultModelId: string, defaultToolModelId: string, aiModelMgr: AIModelMgr): ChatManager {
@@ -94,7 +91,7 @@ export class ChatManager {
         return await this.storage.removeAIInstanceMessages(this.userID, instanceName, sessionId, removeIndexList);
     }
 
-    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsOn: boolean, query?: string, index?: number, contextOption?: any[], contextExpand?: boolean) {
+    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsSelected: any[], query?: string, index?: number, contextOption?: any[], contextExpand?: boolean) {
         const history = await this.getMessages(this.userID, 'chat', session.sessionId, query, index, contextOption, contextExpand);
         let modelId = await this.storage.getAIInstanceModelId(this.userID, 'chat');
         modelId = this.getValidModelId(modelId);
@@ -107,7 +104,7 @@ export class ChatManager {
             session: session,
             history: history,
             index: index,
-            toolsOn: toolsOn,
+            toolsSelected: toolsSelected,
             useKnowledge: useKnowledge,
             modelConfig: this.aiModelMgr.getModelConfig(modelId),
             toolModelConfig: this.aiModelMgr.getModelConfig(toolModelId),
@@ -141,7 +138,9 @@ export class ChatManager {
                 validStart = i;
                 validNum++;
             }
-            if (validNum >= num) break;
+            if (validNum >= num) {
+                break;
+            }
         }
         const messageContext = history.slice(validStart);
         this.insertDatetime(messageContext, 'user');
