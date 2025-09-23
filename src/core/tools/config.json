@@ -2,6 +2,7 @@
     "tools":[
         {
             "id": "browser_search",
+            "name": "联网搜索",
             "type": "function",
             "function": {
                 "module": "browser",
