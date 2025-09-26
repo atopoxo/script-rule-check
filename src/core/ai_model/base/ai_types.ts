@@ -21,7 +21,8 @@ export class AICharacterInfo {
     constructor(
         public id: string,
         public name: string,
-        public describe: string
+        public describe: string,
+        public canModify: boolean
     ) {}
 }
 

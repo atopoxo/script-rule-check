@@ -39,13 +39,33 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private async initAICharacterInfos() {
         let infos = getGlobalConfigValue<any[]>(this.extensionName, 'aiCharacterInfos', []) || [];
         if (infos.length <= 0) {
-            infos = [{
-                id: this.defaultAICharacterId,
-                name: '通用聊天角色',
-                describe: ''
-            }];
+            infos = [
+                {
+                    id: this.defaultAICharacterId,
+                    name: '通用聊天角色',
+                    describe: '',
+                    canModify: false
+                }
+            ];
             await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', infos);
             await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', infos[0].id);
+        }
+        for (const info of infos) {
+            if (!info.canModify) {
+                if (info.id === this.defaultAICharacterId) {
+                    info.canModify = false;
+                } else {
+                    info.canModify = true;
+                }
+            }
+        }
+        if (infos.length === 0 || infos[infos.length - 1].id !== 'addAICharacter') {
+            infos.push({
+                id: 'addAICharacter',
+                name: '...',
+                describe: '添加聊天角色',
+                canModify: false
+            });
         }
         this.setAICharacterInfos(infos);
     }
@@ -57,6 +77,16 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             infos = this.config.tools.searchEngine.items.filter((item: any) => item.id === defaultId);
             await setGlobalConfigValue(this.extensionName, 'searchEngineInfos', infos);
             await setGlobalConfigValue(this.extensionName, 'selectedSearchEngine', infos[0].id);
+        }
+        if (infos.length === 0 || infos[infos.length - 1].id !== 'addSearchEngine') {
+            infos.push({
+                id: 'addSearchEngine',
+                name: '...',
+                engineId: '',
+                url: '',
+                apiKey: '',
+                showConfig: false
+            });
         }
         this.setSearchEngineInfos(infos);
     }
@@ -102,13 +132,22 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const newItem: AICharacterInfo = {
             id,
             name,
-            describe
+            describe,
+            canModify: true
         };
         const items = await this.getAICharacterInfos();
         items.push(newItem);
-        this.setAICharacterInfos(items);
         await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', items);
         await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', id);
+        if (items.length > 0 && items[items.length - 1].id !== 'addAICharacter') {
+            items.push({
+                id: 'addAICharacter',
+                name: '...',
+                describe: '添加聊天角色',
+                canModify: false
+            });
+        }
+        this.setAICharacterInfos(items);
     }
 
     public async removeAICharacter(id: string): Promise<void> {
@@ -123,8 +162,16 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (id === selectedId) {
             await setGlobalConfigValue(this.extensionName, 'selectedAICharacter', this.defaultAICharacterId);
         }
-        this.setAICharacterInfos(infos);
         await setGlobalConfigValue(this.extensionName, 'aiCharacterInfos', infos);
+        if (infos.length === 0 || infos[infos.length - 1].id !== 'addAICharacter') {
+            infos.push({
+                id: 'addAICharacter',
+                name: '...',
+                describe: '添加聊天角色',
+                canModify: false
+            });
+        }
+        this.setAICharacterInfos(infos);
     }
 
     public async addSearchEngine(): Promise<void> {
@@ -159,9 +206,19 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         };
         const items = await this.getSearchEngineInfos();
         items.push(newItem);
-        this.setSearchEngineInfos(items);
         await setGlobalConfigValue(this.extensionName, 'searchEngineInfos', items);
         await setGlobalConfigValue(this.extensionName, 'selectedSearchEngine', id);
+        if (items.length > 0 && items[items.length - 1].id !== 'addSearchEngine') {
+            items.push({
+                id: 'addSearchEngine',
+                name: '...',
+                engineId: '',
+                url: '',
+                apiKey: '',
+                showConfig: false
+            });
+        }
+        this.setSearchEngineInfos(items);
     }
 
     public async removeSearchEngine(id: string): Promise<void> {
@@ -177,8 +234,18 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         if (id === selectedId) {
             await setGlobalConfigValue(this.extensionName, 'selectedSearchEngine', defaultId);
         }
-        this.setSearchEngineInfos(infos);
         await setGlobalConfigValue(this.extensionName, 'searchEngineInfos', infos);
+        if (infos.length === 0 || infos[infos.length - 1].id !== 'addSearchEngine') {
+            infos.push({
+                id: 'addSearchEngine',
+                name: '...',
+                engineId: '',
+                url: '',
+                apiKey: '',
+                showConfig: false
+            });
+        }
+        this.setSearchEngineInfos(infos);
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -289,11 +356,6 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const item = new vscode.TreeItem(`当前AI角色: ${info.name}`);
         item.contextValue = 'aiCharacterSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-        item.iconPath = new vscode.ThemeIcon('add');
-        item.command = {
-            command: 'extension.aiCharacter.add',
-            title: '添加新角色'
-        };
         return item;
     }
 
@@ -317,11 +379,6 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const item = new vscode.TreeItem(`当前搜索引擎: ${info.name}`);
         item.contextValue = 'searchEngineSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-        item.iconPath = new vscode.ThemeIcon('add');
-        item.command = {
-            command: 'extension.searchEngine.add',
-            title: '添加新搜索引擎'
-        };
         return item;
     }
 
@@ -438,14 +495,22 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedAICharacter', '') === info.id;
         const item = new vscode.TreeItem(info.name);
         item.id = info.id;
-        item.contextValue = 'aiCharacterInfo';
-        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        item.contextValue = info.canModify ? 'aiCharacterInfo' : 'aiCharacterInfoBase';
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
-        item.command = {
-            command: 'extension.aiCharacter.selectedChange',
-            title: '选择ai角色',
-            arguments: [item.id]
-        };
+        if (item.id === 'addAICharacter') {
+            item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+            item.command = {
+                command: 'extension.aiCharacter.add',
+                title: '添加新角色'
+            };
+        } else {
+            item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+            item.command = {
+                command: 'extension.aiCharacter.selectedChange',
+                title: '选择ai角色',
+                arguments: [item.id]
+            };
+        }
         return item;
     }
 
@@ -453,14 +518,22 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedSearchEngine', '') === info.id;
         const item = new vscode.TreeItem(info.name);
         item.id = info.id;
-        item.contextValue = info.showConfig ? 'searchEngineInfo' : '';
-        item.collapsibleState = info.showConfig ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+        item.contextValue = info.showConfig ? 'searchEngineInfo' : 'searchEngineInfoBase';
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
-        item.command = {
-            command: 'extension.searchEngine.selectedChange',
-            title: '选择搜索引擎',
-            arguments: [item.id]
-        };
+        if (item.id === 'addSearchEngine') {
+            item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+            item.command = {
+                command: 'extension.searchEngine.add',
+                title: '添加新搜索引擎'
+            };
+        } else {
+            item.collapsibleState = info.showConfig ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+            item.command = {
+                command: 'extension.searchEngine.selectedChange',
+                title: '选择搜索引擎',
+                arguments: [item.id]
+            };
+        }
         return item;
     }
 
