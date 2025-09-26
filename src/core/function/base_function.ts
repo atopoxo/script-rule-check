@@ -2,7 +2,7 @@ const chardet = require('chardet');
 import fs from 'fs';
 import * as vscode from 'vscode';
 import * as iconv from 'iconv-lite';
-function singleton<T extends new (...args: any[]) => any>(cls: T): T {
+export function singleton<T extends new (...args: any[]) => any>(cls: T): T {
     const instances = new Map<T, InstanceType<T>>();
 
     const Wrapper = class extends cls {
@@ -28,6 +28,26 @@ function singleton<T extends new (...args: any[]) => any>(cls: T): T {
     return new Proxy(Wrapper, handler) as T;
 }
 
+export class Mutex {
+    private mutex = Promise.resolve();
+
+    lock(): PromiseLike<() => void> {
+        let begin: (unlock: () => void) => void = () => { };
+
+        this.mutex = this.mutex.then(() => {
+            return new Promise(begin);
+        });
+
+        return new Promise(res => {
+            begin = res;
+        });
+    }
+
+    async acquire(): Promise<() => void> {
+        return this.lock();
+    }
+}
+
 function get_class_instance(class_name: string, module?: any, config?: any): [any | null, any | null] {
     try {
         if (class_name !== "") {
@@ -49,7 +69,9 @@ function get_class_method(class_name: string, method_name: string, module?: any,
     try {
         if (class_name !== "") {
             const [cls, instance] = get_class_instance(class_name, module, config);
-            if (!instance) throw new Error(`Instance of ${class_name} not created`);
+            if (!instance) {
+                throw new Error(`Instance of ${class_name} not created`);
+            }
             return (instance[method_name] as Function).bind(instance);
         } else {
             const method = module?.[method_name] || (globalThis as any)[method_name];

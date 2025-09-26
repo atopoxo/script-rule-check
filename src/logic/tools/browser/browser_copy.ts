@@ -1,4 +1,3 @@
-import { singleton } from "tsyringe";
 import axios, { AxiosResponse } from 'axios';
 import * as crypto from 'crypto';
 import { SocksProxyAgent } from 'socks-proxy-agent';
@@ -6,6 +5,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import * as http from 'http';
 import * as https from 'https';
 import * as userAgents from './user_agents.json';
+import { singleton } from '../../../core/function/base_function';
 import { BrowserError, BrowserBase } from './browser_base';
 import type { SearchResultItem } from './browser_base';
 
@@ -14,7 +14,7 @@ const SEARXNG_INSTANCES = [
   'https://searx.tiekoetter.com'
 ];
 
-@singleton()
+@singleton
 export class Browser extends BrowserBase {
     // private synonymMap: Record<string, string[]> = {};
     // private wordNet: any;

@@ -1,12 +1,11 @@
-import { singleton } from "tsyringe";
 import axios, { AxiosResponse } from 'axios';
 import * as he from 'he';
-import { getJsonParser } from '../../json/json_parser';
-import { getGlobalConfigValue } from '../../function/base_function';
+import { getJsonParser } from '../../../core/json/json_parser';
+import { singleton, getGlobalConfigValue } from '../../../core/function/base_function';
 import { BrowserError, BrowserBase } from './browser_base';
 import type { SearchResultItem } from './browser_base';
 
-@singleton()
+@singleton
 export class Browser extends BrowserBase {
     private jsonParser = getJsonParser();
     private extensionName: string;
@@ -74,7 +73,7 @@ export class Browser extends BrowserBase {
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedSearchEngine', '');
         const infos = getGlobalConfigValue<any[]>(this.extensionName, 'searchEngineInfos', []) || [];
         const info = infos.find(info => info.id === id) || {name: ''};
-        return info
+        return info;
     }
 
     // private async expandSynonyms(word: string): Promise<string[]> {

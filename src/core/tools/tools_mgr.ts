@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { singleton } from 'tsyringe';
+import { singleton } from '../function/base_function';
 import { getJsonParser } from '../json/json_parser';
 
 interface ToolConfig {
@@ -69,14 +69,15 @@ interface AIUsageTips {
     tools_usage: string | null;
 }
 
-@singleton()
+@singleton
 export class ToolsMgr {
     private config: any;
     private toolsConfig: ToolConfig[];
-    private tools: ToolsMap = {};
+    private tools: ToolsMap;
     private jsonParser = getJsonParser();
 
     constructor(config: any) {
+        this.tools = {};
         this.config = config;
         const configPath = path.join(__dirname, 'config.json');
         this.toolsConfig = this.loadToolsConfig(configPath);
@@ -268,6 +269,17 @@ export class ToolsMgr {
         return returnProp ? returnProp : null;
     }
 
+    public getToolInstance(moduleName: string, className: string): any {
+        if (!this.tools[moduleName]) {
+            return null;
+        }
+        const moduleCache = this.tools[moduleName];
+        if (!moduleCache[className]) {
+            return null;
+        }
+        return moduleCache[className].call;
+    }
+
     private loadToolsConfig(filePath: string): any {
         const jsonData = this.jsonParser.readJsonFile(filePath);
         return jsonData.tools;
@@ -281,8 +293,8 @@ export class ToolsMgr {
                 const type = item.type;
                 const call = item[type] as ToolFunctionCall;
                 const moduleName = call.module || 'base';
-
-                const modulePath = path.join(__dirname, `${moduleName}/${moduleName}`);
+                const parentPath = path.join(__dirname, '../../logic/tools');
+                const modulePath = path.join(parentPath, `${moduleName}/${moduleName}`);
                 const toolModule = require(modulePath);
 
                 if (!this.tools[moduleName]) {
@@ -329,6 +341,8 @@ export class ToolsMgr {
         let defaults: any[] = [];
         const funcStr = func.toString();
         const patterns = [
+            // 匹配类方法（包含访问修饰符和async）
+            /(?:public|private|protected)?\s*(?:async\s+)?\w+\s*\(([^)]*)\)(?:\s*:\s*\w+(?:<\w+>)?)?\s*{/,
             // 匹配 __awaiter 转译模式
             /__awaiter\([^)]*\)\s*{\s*return\s*[^;]*?\s*function\*\s*\(([^)]*)\)/,
             // 匹配生成器函数

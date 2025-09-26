@@ -41,6 +41,80 @@
                 },
                 "required": ["ai_data"]
             }
+        },
+        {
+            "id": "script_check",
+            "name": "脚本检查",
+            "type": "function",
+            "function": {
+                "module": "script_check",
+                "class": "ScriptCheck",
+                "name": "checkByRulesType",
+                "description": "根据指定的规则检查lua脚本，需提供检查规则等相关参数",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pathType": {
+                            "type": "string",
+                            "description": "需要检查的脚本路径类型，仅支持三种：'currentChoice'，'currentEdit'，'arbitrary:xxx'；分别表示：'当前选中的路径'，'当前编辑器打开的路径'，'任意路径'；注意当类型为任意路径时格式必须为'arbitrary:xxx'，其中xxx为相对路径"
+                        },
+                        "ruleType": {
+                            "type": "string",
+                            "description": "检查规则类型，支持的类型仅支持'all'，'custom'这两种"
+                        }
+                    },
+                    "required": ["pathType", "ruleType"]
+                }
+            },
+            "returns": {
+                "type": "object",
+                "properties": {
+                    "ai_data": {
+                        "type": "object",
+                        "description": "需要返回给大模型的工具执行结果",
+                        "returnType": "normal",
+                        "showType": "normal"
+                    }
+                },
+                "required": ["ai_data"]
+            }
+        },
+        {
+            "id": "script_reload",
+            "name": "脚本重载(reload)",
+            "type": "function",
+            "function": {
+                "module": "script_reload",
+                "class": "ScriptReload",
+                "name": "reloadByRule",
+                "description": "根据指定的规则重载(reload)lua脚本，需提供规则等相关参数",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pathType": {
+                            "type": "string",
+                            "description": "需要reload的脚本路径类型，仅支持三种：'currentChoice'，'currentEdit'，'arbitrary:xxx'；分别表示：'当前选中的路径'，'当前编辑器打开的路径'，'任意路径'；注意当类型为任意路径时格式必须为'arbitrary:xxx'，其中xxx为相对路径"
+                        },
+                        "ruleType": {
+                            "type": "string",
+                            "description": "检查规则类型，支持的类型仅支持'all'，'only'这两种；'all'表示重载当前脚本和所有关联脚本，包括但不限于AI和技能脚本；'only'表示仅重载当前脚本。默认情况下为'all'，当用户明确表明只需重载当前脚本时，用'only'"
+                        }
+                    },
+                    "required": ["pathType", "ruleType"]
+                }
+            },
+            "returns": {
+                "type": "object",
+                "properties": {
+                    "ai_data": {
+                        "type": "object",
+                        "description": "需要返回给大模型的工具执行结果",
+                        "returnType": "normal",
+                        "showType": "normal"
+                    }
+                },
+                "required": ["ai_data"]
+            }
         }
     ]
 }

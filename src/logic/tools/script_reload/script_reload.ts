@@ -1,38 +1,32 @@
-import { GCClient } from "./logic/network/gc_client";
+import { GCClient } from "../../network/gc_client";
 import { exec } from 'child_process';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getFileContent } from "./core/function/base_function";
+import { Mutex, singleton, getGlobalConfigValue, getFileContent } from "../../../core/function/base_function";
 
-class Mutex {
-    private mutex = Promise.resolve();
-
-    lock(): PromiseLike<() => void> {
-        let begin: (unlock: () => void) => void = () => { };
-
-        this.mutex = this.mutex.then(() => {
-            return new Promise(begin);
-        });
-
-        return new Promise(res => {
-            begin = res;
-        });
-    }
-
-    async acquire(): Promise<() => void> {
-        return this.lock();
-    }
-}
-
-export class GameManager {
+@singleton
+export class ScriptReload {
     private client: GCClient | null = null;
     private taskCount: number = 0;
     private closePromise: Promise<void> | null = null;
-    private pendingOperations: Promise<void> = Promise.resolve();
     private readonly mutex = new Mutex();
+    private extensionName: string;
+    private lastUris: vscode.Uri[];
 
-    constructor() {
+    constructor(config: any) {
+        this.extensionName = config.extensionName;
+        this.lastUris = vscode.window.activeTextEditor?.document.uri ? [vscode.window.activeTextEditor?.document.uri] : [];
+    }
+
+    public explorerSelectedChange(uri?: vscode.Uri, uris?: vscode.Uri[]): void {
+        if (!uris && uri) {
+            uris = [uri];
+        }
+        if (!uris || uris.length === 0) {
+            uris = [];
+        }
+        this.lastUris = uris;
     }
 
     public async clear() {
@@ -44,6 +38,63 @@ export class GameManager {
             this.client = new GCClient();
         }
         return this.client;
+    }
+
+    public async reloadByRule(pathType: string, ruleType: string): Promise<object> {
+        let result = {
+            ai_data: "😭执行脚本reload的过程中出错，具体报错信息请留意弹框，若问题持续存在请联系开发人员"
+        };
+        const productDir = getGlobalConfigValue<string>(this.extensionName, 'productDir', '');
+        if (!fs.existsSync(productDir)) {
+            vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
+            return result;
+        }
+        let selectedUris: vscode.Uri[] = [];
+        switch(pathType) {
+            case 'currentChoice':
+                selectedUris = this.getSelectedUrisFromExplorer();
+                if (selectedUris.length === 0) {
+                    vscode.window.showWarningMessage("请先在资源管理器中选择要reload的脚本");
+                }
+                break;
+            case 'currentEdit':
+                selectedUris = vscode.window.activeTextEditor?.document.uri ? [vscode.window.activeTextEditor?.document.uri] : [];
+                if (selectedUris.length === 0) {
+                    vscode.window.showWarningMessage("请先在vscode中打开该脚本");
+                }
+                break;
+            default:
+                const relativePath = pathType.replace('arbitrary:', '');
+                let absolutePath: string;
+                if (path.isAbsolute(relativePath)) {
+                    absolutePath = relativePath;
+                } else {
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (workspaceFolders && workspaceFolders.length > 0) {
+                        absolutePath = path.join(workspaceFolders[0].uri.fsPath, relativePath);
+                        selectedUris = [vscode.Uri.file(absolutePath)];
+                    } else if (productDir) {
+                        absolutePath = path.join(productDir, relativePath);
+                        selectedUris = [vscode.Uri.file(absolutePath)];
+                    } else {
+                        vscode.window.showErrorMessage(`无法解析路径: ${relativePath}。请确保已打开工作空间或配置了产品目录。`);
+                    }
+                }
+                break;
+        }
+        if (selectedUris.length === 0) {
+            return result;
+        }
+        switch(ruleType) {
+            case 'only':
+                await this.doGMCommand(undefined, selectedUris, false);
+                break;
+            default:
+                await this.doGMCommand(undefined, selectedUris, true);
+                break;
+        }
+        result.ai_data = "😊已成功执行脚本reload，请留意GC上的日志";
+        return result;
     }
 
     public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<void> {
@@ -344,5 +395,14 @@ export class GameManager {
             }
         }
         return result;
+    }
+
+    private getSelectedUrisFromExplorer(): vscode.Uri[] {
+        try {
+            return this.lastUris;
+        } catch (error) {
+            vscode.window.showErrorMessage("获取选中路径失败");
+        }
+        return [];
     }
 }

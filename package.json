@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -297,32 +297,32 @@
       "view/title": [
         {
           "command": "extension.expandAllNodes",
-          "when": "view == ruleCheckResults",
+          "when": "view == scriptCheck",
           "group": "navigation@1"
         },
         {
           "command": "extension.collapseAllNodes",
-          "when": "view == ruleCheckResults",
+          "when": "view == scriptCheck",
           "group": "navigation@2"
         },
         {
           "command": "extension.setDisplayRuleMode",
-          "when": "view == ruleCheckResults",
+          "when": "view == scriptCheck",
           "group": "navigation@3"
         },
         {
           "command": "extension.setDisplayTreeMode",
-          "when": "view == ruleCheckResults",
+          "when": "view == scriptCheck",
           "group": "navigation@4"
         },
         {
           "command": "extension.setDisplayFlatMode",
-          "when": "view == ruleCheckResults",
+          "when": "view == scriptCheck",
           "group": "navigation@5"
         },
         {
           "command": "extension.downloadScriptCheckResult",
-          "when": "view == ruleCheckResults",
+          "when": "view == scriptCheck",
           "group": "navigation@6"
         }
       ],
@@ -453,8 +453,8 @@
           "name": "Configuration"
         },
         {
-          "id": "ruleCheckResults",
-          "name": "Script Check Results"
+          "id": "scriptCheck",
+          "name": "Script Check"
         },
         {
           "id": "chatView",
@@ -556,7 +556,6 @@
     "tree-sitter-javascript": "^0.23.1",
     "tree-sitter-python": "^0.23.4",
     "tree-sitter-typescript": "^0.23.2",
-    "tsyringe": "^4.10.0",
     "web-tree-sitter": "^0.25.6"
   }
 }

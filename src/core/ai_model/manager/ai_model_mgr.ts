@@ -1,4 +1,3 @@
-import { singleton } from "tsyringe";
 import * as vscode from 'vscode';
 import * as path from "path";
 import fs from 'fs';
@@ -7,9 +6,9 @@ import { ModelInfo } from "../base/ai_types";
 import { AIModelBase } from "../base/ai_model_base";
 import { Storage } from '../../storage/storage';
 import { ContextMgr } from '../../context/context_mgr';
-import { setGlobalConfigValue } from '../../function/base_function';
+import { singleton, setGlobalConfigValue } from '../../function/base_function';
 
-@singleton()
+@singleton
 export class AIModelMgr {
     private jsonParser = getJsonParser();
     private models = new Map<string, AIModelBase>();

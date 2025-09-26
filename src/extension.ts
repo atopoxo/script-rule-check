@@ -5,8 +5,6 @@ import * as fs from 'fs';
 // import axios from 'axios';
 // const { CookieJar } = require('tough-cookie');
 // const { JSDOM } = require('jsdom');
-const iconv = require('iconv-lite');
-import { RuleOperator, RuleResultProvider } from './rule_check';
 import { ContextMgr } from './core/context/context_mgr';
 import { ConfigurationProvider } from './configuration';
 import { CheckRule } from './output_format';
@@ -15,18 +13,16 @@ import { ChatManager } from './chat_manager';
 import { Storage } from './core/storage/storage';
 import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
 import { ToolsMgr } from './core/tools/tools_mgr';
+import { ScriptCheck } from './logic/tools/script_check/script_check';
+import { ScriptReload } from './logic/tools/script_reload/script_reload';
 import { getEncoding, getGlobalConfigValue } from "./core/function/base_function";
-import { GameManager } from './game_manager';
 const { EventEmitter } = require('events');
 // EventEmitter.defaultMaxListeners = 20;
 
 const extensionName = 'script-rule-check';
 const publisher = 'shaoyi';
-let ruleOperator: RuleOperator;
 let contextMgr: ContextMgr;
-let ruleResultProvider: RuleResultProvider;
 let customConfig: vscode.WorkspaceConfiguration;
-let treeView: vscode.TreeView<vscode.TreeItem>;
 let allCheckRules: CheckRule[] = [];
 let chatManager: ChatManager;
 let chatViewProvider: ChatViewProvider;
@@ -35,8 +31,8 @@ const userID = "admin";
 let storage: Storage;
 let aiModelMgr: AIModelMgr;
 let toolsMgr: ToolsMgr;
-let gameManager: GameManager;
-gameManager = new GameManager();
+let scriptCheck: ScriptCheck;
+let scriptReload: ScriptReload;
 // const EXTENSION_ID = `${publisher}.${extensionName}`;
 // const VERSION_CHECK_URL = `https://marketplace.visualstudio.com/manage/publishers/${publisher}`;
 
@@ -72,9 +68,16 @@ export async function activate(context: vscode.ExtensionContext) {
     customConfig = vscode.workspace.getConfiguration(extensionName);
     const configurationProvider = new ConfigurationProvider(extensionName);
     await configurationProvider.init();
+    toolsMgr = new ToolsMgr(configurationProvider.getConfig());
     vscode.window.registerTreeDataProvider('scriptRuleConfig', configurationProvider);
     const productDir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
     context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            if (editor) {
+                scriptCheck.explorerSelectedChange(undefined, [editor.document.uri]);
+                scriptReload.explorerSelectedChange(undefined, [editor.document.uri]);
+            }
+        }),
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(extensionName)) {
                 customConfig = vscode.workspace.getConfiguration(extensionName);
@@ -85,7 +88,7 @@ export async function activate(context: vscode.ExtensionContext) {
                         registerNormalCommands(context, configurationProvider, newDir);
                         registered = true;
                     }
-                    ruleResultProvider.refresh();
+                    scriptCheck.resultProviderRefresh();
                 } else {
                     vscode.window.showErrorMessage(`产品库路径'${newDir}'不存在,或路径错误`);
                 }
@@ -221,7 +224,6 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     const defaultModelId = defaultModel ? defaultModel.id : '';
     const defaultToolModel = await aiModelMgr.getSelectedToolModel();
     const defaultToolModelId = defaultToolModel ? defaultToolModel.id : '';
-    toolsMgr = new ToolsMgr(configurationProvider.getConfig());
     chatManager = ChatManager.getInstance(context, extensionName, userID, storage, defaultModelId, defaultToolModelId, aiModelMgr);
     await chatManager.ready;
     chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, toolsMgr, contextMgr);
@@ -400,29 +402,28 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
 function registerNormalCommands(context: vscode.ExtensionContext, configurationProvider: ConfigurationProvider, productDir: string) {
     const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
     const ruleDir = path.join(toolDir, "Case");
-    ruleOperator = new RuleOperator(productDir);
-	ruleResultProvider = new RuleResultProvider(productDir, extensionName);
-    allCheckRules = ruleOperator.getScriptCheckRules(toolDir, ruleDir);
+    scriptCheck = toolsMgr.getToolInstance('script_check', 'ScriptCheck');
+    if (!scriptCheck) {
+        vscode.window.showErrorMessage('获取脚本检查工具实例失败');
+        return;
+    }
+    allCheckRules = scriptCheck.getScriptCheckRules(toolDir, ruleDir);
 	configurationProvider.setCheckRules(allCheckRules);
-    treeView = vscode.window.createTreeView('ruleCheckResults', {
-		treeDataProvider: ruleResultProvider
-	});
+    scriptReload = toolsMgr.getToolInstance('script_reload', 'ScriptReload');
+    if (!scriptReload) {
+        vscode.window.showErrorMessage('获取脚本reload工具实例失败');
+        return;
+    }
     context.subscriptions.push(
-        treeView,
+        scriptCheck.getTreeView(),
+        vscode.commands.registerCommand('extension.checkSpecificRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], rules?: CheckRule[]) => {
+            const targets = scriptCheck.getParams(uriContext, selectedUris);
+            const finalRules = rules || allCheckRules;
+            await scriptCheck.checkRules(targets, finalRules, productDir, toolDir, ruleDir);
+		}),
 		vscode.commands.registerCommand('extension.checkAllRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, allCheckRules);
 		}),
-        vscode.commands.registerCommand('extension.checkSpecificRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], rules?: CheckRule[]) => {
-            const targets = getParams(uriContext, selectedUris);
-            const finalRules = rules || allCheckRules;
-            await checkRules(targets, finalRules, productDir, toolDir, ruleDir);
-		}),
-        vscode.commands.registerCommand('extension.toggleCustomCheckRules', async (ruleId: string) => {
-            let selectedRules: string[] = getGlobalConfigValue<string[]>(extensionName, 'customCheckRules', []);
-            selectedRules = selectedRules.includes(ruleId) ? selectedRules.filter(id => id !== ruleId) : [...selectedRules, ruleId];
-            await customConfig.update('customCheckRules', selectedRules, vscode.ConfigurationTarget.Global);
-            configurationProvider.refresh();
-        }),
         vscode.commands.registerCommand('extension.checkCustomRules', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             const selectedRules = getGlobalConfigValue<string[]>(extensionName, 'customCheckRules', []);
             if (selectedRules.length === 0) {
@@ -431,6 +432,12 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             }
             const rulesToCheck = allCheckRules.filter(rule => selectedRules.includes(rule.id));
             await vscode.commands.executeCommand('extension.checkSpecificRules', uriContext, selectedUris, rulesToCheck);
+        }),
+        vscode.commands.registerCommand('extension.toggleCustomCheckRules', async (ruleId: string) => {
+            let selectedRules: string[] = getGlobalConfigValue<string[]>(extensionName, 'customCheckRules', []);
+            selectedRules = selectedRules.includes(ruleId) ? selectedRules.filter(id => id !== ruleId) : [...selectedRules, ruleId];
+            await customConfig.update('customCheckRules', selectedRules, vscode.ConfigurationTarget.Global);
+            configurationProvider.refresh();
         }),
         vscode.commands.registerCommand('extension.reloadScript', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             if (!uriContext && !selectedUris) {
@@ -447,7 +454,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             if (!fs.existsSync(dir)) {
                 vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
             }
-            await gameManager.doGMCommand(uriContext, selectedUris, true);
+            await scriptReload.doGMCommand(uriContext, selectedUris, true);
         }),
         vscode.commands.registerCommand('extension.reloadScriptOnly', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             if (!uriContext && !selectedUris) {
@@ -464,7 +471,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             if (!fs.existsSync(dir)) {
                 vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
             }
-            await gameManager.doGMCommand(uriContext, selectedUris, false);
+            await scriptReload.doGMCommand(uriContext, selectedUris, false);
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
@@ -497,13 +504,13 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             await customConfig.update('displayMode', 'rule', vscode.ConfigurationTarget.Global);
         }),
         vscode.commands.registerCommand('extension.expandAllNodes', async () => {
-            await ruleResultProvider.setFoldState(treeView, true);
+            await scriptCheck.setFoldState(true);
         }),
         vscode.commands.registerCommand('extension.collapseAllNodes', async () => {
-            vscode.commands.executeCommand('workbench.actions.treeView.ruleCheckResults.collapseAll');
+            vscode.commands.executeCommand('workbench.actions.treeView.scriptCheck.collapseAll');
         }),
         vscode.commands.registerCommand('extension.downloadScriptCheckResult', async () => {
-            await ruleResultProvider.generateExportFile();
+            await scriptCheck.generateExportFile();
         })
 	);
 
@@ -517,77 +524,7 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
     });
 }
 
-async function checkRules(targets: Array<{path: string; isDir: boolean; valid: boolean}>, rules: CheckRule[], productDir: string, toolDir: string, ruleDir: string) { 
-    await vscode.commands.executeCommand('ruleCheckResults.focus');
-    const logDir = path.join(toolDir, "Log");
-    if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-    }
-    const luaExe = path.join(toolDir, "lua/5.1/lua.exe");
-    const pythonExe = path.join(toolDir, "Python310/python.exe");
-    const cwd = ruleDir;
-    const luaParams = "io.stdout:setvbuf('no')";
-
-    ruleResultProvider.clear();
-    ruleOperator.clearResults();
-    await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: "Script Rule Check Progress",
-        cancellable: true
-    }, async (progress, token) => {
-        const totalTasks = targets.length * rules.length;
-        let completedTasks = 0;
-        for (const target of targets) {
-            for (const rule of rules) {
-                if (token.isCancellationRequested) {
-                    vscode.window.showInformationMessage("用户取消操作");
-                    return;
-                }
-                progress.report({
-                    message: `目标: ${path.basename(target.path)} - 规则: ${path.basename(rule.taskName)} (${++completedTasks}/${totalTasks})`,
-                    increment: (100 / totalTasks)
-                });
-                await ruleOperator.processRuleFile(rule, logDir, luaExe, pythonExe, luaParams, target.path, productDir, cwd);
-            }
-        }
-        let rootNode = ruleOperator.getVirtualRoot(false, targets);
-        ruleResultProvider.update(rootNode);
-        const issueCount = ruleOperator.getIssueCount();
-        treeView.description = `${issueCount} issues`;
-    });
-}
-
-function getParams(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): Array<{path: string; isDir: boolean; valid: boolean}> {
-    if (!selectedUris && uriContext) {
-        selectedUris = [uriContext];
-    }
-    if (!selectedUris || selectedUris.length === 0) {
-        vscode.window.showWarningMessage("请先在资源管理器中选择要检查的文件/目录");
-        return [];
-    }
-    const targets = selectedUris
-        .map(uri => {
-            try {
-                const stats = fs.statSync(uri.fsPath);
-                return {
-                    path: uri.fsPath,
-                    isDir: stats.isDirectory(),
-                    valid: true
-                };
-            } catch (error) {
-                // console.error(`Invalid path: ${uri.fsPath}`, error);
-                return { 
-                    path: uri.fsPath,
-                    isDir: false,
-                    valid: false
-                };
-            }
-        })
-        .filter(t => t.valid);
-    return targets;
-}
-
 // This method is called when your extension is deactivated
 export function deactivate() {
-    gameManager.clear();
+    scriptReload.clear();
 }

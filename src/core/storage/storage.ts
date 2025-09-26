@@ -1,17 +1,17 @@
-import { singleton } from 'tsyringe';
 import { Pool } from 'pg';
 import initSqlJs from 'sql.js';
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Mutex } from 'async-mutex';
+import { singleton } from '../function/base_function';
 import { Cache } from '../ai_model/base/ai_types';
 import { getJsonParser } from '../json/json_parser';
 import { Message, Session, AIInstance, UserInfo } from '../ai_model/base/ai_types';
 
 const MAX_SESSION_NAME_LENGTH = 60;
 
-@singleton()
+@singleton
 export class Storage {
     private jsonParser = getJsonParser();
     private userCache: UserInfo | undefined = undefined;

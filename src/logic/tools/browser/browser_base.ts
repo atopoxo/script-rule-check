@@ -1,4 +1,4 @@
-import { TextSegmenter } from '../../function/text_segmenter';
+import { TextSegmenter } from '../../../core/function/text_segmenter';
 
 export class BrowserError extends Error {
     constructor(message: string) {
@@ -110,7 +110,7 @@ export class BrowserBase {
         const result = {
             name: '',
             score: 0
-        }
+        };
         try {
             const url = new URL(link);
             const domain = url.hostname;
@@ -186,7 +186,7 @@ export class BrowserBase {
 
         const coverageScore = queryKeywords.filter(kw => content.includes(kw)).length / queryKeywords.length;
 
-        const result = jaccardScore * 0.3 + bm25Score * 0.4 + editDistanceScore * 0.1 + coverageScore * 0.2
+        const result = jaccardScore * 0.3 + bm25Score * 0.4 + editDistanceScore * 0.1 + coverageScore * 0.2;
         return result;
     }
 

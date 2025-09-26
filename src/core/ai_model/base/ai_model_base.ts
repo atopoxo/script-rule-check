@@ -284,6 +284,7 @@ export abstract class AIModelBase {
                             cache.returns.ai.ai_conclusion = itemStr;
                         } else {
                             cache.returns[id] = item;
+                            cache.returns.ai.ai_conclusion = '已执行完所有工具';
                         }
                         if (item) {
                             const currentReturn = {
