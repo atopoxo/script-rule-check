@@ -65,7 +65,11 @@ export class ScriptCheck {
 
     public async checkByRulesType(pathType: string, ruleType: string): Promise<object> {
         let result = {
-            ai_data: "😭执行脚本检查的过程中出错，具体报错信息请留意弹框，若问题持续存在请联系开发人员"
+            checkResult: {
+                showType: "string_list",
+                returnType: "normal",
+                value: "😭执行脚本检查的过程中出错，具体报错信息请留意弹框，若问题持续存在请联系开发人员" as string | string[]
+            }
         };
         const productDir = getGlobalConfigValue<string>(this.extensionName, 'productDir', '');
         if (!fs.existsSync(productDir)) {
@@ -126,7 +130,16 @@ export class ScriptCheck {
         const toolDir = path.join(productDir, "tools/CheckScripts/CheckScripts");
         const ruleDir = path.join(toolDir, "Case");
         await this.checkRules(targets, rules, productDir, toolDir, ruleDir);
-        result.ai_data = "😊已成功执行脚本检查，请查看'SCRIPT CHECK RESULTS'窗口";
+        const sriptCheckReturnType = getGlobalConfigValue<string>(this.extensionName, 'sriptCheckReturnType', 'normal');
+        result.checkResult.returnType = sriptCheckReturnType;
+        switch(sriptCheckReturnType) {
+            case 'ai_tips':
+                result.checkResult.value = this.ruleResultProvider.getResults('tree');
+                break;
+            case 'normal':
+                result.checkResult.value = "😊已成功执行脚本检查，请查看'SCRIPT CHECK RESULTS'窗口";
+                break;
+        }
         return result;
     }
 

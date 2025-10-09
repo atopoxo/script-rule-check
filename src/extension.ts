@@ -503,6 +503,9 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
         vscode.commands.registerCommand('extension.setDisplayRuleMode', async () => {
             await customConfig.update('displayMode', 'rule', vscode.ConfigurationTarget.Global);
         }),
+        vscode.commands.registerCommand('extension.setScriptCheckReturnType', async (type) => {
+            await customConfig.update('sriptCheckReturnType', type, vscode.ConfigurationTarget.Global);
+        }),
         vscode.commands.registerCommand('extension.expandAllNodes', async () => {
             await scriptCheck.setFoldState(true);
         }),

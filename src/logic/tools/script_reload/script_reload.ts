@@ -42,7 +42,11 @@ export class ScriptReload {
 
     public async reloadByRule(pathType: string, ruleType: string): Promise<object> {
         let result = {
-            ai_data: "😭执行脚本reload的过程中出错，具体报错信息请留意弹框，若问题持续存在请联系开发人员"
+            reloadResult: {
+                showType: "normal",
+                returnType: "normal",
+                value: "😭执行脚本reload的过程中出错，具体报错信息请留意弹框，若问题持续存在请联系开发人员"
+            }
         };
         const productDir = getGlobalConfigValue<string>(this.extensionName, 'productDir', '');
         if (!fs.existsSync(productDir)) {
@@ -85,19 +89,23 @@ export class ScriptReload {
         if (selectedUris.length === 0) {
             return result;
         }
+        let flag = false;
         switch(ruleType) {
             case 'only':
-                await this.doGMCommand(undefined, selectedUris, false);
+                flag = await this.doGMCommand(undefined, selectedUris, false);
                 break;
             default:
-                await this.doGMCommand(undefined, selectedUris, true);
+                flag = await this.doGMCommand(undefined, selectedUris, true);
                 break;
         }
-        result.ai_data = "😊已成功执行脚本reload，请留意GC上的日志";
+        if (flag) {
+            result.reloadResult.value = "😊已成功执行脚本reload，请留意GC上的日志";
+        }
         return result;
     }
 
-    public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<void> {
+    public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<boolean> {
+        let result = false;
         const release = await this.mutex.acquire();
         try {
             if (this.closePromise) {
@@ -110,13 +118,15 @@ export class ScriptReload {
         }
 
         try {
-            await this.executeGMCommand(uriContext, selectedUris, additionOperator);
+            result = await this.executeGMCommand(uriContext, selectedUris, additionOperator);
         } finally {
             await this.releaseRef();
         }
+        return result;
     }
 
-    public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<void> {
+    public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<boolean> {
+        let result = false;
         let client = this.getGCClient();
         try {
             await vscode.window.withProgress({
@@ -126,6 +136,7 @@ export class ScriptReload {
             }, async (progress, token) => {
                 if (!await client.tryConnect()) {
                     vscode.window.showErrorMessage(`执行ReloadScript失败：无法连接到后台服务`);
+                    result = false;
                     return;
                 }
                 progress.report({
@@ -161,10 +172,13 @@ export class ScriptReload {
                         }
                     }
                 }
+                result = true;
             });
         } catch (error) {
             vscode.window.showErrorMessage(`执行ReloadScript失败：${error}`);
+            result = false;
         }
+        return result;
     }
 
     public async findGameProcess(processName: string): Promise<{ host: string; port: number } | null> {

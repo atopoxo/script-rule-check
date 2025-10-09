@@ -52,6 +52,19 @@
           "default": "tree",
           "description": "结果展示模式：树形结构(tree)/平铺列表(flat)/规则结构(rule)"
         },
+        "script-rule-check.sriptCheckReturnType": {
+          "type": "string",
+          "enum": [
+            "ai_tips",
+            "normal"
+          ],
+          "enumDescriptions": [
+            "需要ai进一步分析",
+            "直接返回"
+          ],
+          "default": "normal",
+          "description": "工具调用的结果返回是否需要ai处理：需要ai处理(ai_tips)/无需处理(normal)"
+        },
         "script-rule-check.searchEngineInfos": {
           "type": "array",
           "items": {

@@ -22,7 +22,7 @@ export const throttle = (func: Function, limit: number) => {
                 }
             }, limit - (Date.now() - lastRan));
         }
-    }
+    };
 };
 
 const replaceOutsideCode = (source: string, pattern: RegExp) => {
@@ -30,7 +30,7 @@ const replaceOutsideCode = (source: string, pattern: RegExp) => {
     let lastIndex = 0;
     let result = '';
     const stack: string[] = [];
-    const maxDepth = 3;
+    const maxDepth = 4;
     
     const replacer = (tag: string) => {
         const isClose = tag.startsWith('</');
@@ -85,7 +85,7 @@ export const md2html = (content: string) => {
     const result = {
         html: '',
         components: []
-    }
+    };
     let text = String(content);
     text = text.replace(/<\|tips_start\|>[\s\S]*?<\|tips_end\|>/g, '');
     const codeStyleBegin = `<pre class="hljs"><code>`;
@@ -247,6 +247,15 @@ const processOutputContainers = (components: any[], html: string) => {
                             index: componentIndex
                         });
                         containerHtml += `${beginDiv}<div id="${id}"></div>${endDiv}`;
+                    } else if (item.showType === "string_list") {
+                        componentIndex++;
+                        const id = `component-${componentIndex}`;
+                        components.push({
+                            type: 'string-list',
+                            data: item.value,
+                            index: componentIndex
+                        });
+                        containerHtml += `${beginDiv}<div id="${id}"></div>${endDiv}`;
                     } else {
                         containerHtml += `${beginDiv}<div class="json-content">${JSON.stringify(item.value, null, 2)}</div>${endDiv}`;
                     }
@@ -281,6 +290,6 @@ const decodeHtmlEntities = (str: string) => {
         .replace(/<br\s*\/?>/gi, '\n')    // <br> → 换行
         .replace(/<\/p>/gi, '\n\n')       // </p> → 双换行（段落间距）
         .replace(/<p[^>]*>/gi, '')        // 移除<p>标签本身
-        .replace(/[\u00A0]/g, ' ') 
-    return decoded
+        .replace(/[\u00A0]/g, ' ');
+    return decoded;
 };

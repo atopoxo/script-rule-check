@@ -114,6 +114,12 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
         }
     }
 
+    public getResults(displayMode: string): string[] {
+        let results: string[] = [];
+        this.printData(results, displayMode);
+        return results;
+    }
+
     public async setFoldState(treeView: vscode.TreeView<vscode.TreeItem>, state: boolean): Promise<void> {
         if (!treeView || !state) {
             return;
@@ -155,7 +161,7 @@ export class RuleResultProvider implements vscode.TreeDataProvider<vscode.TreeIt
     //     return allItems;
     // }
 
-    private printData(results: string[], displayMode: string) {
+    public printData(results: string[], displayMode: string) {
         if (displayMode === 'tree' && this.rootNode) {
             this.collectTreeDataRecursive(this.rootNode, results, 0);
         }

@@ -461,10 +461,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
             content = content.replace(/\r\n/g, '\n');
             const contextOption = this.contextMgr.getRelevantContext(startPos, content, editor.document.fileName);
+            const query = `请帮我分析一下下面的代码是否存在问题。
+                重要要求：
+                1. 如果涉及到脚本的分析，并且可调用的工具列表中有"脚本检查"，请先调用该工具。
+
+                需要分析的代码：
+                \`\`\`
+                ${content}
+                \`\`\`
+                `;
             this.updateWebview('updateContext', {
                 index: -1,
                 contextOption: contextOption,
-                query: `请帮我分析一下下面的代码是否存在问题：\n${content}`
+                // query: `请帮我分析一下下面的代码是否存在问题：\n${content}`
+                query: query
             });
         }
     }

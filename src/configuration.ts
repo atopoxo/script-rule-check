@@ -286,6 +286,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             return this.createCustomCheckRuleItems();
         } else if (element.contextValue === 'modeSelector') {
             return this.createModeItems();
+        } else if (element.contextValue === 'scriptCheckReturnTypeSelector') {
+            return this.createScriptCheckReturnTypeItems();
         }
         
         return [];
@@ -392,7 +394,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private createScriptCheckItems(): vscode.TreeItem[] {
         return [
             this.createCustomCheckRuleSelectorItem(),
-            this.createModeSelectorItem()
+            this.createModeSelectorItem(),
+            this.createScriptCheckReturnTypeSelectorItem()
         ];
     }
 
@@ -436,6 +439,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             this.createModeItem('rule', 'rule')
         ];
     }
+
     private createModeItem(mode: string, label: string): vscode.TreeItem {
         const isCurrent = getGlobalConfigValue<string>(this.extensionName, 'displayMode', 'flat') === mode;
         const item = new vscode.TreeItem(label);
@@ -443,6 +447,44 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             command: 'extension.setDisplayMode',
             title: '',
             arguments: [mode]
+        };
+        if (isCurrent) {
+            item.iconPath = new vscode.ThemeIcon('check');
+        }
+        return item;
+    }
+
+    private createScriptCheckReturnTypeSelectorItem(): vscode.TreeItem {
+        const type = getGlobalConfigValue<string>(this.extensionName, 'sriptCheckReturnType', 'normal');
+        let showString = '';
+        switch(type) {
+            case 'ai_tips':
+                showString = '工具调用结果: 需要ai进一步分析';
+                break;
+            default:
+                showString = '工具调用结果: 直接返回';
+                break;
+        }
+        const item = new vscode.TreeItem(`${showString}`);
+        item.contextValue = 'scriptCheckReturnTypeSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createScriptCheckReturnTypeItems(): vscode.TreeItem[] {
+        return [
+            this.createScriptCheckReturnTypeItem('ai_tips', '需要ai进一步分析'),
+            this.createScriptCheckReturnTypeItem('normal', '直接返回')
+        ];
+    }
+
+    private createScriptCheckReturnTypeItem(type: string, label: string): vscode.TreeItem {
+        const isCurrent = getGlobalConfigValue<string>(this.extensionName, 'sriptCheckReturnType', 'normal') === type;
+        const item = new vscode.TreeItem(label);
+        item.command = {
+            command: 'extension.setScriptCheckReturnType',
+            title: '',
+            arguments: [type]
         };
         if (isCurrent) {
             item.iconPath = new vscode.ThemeIcon('check');

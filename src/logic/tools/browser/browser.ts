@@ -19,6 +19,13 @@ export class Browser extends BrowserBase {
     }
 
     public async search(query: string, domain: string, numResults: number = 10): Promise<any> {
+        let result = {
+            browserResult: {
+                showType: "browser_list",
+                returnType: "ai_tips",
+                value: [] as SearchResultItem[]
+            }
+        };
         const info = this.getConfig();
         const engineId = info.engineId;
         const baseUrl = info.url;
@@ -65,8 +72,8 @@ export class Browser extends BrowserBase {
             !item.title.includes("404") &&  // 排除404页面
             item.snippet.length > 30  // 排除过短摘要
         ).slice(0, numResults);
-
-        return { ai_data: filteredResults };
+        result.browserResult.value = filteredResults;
+        return result;
     }
 
     private getConfig(): any {

@@ -83,7 +83,7 @@ export class GCClient {
         if (!this.isConnected) {
             const connected = await this.connect();
             if (!connected) {
-                vscode.window.showErrorMessage(`Service closed`);
+                // vscode.window.showErrorMessage(`Service closed`);
                 return false;
             }
         }

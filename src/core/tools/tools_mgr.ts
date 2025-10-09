@@ -151,7 +151,7 @@ export class ToolsMgr {
         } else {
             const tools = this.getToolsConfig(toolsSelected);
             const toolsStr = this.jsonParser.toJsonStr(tools);
-            result.tools_describe = `\n## 在生成时请注意，你有如下工具可以调用：
+            result.tools_describe = `\n## 在生成时请注意，回答当前的问题时，只能使用如下的工具：
                 ${toolsStr}
                 参数解释：
                     1."properties"表示传入参数，其值用一个map表示，key为变量名，value为该变量的描述。
@@ -161,7 +161,7 @@ export class ToolsMgr {
                     5."class"表示该函数的类，例如："Browser"。
                     6."module"表示该函数的类，例如："browser"。
                     7."type"表示该工具的类型，例如："function"，如果type为"function"，则表示该工具是一个函数，可以调用，并且"function"描述了如何调用该函数。\n`;
-            result.tools_usage = `\n## 当你发现回答用户的问题需要调用工具时，${toolCallCheckStr}\n`;
+            result.tools_usage = `\n## ${toolCallCheckStr}\n`;
         }
         return result;
     }

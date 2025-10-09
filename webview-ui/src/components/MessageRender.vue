@@ -40,10 +40,12 @@ import { defineComponent, ref, watchEffect, onMounted, onUnmounted, nextTick, cr
 import { throttle, md2html } from '../functions/BaseFunctions';
 import { currentModuleUrl, iconRoot } from '../types/GlobalTypes';
 import BrowserList from './BrowserList.vue';
+import StringList from './StringList.vue';
 
 export default defineComponent({
   components: {
-    BrowserList
+    BrowserList, 
+    StringList
   },
   props: {
     isDark: {
@@ -522,11 +524,23 @@ export default defineComponent({
         if (!container) {
           return;
         }
-        const app = createApp(BrowserList, {
-          isDark: props.isDark,
-          data: comp.data,
-          onOpenExternal: handleOpenExternal
-        });
+        let app: any = null;
+        switch(comp.type) {
+          case 'browser-list':
+            app = createApp(BrowserList, {
+              isDark: props.isDark,
+              data: comp.data,
+              onOpenExternal: handleOpenExternal
+            });
+            break;
+          case 'string-list':
+            app = createApp(StringList, {
+              isDark: props.isDark,
+              data: comp.data,
+              onOpenExternal: handleOpenExternal
+            });
+            break;
+        }
         app.mount(container);
         componentInstances.value.push(app);
       });

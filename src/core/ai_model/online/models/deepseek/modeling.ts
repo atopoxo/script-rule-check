@@ -37,6 +37,17 @@ export class DeepSeek extends AIModelOnlineBase {
         });
     }
 
+    async getToolResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
+        const client = toolModel ? this.toolClient! : this.client;
+        const filteredMessages = messages.length > 0 ? [messages[0], ...(messages.length > 1 ? [messages[messages.length - 1]] : [])] : [];
+        return await client.chat.completions.create({
+            model: moduleName,
+            messages: filteredMessages,
+            max_tokens: maxTokens,
+            stream: stream,
+        });
+    }
+
     getDelta(chunk: any): Delta {
         const deltaData = chunk.choices[0]?.delta;
         return {

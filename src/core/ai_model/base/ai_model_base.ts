@@ -40,6 +40,10 @@ export abstract class AIModelBase {
         throw new Error("Method not implemented.");
     }
 
+    public async getToolResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
+        throw new Error("Method not implemented.");
+    }
+
     getDelta(chunk: any): Delta {
         throw new Error("Method not implemented.");
     }
@@ -78,10 +82,13 @@ export abstract class AIModelBase {
                 if (toolsSelected.length > 0) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex, toolsSelected);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    yield* this.streamGenerator(true, signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace);
+                    yield* this.streamGenerator(true, signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace, true);
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex, toolsSelected);
-                    const tools = this.toolsMgr.getTools(contentMap.conclusion_content);
+                    let tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     // yield* this.reportToolInfos(tools, contentMap.conclusion_content);
+                    tools = tools.map(toolGroup => 
+                        toolGroup.filter(tool => toolsSelected.includes(tool.id))
+                    );
                     const toolResult = await this.handleToolCalls(tools, messages, cache, currentIndex);
                     const returnToAi = toolResult.ai;
                     const toolCalls = toolResult.toolCalls;
@@ -97,7 +104,7 @@ export abstract class AIModelBase {
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                yield* this.streamGenerator(false, signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace);
+                yield* this.streamGenerator(false, signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace, false);
                 streamContent += contentMap.think_content + contentMap.conclusion_content;
                 cache.returns.ai.ai_conclusion = contentMap.conclusion_content;
                 hasTask = cache.tool_calls.length > 0;
@@ -185,8 +192,13 @@ export abstract class AIModelBase {
         return result;
     }
 
-    private async *streamGenerator(toolModel: boolean, signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean): AsyncGenerator<string, void, unknown> {
-        const response = await this.getResponse(toolModel, moduleName, messages, true, maxTokens, index);
+    private async *streamGenerator(toolModel: boolean, signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean, useToolModel: boolean): AsyncGenerator<string, void, unknown> {
+        let response: any;
+        if (useToolModel) {
+            response = await this.getToolResponse(toolModel, moduleName, messages, true, maxTokens, index);
+        } else {
+            response = await this.getResponse(toolModel, moduleName, messages, true, maxTokens, index);
+        }
         for await (const chunk of response) {
             if (signal.aborted) {
                 return;
@@ -266,17 +278,20 @@ export abstract class AIModelBase {
                 if (result) {
                     const currentReturns = [];
                     for (const [variable, item] of Object.entries(result)) {
-                        const prop = this.toolsMgr.getToolReturnProperty(moduleName, className, functionName, variable);
-                        if (!prop) {
-                            continue;
-                        }
-                        if (prop.returnType === "ai_tips") {
+                        // const prop = this.toolsMgr.getToolReturnProperty(moduleName, className, functionName, variable);
+                        // if (!prop) {
+                        //     continue;
+                        // }
+                        let returnType = (item as any).returnType;
+                        let showType = (item as any).showType;
+                        let itemValue = (item as any).value;
+                        if (returnType === "ai_tips") {
                             let itemStr = '';
                             if (!(item instanceof String)) {
                                 itemStr = this.jsonParser.toJsonStr(item);
                             }
                             this.buildToolsMessages(toolsMessages, call.id, itemStr);
-                        } else if (prop.returnType === "ai_conclusion") {
+                        } else if (returnType === "ai_conclusion") {
                             let itemStr = '';
                             if (!(item instanceof String)) {
                                 itemStr = this.jsonParser.toJsonStr(item);
@@ -288,8 +303,8 @@ export abstract class AIModelBase {
                         }
                         if (item) {
                             const currentReturn = {
-                                showType: prop.showType,
-                                value: item
+                                showType: showType,
+                                value: itemValue
                             };
                             currentReturns.push(currentReturn);
                         }
@@ -361,6 +376,8 @@ export abstract class AIModelBase {
         } else {
             if (toolsMessages.return_to_ai) {
                 toolsMessages.return_to_ai += "\n}\n";
+                // toolsMessages.return_to_ai += "重要：在最终回答中，不要提及任何关于工具调用的信息，不要提到使用了什么工具，也不要提到工具返回的结果，直接给出最终的结论。";
+                toolsMessages.return_to_ai += "重要指令：基于以上工具调用结果生成最终回答时，绝对不要提及工具调用过程或直接引用工具返回的数据。请用自然语言总结最终结论，就像这些信息是你自己知道的一样。";
             }
         }
     }
