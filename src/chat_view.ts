@@ -42,7 +42,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    public async isViewCreated(timeout = 5000): Promise<boolean> {
+    public async isViewCreated(timeout = 8000): Promise<boolean> {
         if (this.view && this.isWebviewReady) {
             return true;
         }
@@ -92,10 +92,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             switch (type) {
                 case 'ready':
                     this.isWebviewReady = true;
-                    await this.initSession(vscode.window.activeColorTheme.kind);
                     if (this.viewCreatedResolve) {
                         this.viewCreatedResolve(true);
                     }
+                    await this.initSession(vscode.window.activeColorTheme.kind);
                     break;
                 case 'showToolsOptions':
                     await this.showToolsOptions(data.toolsSelected);

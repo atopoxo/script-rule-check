@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.29",
+  "version": "0.0.32",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -242,6 +242,10 @@
         "title": "▶ 场景对应脚本检查"
       },
       {
+        "command": "extension.checkSpecificRule.rule14",
+        "title": "▶ AI脚本检查"
+      },
+      {
         "command": "extension.searchEngine.selectedChange",
         "title": "选择搜索引擎"
       },
@@ -447,6 +451,10 @@
         {
           "command": "extension.checkSpecificRule.rule13",
           "group": "navigation@13"
+        },
+        {
+          "command": "extension.checkSpecificRule.rule14",
+          "group": "navigation@14"
         }
       ]
     },
