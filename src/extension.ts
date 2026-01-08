@@ -228,10 +228,27 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
     await chatManager.ready;
     chatViewProvider = new ChatViewProvider(context, chatManager, aiModelMgr, toolsMgr, contextMgr);
     // chatViewProvider.createWebview();
-	const allModelInfos = aiModelMgr.getModelInfos();
-    configurationProvider.setModelInfos(allModelInfos);
+    configurationProvider.setModelMgr(aiModelMgr);
+    configurationProvider.setChatViewProvider(chatViewProvider);
+    configurationProvider.setModelInfos([]);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('chatView', chatViewProvider),
+        vscode.commands.registerCommand('extension.chatModel.add', async () => {
+            await configurationProvider.addModel();
+        }),
+        vscode.commands.registerCommand('extension.chatModel.remove', async (item: vscode.TreeItem) => {
+            if (item.id) {
+                const confirm = await vscode.window.showWarningMessage(
+                    `确定要删除模型 "${item.label}" 吗?`, 
+                    { modal: true }, 
+                    '确定'
+                );
+                if (confirm === '确定') {
+                    const id = item.id?.split(':')[1];
+                    await configurationProvider.removeModel(id);
+                }
+            }
+        }),
         vscode.commands.registerCommand('extension.toggleModelInfo', async (modelID: string) => {
             let selectedModel: string = getGlobalConfigValue<string>(extensionName, 'selectedModel', '');
             selectedModel = selectedModel === modelID ? '' : modelID;
@@ -239,6 +256,7 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
             configurationProvider.refresh();
         }),
         vscode.commands.registerCommand('extension.model.editInfo', async (modelID: string, data: object) => {
+            const allModelInfos = aiModelMgr.getModelInfos();
             const modelInfo = allModelInfos.find(info => info.id === modelID);
             if (!modelInfo) {
                 vscode.window.showErrorMessage(`未找到 ID 为 ${modelID} 的模型。`);
@@ -254,12 +272,22 @@ async function registerAICommands(context: vscode.ExtensionContext, configuratio
                     return;
                 }
                 (modelInfo as any)[key] = newValue;
-                aiModelMgr.saveModelConfig("models", allModelInfos);
-                configurationProvider.refresh();
+                aiModelMgr.updateModel(modelInfo);
                 vscode.window.showInformationMessage(`模型"${modelInfo.name}"的"${key}"已更新为"${newValue}"`);
             });
         }),
+        vscode.commands.registerCommand('extension.chatModel.selectedChange', async (id: string) => {
+            const allModelInfos = aiModelMgr.getModelInfos();
+            const chatModelInfo = allModelInfos.find(info => info.id === id);
+            if (!chatModelInfo) {
+                vscode.window.showErrorMessage(`未找到 ID 为 ${id} 的模型。`);
+                return;
+            }
+            await chatViewProvider.selectModel(id);
+            await customConfig.update('selectedModel', id, vscode.ConfigurationTarget.Global);
+        }),
         vscode.commands.registerCommand('extension.toolModel.selectedChange', async (id: string) => {
+            const allModelInfos = aiModelMgr.getModelInfos();
             const toolModelInfo = allModelInfos.find(info => info.id === id);
             if (!toolModelInfo) {
                 vscode.window.showErrorMessage(`未找到 ID 为 ${id} 的模型。`);

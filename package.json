@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -77,6 +77,14 @@
           "type": "string",
           "default": "",
           "description": "当前选中的搜索引擎"
+        },
+        "script-rule-check.customChatModels": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "default": [],
+          "description": "自定义大语言模型列表"
         },
         "script-rule-check.selectedModel": {
           "type": "string",
@@ -258,8 +266,20 @@
         "title": "修改模型配置"
       },
       {
+        "command": "extension.chatModel.add",
+        "title": "添加模型"
+      },
+      {
+        "command": "extension.chatModel.selectedChange",
+        "title": "选择聊天模型"
+      },
+      {
         "command": "extension.toolModel.selectedChange",
         "title": "选择工具模型"
+      },
+      {
+        "command": "extension.chatModel.remove",
+        "title": "删除大模型"
       },
       {
         "command": "extension.aiCharacter.editInfo",
@@ -344,6 +364,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "extension.chatModel.remove",
+          "when": "viewItem == modelInfo",
+          "group": "action"
+        },
         {
           "command": "extension.aiCharacter.remove",
           "when": "viewItem == aiCharacterInfo",

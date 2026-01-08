@@ -100,7 +100,7 @@ export abstract class AIModelBase {
                     if (!returnToAi && cache.returns.ai.ai_conclusion) {
                         streamContent += `${cache.returns.ai.ai_conclusion}`;
                         yield streamContent;
-                        break;
+                        break; 
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };

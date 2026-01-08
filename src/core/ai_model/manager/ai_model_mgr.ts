@@ -6,7 +6,7 @@ import { ModelInfo } from "../base/ai_types";
 import { AIModelBase } from "../base/ai_model_base";
 import { Storage } from '../../storage/storage';
 import { ContextMgr } from '../../context/context_mgr';
-import { singleton, setGlobalConfigValue } from '../../function/base_function';
+import { singleton, getGlobalConfigValue, setGlobalConfigValue } from '../../function/base_function';
 
 @singleton
 export class AIModelMgr {
@@ -19,6 +19,10 @@ export class AIModelMgr {
         const modelConfig = this.getConfigFromFile();
         this.defaultToolModelId = modelConfig['defaultToolModel'];
         this.setModelConfigs(modelConfig["models"]);
+        const customChatModels = getGlobalConfigValue(this.extensionName, `customChatModels`, []) as ModelInfo[];
+        for (const model of customChatModels) {
+            this.modelConfigs.set(model.id, model);
+        }
     }
 
     async getSelectedModel(): Promise<ModelInfo | undefined> {
@@ -84,6 +88,21 @@ export class AIModelMgr {
             console.error('加载模型配置失败:', error);
             return {};
         }
+    }
+
+    public async updateModel(modelInfo: ModelInfo) {
+        this.modelConfigs.set(modelInfo.id, modelInfo);
+        const modifiableModels = Array.from(this.modelConfigs.values()).filter(model => model.canModify);
+        await setGlobalConfigValue(this.extensionName, `customChatModels`, modifiableModels);
+    }
+
+    async removeModel(id: string) {
+        if (!this.modelConfigs.has(id)) {
+            return;
+        }
+        this.modelConfigs.delete(id);
+        const modifiableModels = Array.from(this.modelConfigs.values()).filter(model => model.canModify);
+        await setGlobalConfigValue(this.extensionName, `customChatModels`, modifiableModels);
     }
 
     saveModelConfig(key: string, value: any) {

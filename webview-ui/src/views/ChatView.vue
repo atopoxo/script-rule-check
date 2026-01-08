@@ -1110,6 +1110,9 @@ export default defineComponent({
               case 'selectAICharacter':
                   titleBarText.value = data.aiCharacter.name || titleBarText.value;
                   break;
+              case 'updateModels':
+                  modelOptions.value = getModels(data.modelInfos);
+                  break;
               case 'selectModel':
                   selectedModel.value = data.selectedModel.name;
                   break;

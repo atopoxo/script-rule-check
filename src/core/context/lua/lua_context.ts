@@ -1,6 +1,6 @@
 import { ContextItem, ContextTreeNode } from '../../ai_model/base/ai_types';
 import { ContextBase } from '../../context/base/context_base';
-import { Scope } from '../../types/scope'
+import { Scope } from '../../types/scope';
 
 export type DependencyGraphType = Map<string, Set<string>>;
 export type DefinitionMapType = Map<string, ContextItem>;

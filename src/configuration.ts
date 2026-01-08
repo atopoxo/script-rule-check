@@ -3,17 +3,24 @@ import { ModelInfo, AICharacterInfo, SearchEngineInfo } from './core/ai_model/ba
 import { CheckRule } from "./output_format";
 import { getGlobalConfigValue, setGlobalConfigValue } from "./core/function/base_function";
 import { GlobalConfig } from './settings/global_config';
+import { AIModelMgr } from './core/ai_model/manager/ai_model_mgr';
+import { ModelConfigPanel } from './view/model_config_panel';
+import { ChatViewProvider } from './chat_view';
+import { info } from 'console';
 
 export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private allCheckRules: CheckRule[] = [];
+    private aiModelMgr: AIModelMgr | undefined;
     private allModelInfos: ModelInfo[] = [];
     private allAICharacterInfos: AICharacterInfo[] = [];
     private defaultAICharacterId: string = 'normal chat character';
     private allSearchEngineInfos: SearchEngineInfo[] = [];
     private globalConfig: any = new GlobalConfig();
     private config: any;
+    private modelConfigPanel: ModelConfigPanel | undefined;
+    private chatViewProvider: ChatViewProvider | undefined;
 
     constructor(private extensionName: string) {
         this.config = this.globalConfig.getConfig();
@@ -91,9 +98,41 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         this.setSearchEngineInfos(infos);
     }
 
+    public setModelMgr(aiModelMgr: AIModelMgr) {
+        this.aiModelMgr = aiModelMgr;
+    }
+
+    public setChatViewProvider(chatViewProvider: ChatViewProvider) {
+        this.chatViewProvider = chatViewProvider;
+    }
+
     public setModelInfos(infos: ModelInfo[]) {
+        if (infos.length === 0) {
+            infos = this.aiModelMgr?.getModelInfos() || [];
+        }
+        this.appendModelInfo(infos);
         this.allModelInfos = infos;
         this._onDidChangeTreeData.fire();
+    }
+
+    public appendModelInfo(infos: ModelInfo[]) {
+        if (infos.length === 0 || infos[infos.length - 1].id !== 'addModel') {
+            infos.push({
+                url: '',
+                id: 'addModel',
+                platform: '',
+                codeName: '',
+                modelName: '',
+                temperature: 0,
+                maxTokens: 0,
+                name: '...',
+                type: 'chat',
+                showConfig: false,
+                safe: false,
+                apiKey: '',
+                canModify: false
+            });
+        }
     }
 
     public setAICharacterInfos(infos: AICharacterInfo[]) {
@@ -114,6 +153,44 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     public async getSearchEngineInfos(): Promise<SearchEngineInfo[]> {
         let infos = getGlobalConfigValue<any[]>(this.extensionName, 'searchEngineInfos', []) || [];
         return infos;
+    }
+
+    public async addModel(): Promise<void> {
+        this.modelConfigPanel = new ModelConfigPanel(this.aiModelMgr, this);
+        this.modelConfigPanel?.addModel();
+    }
+
+    public async updateModelInfos(newItem: ModelInfo | undefined) {
+        if (newItem) {
+            this.aiModelMgr?.updateModel(newItem);
+        }
+        this.allModelInfos = this.aiModelMgr?.getModelInfos() || [];
+        this.appendModelInfo(this.allModelInfos);
+        this.refresh();
+        await this.chatViewProvider?.updateModels();
+    }
+
+    public async removeModel(id: string): Promise<void> {
+        const infos = this.allModelInfos;
+        const selectedChatModelId = getGlobalConfigValue(this.extensionName, 'selectedModel', '');
+        const selectedToolModelId = getGlobalConfigValue(this.extensionName, 'selectedToolModel', '');
+        const index = infos.findIndex((item) => item.id === id);
+        if (index !== -1) {
+            if (infos[index].canModify === false) {
+                vscode.window.showErrorMessage(`name为${infos[index].name}的模型为默认模型，不能删除。`);
+                return;
+            }
+            if (infos[index].id !== selectedChatModelId && infos[index].id !== selectedToolModelId) {
+                infos.splice(index, 1);
+                this.aiModelMgr?.removeModel(id);
+                this.updateModelInfos(undefined);
+            } else {
+                vscode.window.showErrorMessage(`name为${infos[index].name}的模型为当前选中模型，不能删除。`);
+                return;
+            }
+        } else {
+            vscode.window.showErrorMessage(`未找到ID为${id}的模型。`);
+        }
     }
 
     public async addAICharacter(): Promise<void> {
@@ -266,6 +343,8 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             return this.createAIConfigItems();
         } else if (element.contextValue === 'modelSelector') {
             return this.createModelItems();
+        } else if (element.contextValue === 'chatModelSelector') {
+            return this.createChatModelItems();
         } else if (element.contextValue === 'toolModelSelector') {
             return this.createToolModelItems();
         } else if (element.contextValue === 'aiCharacterSelector') {
@@ -327,17 +406,25 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private createAIConfigItems(): vscode.TreeItem[] {
         return [
             this.createModelSelectorItem(),
+            this.createChatModelSelectorItem(),
             this.createToolModelSelectorItem(),
             this.createAICharacterSelectorItem()
         ];
     }
 
     private createModelSelectorItem(): vscode.TreeItem {
+        const item = new vscode.TreeItem(`模型管理`);
+        item.contextValue = 'modelSelector';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+        return item;
+    }
+
+    private createChatModelSelectorItem(): vscode.TreeItem {
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '');
         const models = this.allModelInfos.filter(info => info.id === id);
         const name = models.length > 0 ? models[0].name : '';
-        const item = new vscode.TreeItem(`当前'AI Chat'模型: ${name}`);
-        item.contextValue = 'modelSelector';
+        const item = new vscode.TreeItem(`当前对话模型: ${name}`);
+        item.contextValue = 'chatModelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
     }
@@ -346,7 +433,7 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const id = getGlobalConfigValue<string>(this.extensionName, 'selectedToolModel', '');
         const models = this.allModelInfos.filter(info => info.id === id);
         const name = models.length > 0 ? models[0].name : '';
-        const item = new vscode.TreeItem(`当前'AI Chat'中，决定工具调用的模型: ${name}`);
+        const item = new vscode.TreeItem(`当前对话中，工具调用的模型: ${name}`);
         item.contextValue = 'toolModelSelector';
         item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
         return item;
@@ -496,8 +583,12 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         return this.allModelInfos.map(item => this.createModelItem(item));
     }
 
+    private createChatModelItems(): vscode.TreeItem[] {
+        return this.allModelInfos.filter(item => item.name !== '...').map(item => this.createChatModelItem(item));
+    }
+
     private createToolModelItems(): vscode.TreeItem[] {
-        return this.allModelInfos.map(item => this.createToolModelItem(item));
+        return this.allModelInfos.filter(item => item.name !== '...').map(item => this.createToolModelItem(item));
     }
 
     private createAICharacterItems(): vscode.TreeItem[] {
@@ -512,9 +603,31 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
         const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '') === info.id;
         const item = new vscode.TreeItem(info.name);
         item.id = `Model:${info.id}`;
-        item.contextValue = info.showConfig ? 'modelInfo': '';
-        item.collapsibleState = info.showConfig ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+        item.contextValue = info.canModify ? 'modelInfo': '';
+        item.collapsibleState = info.canModify ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        if (item.id === 'Model:addModel') {
+            item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+            item.command = {
+                command: 'extension.chatModel.add',
+                title: '添加新的大模型'
+            };
+        }
+        return item;
+    }
+
+    private createChatModelItem(info: ModelInfo): vscode.TreeItem {
+        const isSelected = getGlobalConfigValue<string>(this.extensionName, 'selectedModel', '') === info.id;
+        const item = new vscode.TreeItem(info.name);
+        item.id = `Chat Model:${info.id}`;
+        item.contextValue = '';
+        item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        item.iconPath = isSelected ? new vscode.ThemeIcon('check') : undefined;
+        item.command = {
+            command: 'extension.chatModel.selectedChange',
+            title: '选择聊天模型',
+            arguments: [info.id]
+        };
         return item;
     }
 
@@ -582,12 +695,11 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
     private getModelConfigItems(item: vscode.TreeItem): vscode.TreeItem[] {
         const id = item.id?.split(":")[1];
         const currentModel = this.allModelInfos.find(info => info.id === id);
-        let key = "";
-        if (currentModel) {
-            key = currentModel.apiKey;
-        }
         const config = {
-            "apiKey": key
+            "name": currentModel?.name || "",
+            "url": currentModel?.url || "",
+            "apiKey": this.maskApiKey(currentModel?.apiKey || ""),
+            "modelName": currentModel?.modelName || ""
         };
 
         return Object.entries(config).map(([key, value]) => {
@@ -601,6 +713,16 @@ export class ConfigurationProvider implements vscode.TreeDataProvider<vscode.Tre
             };
             return configItem;
         });
+    }
+
+    private maskApiKey(apiKey: string | undefined): string {
+        if (!apiKey) {
+            return '';
+        }
+        if (apiKey.length <= 4) {
+            return '••••';
+        }
+        return `${apiKey.substring(0, 4)}${'•'.repeat(Math.min(apiKey.length - 4, 20))}`;
     }
 
     private getAICharacterConfigItems(item: vscode.TreeItem): vscode.TreeItem[] {

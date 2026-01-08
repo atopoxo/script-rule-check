@@ -13,7 +13,8 @@
             "maxTokens": 8192,
             "showConfig": false,
             "safe": false,
-            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
+            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669",
+            "canModify": false
         },
         {
             "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
@@ -27,7 +28,8 @@
             "maxTokens": 8192,
             "showConfig": false,
             "safe": false,
-            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669"
+            "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669",
+            "canModify": false
         },
         {
             "url": "https://api.deepseek.com/v1",
@@ -41,7 +43,8 @@
             "maxTokens": 8192,
             "showConfig": true,
             "safe": false,
-            "apiKey": ""
+            "apiKey": "sk-b30b2d7a1f494b6388bf819d8da84664",
+            "canModify": false
         },
         {
             "url": "https://api.deepseek.com/v1",
@@ -55,7 +58,8 @@
             "maxTokens": 8192,
             "showConfig": true,
             "safe": false,
-            "apiKey": ""
+            "apiKey": "sk-b30b2d7a1f494b6388bf819d8da84664",
+            "canModify": false
         }
     ]
 }

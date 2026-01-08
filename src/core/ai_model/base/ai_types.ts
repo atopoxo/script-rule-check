@@ -13,7 +13,8 @@ export class ModelInfo {
         public type: string,
         public showConfig: boolean,
         public safe: boolean,
-        public apiKey: string
+        public apiKey: string,
+        public canModify: boolean
     ) {}
 }
 

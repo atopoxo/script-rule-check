@@ -248,6 +248,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.updateWebview('showToolsOptions', data);
     }
 
+    public async updateModels() {
+        const data = {
+            modelInfos: this.aiModelMgr.getModelInfos(),
+        };
+        this.updateWebview('updateModels', data);
+    }
+
     public async selectModel(id: string) {
         const selectedModelConfig = await this.aiModelMgr.getModelConfig(id);
         if (!selectedModelConfig) {
