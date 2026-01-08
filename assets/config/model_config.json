@@ -30,36 +30,6 @@
             "safe": false,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669",
             "canModify": false
-        },
-        {
-            "url": "https://api.deepseek.com/v1",
-            "id": "online/deepseek-chat",
-            "platform": "online",
-            "codeName": "deepseek",
-            "modelName": "deepseek-chat",
-            "name": "deepseek-chat",
-            "type": "外网-快速响应",
-            "temperature": 1,
-            "maxTokens": 8192,
-            "showConfig": true,
-            "safe": false,
-            "apiKey": "sk-b30b2d7a1f494b6388bf819d8da84664",
-            "canModify": false
-        },
-        {
-            "url": "https://api.deepseek.com/v1",
-            "id": "online/deepseek-reasoner",
-            "platform": "online",
-            "codeName": "deepseek",
-            "modelName": "deepseek-reasoner",
-            "name": "deepseek-reasoner",
-            "type": "外网-深度思考",
-            "temperature": 1,
-            "maxTokens": 8192,
-            "showConfig": true,
-            "safe": false,
-            "apiKey": "sk-b30b2d7a1f494b6388bf819d8da84664",
-            "canModify": false
         }
     ]
 }
