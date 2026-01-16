@@ -136,155 +136,153 @@ export default defineComponent({
 
     emits: ['close', 'select', 'selectFiles', 'selectWorkspace'],
 
-  setup(props, { emit }) {
-    const selectedItems = ref<SelectorItem[]>([]);
-    const expandedItem = ref<SelectorItem | null>(null);
-    const expandIconPath = ref<string>('');
-    const choiceIconPath = ref<string>('');
+    setup(props, { emit }) {
+        const selectedItems = ref<SelectorItem[]>([]);
+        const expandedItem = ref<SelectorItem | null>(null);
+        const expandIconPath = ref<string>('');
+        const choiceIconPath = ref<string>('');
 
-    const isSelected = (item: SelectorItem) => {
-        if (item.children && item.children.length > 0) {
-            let flag = true;
-            item.children.forEach(child => {
-                if (!isSelected(child)) {
-                    flag = false;
-                    return;
-                }
-            });
-            updateSelectedItems(item, true, flag);
-        }
-        return selectedItems.value.some(selected => selected.id === item.id);
-    };
-
-    const handleItemClick = (item: SelectorItem) => {
-        switch (item.type) {
-            case "code-block":
-                const flag = !isSelected(item);
-                item.children?.map(child => {
-                    updateSelectedItems(child, true, flag);
+        const isSelected = (item: SelectorItem) => {
+            if (item.children && item.children.length > 0) {
+                let flag = true;
+                item.children.forEach(child => {
+                    if (!isSelected(child)) {
+                        flag = false;
+                        return;
+                    }
                 });
                 updateSelectedItems(item, true, flag);
-                break;
-            case "files":
-                filesSelect(true);
-                break;
-            case "folders":
-                filesSelect(false);
-                break;
-            case "workspace":
-                workspaceSelect();
-                break;
-            default:
-                updateSelectedItems(item);
-                break;
-        }
-        if (!props.mutiSelect) {
-            closeSelector(selectedItems.value);
-        }
-    };
+            }
+            return selectedItems.value.some(selected => selected.id === item.id);
+        };
 
-    const updateSelectedItems = (item: SelectorItem, force?: boolean, flag?: boolean) => {
-        if (!props.mutiSelect) {
-            selectedItems.value = []
-        }
-        if (force) {
-            const index = selectedItems.value.findIndex(i => i.id === item.id);
-            if (flag) {
-                if (index < 0) {
-                    selectedItems.value.push(item);
+        const handleItemClick = (item: SelectorItem) => {
+            switch (item.type) {
+                case "code-block":
+                    const flag = !isSelected(item);
+                    item.children?.map(child => {
+                        updateSelectedItems(child, true, flag);
+                    });
+                    updateSelectedItems(item, true, flag);
+                    break;
+                case "files":
+                    filesSelect(true);
+                    break;
+                case "folders":
+                    filesSelect(false);
+                    break;
+                case "workspace":
+                    workspaceSelect();
+                    break;
+                default:
+                    updateSelectedItems(item);
+                    break;
+            }
+            if (!props.mutiSelect) {
+                closeSelector(selectedItems.value);
+            }
+        };
+
+        const updateSelectedItems = (item: SelectorItem, force?: boolean, flag?: boolean) => {
+            if (!props.mutiSelect) {
+                selectedItems.value = []
+            }
+            if (force) {
+                const index = selectedItems.value.findIndex(i => i.id === item.id);
+                if (flag) {
+                    if (index < 0) {
+                        selectedItems.value.push(item);
+                    }
+                } else {
+                    if (index >= 0) {
+                        selectedItems.value.splice(index, 1);
+                    }
                 }
             } else {
+                const index = selectedItems.value.findIndex(i => i.id === item.id);
                 if (index >= 0) {
                     selectedItems.value.splice(index, 1);
+                } else {
+                    selectedItems.value.push(item);
                 }
             }
-        } else {
-            const index = selectedItems.value.findIndex(i => i.id === item.id);
-            if (index >= 0) {
-                selectedItems.value.splice(index, 1);
-            } else {
-                selectedItems.value.push(item);
+        }
+
+        const filesSelect = (onlyFiles: boolean) => {
+            emit('selectFiles', onlyFiles, props.index);
+        };
+
+        const workspaceSelect = () => {
+            emit('selectWorkspace', props.index);
+        }
+
+        const handleItemHover = (item: SelectorItem) => {
+            expandedItem.value = item;
+        };
+
+        const handleOutsideClick = () => {
+            closeSelector(undefined);
+        };
+
+        const confirmSelection = () => {
+            emit('select', selectedItems.value, props.index);
+        };
+
+        const closeSelector = (items: SelectorItem[] | undefined) => {
+            let data = undefined;
+            if (items) {
+                data = items
+            }
+            emit('close', data, props.index);
+        };
+
+        const getIconPath = (iconPath: string) => {
+            try {
+                return new URL(`${iconRoot}${iconPath}`, currentModuleUrl).href;
+            } catch (error) {
+                console.error('图标加载失败:', iconPath, error);
+                return '';
             }
         }
-    }
 
-    const filesSelect = (onlyFiles: boolean) => {
-        emit('selectFiles', onlyFiles, props.index);
-    };
-
-    const workspaceSelect = () => {
-        emit('selectWorkspace', props.index);
-    }
-
-    const handleItemHover = (item: SelectorItem) => {
-      expandedItem.value = item;
-    };
-
-    const handleOutsideClick = () => {
-      closeSelector(undefined);
-    };
-
-    const confirmSelection = () => {
-      if (selectedItems.value.length > 0) {
-        emit('select', selectedItems.value, props.index);
-      }
-    };
-
-    const closeSelector = (items: SelectorItem[] | undefined) => {
-        let data = undefined;
-        if (items) {
-            data = items
+        const canExpand = (item: SelectorItem) => {
+            if (item.children && item.children.length > 0) {
+                return expandedItem.value?.id == item.id;
+            } else {
+                return false;
+            }
         }
-        emit('close', data, props.index);
-    };
 
-    const getIconPath = (iconPath: string) => {
-        try {
-            return new URL(`${iconRoot}${iconPath}`, currentModuleUrl).href;
-        } catch (error) {
-            console.error('图标加载失败:', iconPath, error);
-            return '';
-        }
+        watchEffect(() => {
+            selectedItems.value = props.selectedItems;
+            if (props.isDark) {
+                expandIconPath.value = 'dark/expand.svg';
+                choiceIconPath.value = 'dark/check.svg';
+            } else {
+                expandIconPath.value = 'light/expand.svg';
+                choiceIconPath.value = 'light/check.svg';
+            }
+        });
+
+        defineExpose({
+            confirmSelection
+        });
+
+        return {
+        selectedItems,
+        expandedItem,
+        expandIconPath,
+        choiceIconPath,
+        isSelected,
+        canExpand,
+        handleItemClick,
+        handleItemHover,
+        handleOutsideClick,
+        confirmSelection,
+        closeSelector,
+        getIconPath
+        };
     }
-
-    const canExpand = (item: SelectorItem) => {
-        if (item.children && item.children.length > 0) {
-            return expandedItem.value?.id == item.id;
-        } else {
-            return false;
-        }
-    }
-
-    watchEffect(() => {
-        selectedItems.value = props.selectedItems;
-        if (props.isDark) {
-            expandIconPath.value = 'dark/expand.svg';
-            choiceIconPath.value = 'dark/check.svg';
-        } else {
-            expandIconPath.value = 'light/expand.svg';
-            choiceIconPath.value = 'light/check.svg';
-        }
-    });
-
-    defineExpose({
-        confirmSelection
-    });
-
-    return {
-      selectedItems,
-      expandedItem,
-      expandIconPath,
-      choiceIconPath,
-      isSelected,
-      canExpand,
-      handleItemClick,
-      handleItemHover,
-      handleOutsideClick,
-      confirmSelection,
-      closeSelector,
-      getIconPath
-    };
-  }
 });
 </script>
 

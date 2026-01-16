@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { merge } from 'lodash';
 import type { Delta } from '../../../base/ai_types';
 import { AIModelOnlineBase } from "../../base/ai_model_online_base";
 
@@ -27,33 +28,60 @@ export class DeepSeek extends AIModelOnlineBase {
         });
     }
 
-    async getResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
+    async getResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1, extra: any): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
         const client = toolModel ? this.toolClient! : this.client;
-        return await client.chat.completions.create({
+        let params: any = {
             model: moduleName,
             messages: messages.slice(0, index + 1),
             max_tokens: maxTokens,
-            stream: stream,
-        });
+            stream: stream
+        };
+        if (extra) {
+            params = merge({}, params, extra);
+        }
+        return await client.chat.completions.create(params);
     }
 
-    async getToolResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
+    async getToolResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1, extra: any): Promise<AsyncIterable<OpenAI.ChatCompletionChunk> | OpenAI.ChatCompletion> {
         const client = toolModel ? this.toolClient! : this.client;
-        const filteredMessages = messages.length > 0 ? [messages[0], ...(messages.length > 1 ? [messages[messages.length - 1]] : [])] : [];
-        return await client.chat.completions.create({
+        let filteredMessages: any[] = [];
+        if (messages.length >= 1) {
+            let lastUserMessage = null;
+            for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i].role === 'user') {
+                    lastUserMessage = messages[i];
+                    break;
+                }
+            }
+            if (lastUserMessage) {
+                filteredMessages = [messages[0], lastUserMessage];
+            }
+        }
+        let params: any = {
             model: moduleName,
             messages: filteredMessages,
             max_tokens: maxTokens,
-            stream: stream,
-        });
+            stream: stream
+        };
+        if (extra) {
+            params = merge({}, params, extra);
+        }
+        return await client.chat.completions.create(params);
     }
 
     getDelta(chunk: any): Delta {
         const deltaData = chunk.choices[0]?.delta;
-        return {
-            reasoning: "reasoning_content" in deltaData ? (deltaData as any).reasoning_content : null,
-            conclusion: "content" in deltaData ? deltaData.content : null,
-        };
+        if (deltaData) {
+            return {
+                reasoning: "reasoning_content" in deltaData ? (deltaData as any).reasoning_content : undefined,
+                conclusion: "content" in deltaData ? deltaData.content : undefined
+            };
+        } else {
+            return {
+                reasoning: undefined,
+                conclusion: undefined
+            };
+        }
     }
 }
 

@@ -119,6 +119,8 @@ export interface InputData {
     useKnowledge?: boolean;
     modelConfig?: any;
     toolModelConfig?: any;
+    toolModelExtra?: any;
+    modelExtra?: any;
 }
 
 export interface ContentMap {

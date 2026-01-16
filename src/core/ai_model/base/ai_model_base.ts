@@ -36,11 +36,11 @@ export abstract class AIModelBase {
     public setToolModel(config: any) {
         throw new Error("Method not implemented.");
     }
-    public async getResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
+    public async getResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1, extra: any): Promise<any> {
         throw new Error("Method not implemented.");
     }
 
-    public async getToolResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1): Promise<any> {
+    public async getToolResponse(toolModel: boolean, moduleName: string, messages: any[], stream: boolean = true, maxTokens: number = 8192, index: number = -1, extra: any): Promise<any> {
         throw new Error("Method not implemented.");
     }
 
@@ -65,6 +65,8 @@ export abstract class AIModelBase {
         const toolModelName = toolModelConfig.modelName;
         const toolMaxTokens = toolModelConfig.maxTokens || 8192;
         const cache = inputData.cache;
+        const toolModelExtra = inputData.toolModelExtra;
+        const modelExtra = inputData.modelExtra;
         let messageReplace = false;
         let hasTask = true;
         let streamContent = "";
@@ -82,7 +84,7 @@ export abstract class AIModelBase {
                 if (toolsSelected.length > 0) {
                     currentIndex = this.checkToolTips(messages, cache, true, currentIndex, toolsSelected);
                     const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                    yield* this.streamGenerator(true, signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, messageReplace, true);
+                    yield* this.streamGenerator(true, signal, userId, session, toolModelName!, messages, toolMaxTokens, contentMap, currentIndex, toolModelExtra, modelExtra, messageReplace, true);
                     currentIndex = this.checkToolTips(messages, cache, false, currentIndex, toolsSelected);
                     let tools = this.toolsMgr.getTools(contentMap.conclusion_content);
                     // yield* this.reportToolInfos(tools, contentMap.conclusion_content);
@@ -104,7 +106,7 @@ export abstract class AIModelBase {
                     }
                 }
                 const contentMap: ContentMap = { think_content: "", conclusion_content: "" };
-                yield* this.streamGenerator(false, signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, messageReplace, false);
+                yield* this.streamGenerator(false, signal, userId, session, modelName!, messages, maxTokens, contentMap, currentIndex, toolModelExtra, modelExtra, messageReplace, false);
                 streamContent += contentMap.think_content + contentMap.conclusion_content;
                 cache.returns.ai.ai_conclusion = contentMap.conclusion_content;
                 hasTask = cache.tool_calls.length > 0;
@@ -192,12 +194,12 @@ export abstract class AIModelBase {
         return result;
     }
 
-    private async *streamGenerator(toolModel: boolean, signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, messageReplace: boolean, useToolModel: boolean): AsyncGenerator<string, void, unknown> {
+    private async *streamGenerator(toolModel: boolean, signal: AbortSignal, userId: string | undefined, session:Session, moduleName: string, messages: Message[], maxTokens: number, contentMap: ContentMap, index: number, toolModelExtra: any, modelExtra: any, messageReplace: boolean, useToolModel: boolean): AsyncGenerator<string, void, unknown> {
         let response: any;
         if (useToolModel) {
-            response = await this.getToolResponse(toolModel, moduleName, messages, true, maxTokens, index);
+            response = await this.getToolResponse(toolModel, moduleName, messages, true, maxTokens, index, toolModelExtra);
         } else {
-            response = await this.getResponse(toolModel, moduleName, messages, true, maxTokens, index);
+            response = await this.getResponse(toolModel, moduleName, messages, true, maxTokens, index, modelExtra);
         }
         for await (const chunk of response) {
             if (signal.aborted) {

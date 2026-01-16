@@ -2,11 +2,11 @@
     "defaultToolModel": "online/volcengine-deepseek-chat",
     "models": [
         {
-            "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
+            "url": "https://ai.seasungame.com/ai_in_one/v2/",
             "id": "online/volcengine-deepseek-chat",
             "platform": "online",
             "codeName": "deepseek",
-            "modelName": "tcdpv3",
+            "modelName": "deepseek-v3.2",
             "name": "api-deepseek-chat",
             "type": "外网-快速响应",
             "temperature": 1,
@@ -14,10 +14,15 @@
             "showConfig": false,
             "safe": false,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669",
-            "canModify": false
+            "canModify": false,
+            "extra": {
+                "thinking": {
+                    "type": "disabled"
+                }
+            }
         },
         {
-            "url": "https://ai.seasungame.com/ai_in_one/v1/sdk/",
+            "url": "https://ai.seasungame.com/ai_in_one/v2/",
             "id": "online/volcengine-deepseek-reasoner",
             "platform": "online",
             "codeName": "deepseek",
@@ -29,7 +34,12 @@
             "showConfig": false,
             "safe": false,
             "apiKey": "tc-n8H6NLxPxkgVRffvC05935E4EeC34985B4A35f53D8A5E669",
-            "canModify": false
+            "canModify": false,
+            "extra": {
+                "thinking": {
+                    "type": "enabled"
+                }
+            }
         }
     ]
 }

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { merge } from 'lodash';
 import { Message, InputData } from './core/ai_model/base/ai_types';
 import { Storage } from './core/storage/storage';
 import { Session } from './core/ai_model/base/ai_types';
@@ -91,13 +92,16 @@ export class ChatManager {
         return await this.storage.removeAIInstanceMessages(this.userID, instanceName, sessionId, removeIndexList);
     }
 
-    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsSelected: any[], query?: string, index?: number, contextOption?: any[], contextExpand?: boolean) {
+    public async chatStream(signal: AbortSignal, session: Session, useKnowledge: boolean, toolsSelected: any[], query?: string, index?: number, contextOption?: any[], contextExpand?: boolean, toolModelExtra?: any, modelExtra?: any) {
         const history = await this.getMessages(this.userID, 'chat', session.sessionId, query, index, contextOption, contextExpand);
         let modelId = await this.storage.getAIInstanceModelId(this.userID, 'chat');
         modelId = this.getValidModelId(modelId);
         let toolModelId = await this.storage.getAIInstanceToolModelId(this.userID, 'chat');
         toolModelId = this.getValidToolModelId(toolModelId);
-
+        let toolModelConfig = this.aiModelMgr.getModelConfig(toolModelId);
+        let modelConfig = this.aiModelMgr.getModelConfig(modelId);
+        let realToolModelExtra = merge({}, toolModelConfig?.extra, toolModelExtra);
+        let realModelExtra = merge({}, modelConfig?.extra, modelExtra);
         const data: InputData = {
             userID: this.userID,
             instanceName: 'chat',
@@ -106,9 +110,11 @@ export class ChatManager {
             index: index,
             toolsSelected: toolsSelected,
             useKnowledge: useKnowledge,
-            modelConfig: this.aiModelMgr.getModelConfig(modelId),
-            toolModelConfig: this.aiModelMgr.getModelConfig(toolModelId),
-            cache: await this.storage.getAIInstanceCache(this.userID, 'chat')
+            modelConfig: modelConfig,
+            toolModelConfig: toolModelConfig,
+            cache: await this.storage.getAIInstanceCache(this.userID, 'chat'),
+            toolModelExtra: realToolModelExtra,
+            modelExtra: realModelExtra
         };
         return this.aiModelMgr.chatStream(signal, modelId, data);
     }

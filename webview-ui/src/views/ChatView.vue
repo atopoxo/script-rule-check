@@ -502,10 +502,8 @@ export default defineComponent({
       showToolsSelector.value = false;
     }
     const handleToolsSelect = (selected: any[], _index: number) => {
-      if (selected.length > 0) {
-        let items = toRaw(selected);
-        vscode.postMessage({ type: 'showToolsOptions', data: {toolsSelected: items}} );
-      }
+      let items = toRaw(selected);
+      vscode.postMessage({ type: 'showToolsOptions', data: {toolsSelected: items}} );
     };
 
     const getToolsOptions = (options: ContextOption[]): SelectorItem[] => {

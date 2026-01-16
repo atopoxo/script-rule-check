@@ -317,7 +317,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 const port = this.view.webview;
                 const abortController = new AbortController();
                 const toolsSelected = this.chatManager.getToolsSelected();
-                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, toolsSelected, query, index, contextOption, contextExpand);
+                streamGenerator = await this.chatManager.chatStream(abortController.signal, currentSession, false, toolsSelected, query, index, contextOption, contextExpand, {}, {});
                 currentSession.isAIStreamTransfer = true;
                 port.postMessage({
                     type: 'aiStreamStart',
