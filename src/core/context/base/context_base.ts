@@ -18,6 +18,8 @@ type ParserFormat = (content: string, types: IdentifierType[], startPos: number)
 export class ContextBase {
     protected languageParsers: {[key: string]: ParserFormat} = {
         lua: (content, types, startPos) => this.parseLua(content, types, startPos),
+        lh: (content, types, startPos) => this.parseLua(content, types, startPos),
+        ls: (content, types, startPos) => this.parseLua(content, types, startPos),
         py: (content, types, startPos) => this.parsePython(content, types, startPos),
         js: (content, types, startPos) => this.parseJsTs(content, types, startPos),
         ts: (content, types, startPos) => this.parseJsTs(content, types, startPos),

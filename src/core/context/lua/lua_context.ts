@@ -1,3 +1,4 @@
+import { parentPort } from 'worker_threads';
 import { ContextItem, ContextTreeNode } from '../../ai_model/base/ai_types';
 import { ContextBase } from '../../context/base/context_base';
 import { Scope } from '../../types/scope';
@@ -7,8 +8,8 @@ export type DefinitionMapType = Map<string, ContextItem>;
 
 export interface ScopeNode {
     stack: Map<string, Scope>[];
-    current: Scope | undefined;
     currentDepth: number;
+    current: Scope | undefined;
     filePath: string;
 }
 
@@ -68,7 +69,7 @@ export class LuaContext extends ContextBase {
             if (isLocalFunction) {
                 this.enterNewScope(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement, true);   
             }
-            const currentTree = this.processNodeForDependencies(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement);
+            const currentTree = this.processNodeForDependencies(undefined, undefined, parentTree, scopeNode, current, content, startPos, statement, null);
             const filters = this.filters.get(current.type);
             if (!filters?.has("*")) {
                 for (const key in current) {
@@ -104,7 +105,7 @@ export class LuaContext extends ContextBase {
     }
 
     public buildDependencyGraph(definitionMap: DefinitionMapType, dependencyGraph: DependencyGraphType, scopeNode: ScopeNode, root: any, content: string, startPos: number) {
-        const traverse = (current: any, statement: any) => {
+        const traverse = (current: any, statement: any, parentType: any) => {
             if (this.isRangeChange(current)) {
                 statement = current;
             }
@@ -125,12 +126,14 @@ export class LuaContext extends ContextBase {
                         if (Array.isArray(current[key])) {
                             for (const child of current[key]) {
                                 if (child) {
-                                    traverse(child, statement);
+                                    const parentType = child.type !== 'Identifier' ? child.type : current.type;
+                                    traverse(child, statement, parentType);
                                 }
                             }
                         } else {
                             if (current[key]) {
-                                traverse(current[key], statement);
+                                const parentType = current[key].type !== 'Identifier' ? current[key].type : current.type;
+                                traverse(current[key], statement, parentType);
                             }
                         }
                         if (this.isScopeNode(current, key)) {
@@ -139,23 +142,23 @@ export class LuaContext extends ContextBase {
                     }
                 }
             }
-            this.processNodeForDependencies(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement);
+            this.processNodeForDependencies(definitionMap, dependencyGraph, undefined, scopeNode, current, content, startPos, statement, parentType);
             if (isLocalFunction) {
                 this.exitScope(scopeNode);
             }
         };
-        traverse(root, undefined);
+        traverse(root, undefined, root.type);
     }
 
     protected processNodeForDependencies(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
-            scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
+            scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any, parentType: any): ContextTreeNode | undefined {
         let contextTree: ContextTreeNode | undefined = keywordTree;
         switch (current.type) {
             case 'Identifier':
-                contextTree = this.processIdentifierDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
+                contextTree = this.processIdentifierDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement, parentType);
                 break;
             case 'MemberExpression':
-                contextTree = this.processMemberDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
+                contextTree = this.processMemberDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement, parentType);
                 break;
             case 'CallExpression':
                 contextTree = this.processCallDependencies(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
@@ -239,19 +242,19 @@ export class LuaContext extends ContextBase {
     }
 
     protected processIdentifierDependencies(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
-        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
-        let result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
+        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any, parentType: any): ContextTreeNode | undefined {
+        let result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement, parentType);
         return result;
     }
 
     protected processMemberDependencies(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
-        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
-        let result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement);
+        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any, parentType: any): ContextTreeNode | undefined {
+        let result = this.UnaryDeal(definitionMap, dependencyGraph, keywordTree, scopeNode, current, content, startPos, statement, parentType);
         return result;
     }
 
     private UnaryDeal(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, keywordTree: ContextTreeNode | undefined, 
-        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any): ContextTreeNode | undefined {
+        scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any, parentType: any): ContextTreeNode | undefined {
         let name = '';
         let scopedName = '';
         let deep = true;
@@ -272,7 +275,8 @@ export class LuaContext extends ContextBase {
             }
         }
         if (definitionMap && dependencyGraph) {
-            this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, name, scopedName);
+            const change = (parentType === 'AssignmentStatement' || parentType === 'LocalStatement');
+            this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, name, scopedName, change);
             const rightDeps = new Set<string>();
             this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, rightDeps, scopeNode, dependencyNode, content, startPos, statement, deep);
             if (rightDeps.size > 0) {
@@ -328,11 +332,11 @@ export class LuaContext extends ContextBase {
         const funcName = this.getScopeName(current, startPos, 'function');
         const scopedFuncName = this.getScopedName(funcName, scopeNode);
         if (definitionMap && dependencyGraph) {
-            this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, funcName, scopedFuncName);
+            this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, funcName, scopedFuncName, true);
             for (const param of current.parameters) {
                 if (param.type === 'Identifier') {
                     const paramName = param.name;
-                    const scopedParamName = this.resolveScopedName(scopeNode, paramName);
+                    const scopedParamName = this.resolveScopedName(scopeNode, paramName, param);
                     if (!dependencyGraph.has(scopedFuncName)) {
                         dependencyGraph.set(scopedFuncName, new Set());
                     }
@@ -373,7 +377,7 @@ export class LuaContext extends ContextBase {
                 if (variable.type === 'Identifier') {
                     const scopedName = this.getScopedName(variable.name, scopeNode);
                     leftVars.push(scopedName);
-                    this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, variable.name, scopedName);
+                    this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, variable.name, scopedName, true);
                 }
             }
             if (isFileLocal) {
@@ -433,7 +437,7 @@ export class LuaContext extends ContextBase {
                         leftVars.push(scopedName);
                     }
                 }
-                this.checkDefineNode(definitionMap, scopeNode, variable, content, startPos, statement, name, scopedName);
+                this.checkDefineNode(definitionMap, scopeNode, variable, content, startPos, statement, name, scopedName, true);
             }
             const rightDeps = new Set<string>();
             for (const expr of current.init) {
@@ -482,7 +486,7 @@ export class LuaContext extends ContextBase {
             case 'Identifier':
                 name = node.name;
                 if (name) {
-                    const scopedFuncName = deep ? `${this.resolveScopedName(scopeNode, name)}`: `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
+                    const scopedFuncName = deep ? `${this.resolveScopedName(scopeNode, name, node)}`: `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
                     dependencies.add(scopedFuncName);
                 }
                 break;
@@ -495,7 +499,7 @@ export class LuaContext extends ContextBase {
                     } else {
                         scopedName = `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
                     }
-                    const funcDeclareName = deep ? `${this.resolveScopedName(scopeNode, name)}`: `${scopedName}`;
+                    const funcDeclareName = deep ? `${this.resolveScopedName(scopeNode, name, node)}`: `${scopedName}`;
                     dependencies.add(funcDeclareName);
                 }
                 break;
@@ -595,36 +599,32 @@ export class LuaContext extends ContextBase {
         const contextTreeNode = {
             value: contextItem,
             children: []
-        }
+        };
         keywordTree?.children.push(contextTreeNode);
-        if (!scopeNode.current?.hasVariable(name)) {
-            scopeNode.current?.addVariable(name, scopedName);
-        }
+        scopeNode.current?.addVariable(name, scopedName, false);
         return contextTreeNode;
     }
 
-    private checkDefineNode(definitionMap: DefinitionMapType, scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any, name: string, scopedName: string) {
+    private checkDefineNode(definitionMap: DefinitionMapType, scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any, name: string, scopedName: string, change: boolean = false) {
         if (!definitionMap.has(scopedName)) {
             const item = this.createContextItemForLua(current, current.type, scopedName, false, undefined, content, startPos, statement);
             definitionMap.set(scopedName, item);
         }
-        if (!scopeNode.current?.hasVariable(name)) {
-            scopeNode.current?.addVariable(name, scopedName);
-        }
+        scopeNode.current?.addVariable(name, scopedName, change);
     }
 
-    private resolveScopedName(scopeNode: ScopeNode, name: string): string {
+    private resolveScopedName(scopeNode: ScopeNode, name: string, node: any): string {
         if (scopeNode.current?.hasVariable(name)) {
-            const scopedName = scopeNode.current.getScopedName(name)!;
-            if (this.isDefined(scopedName)) {
+            const scopedName = scopeNode.current.getScopedLikelyName(name, node)!;
+            if (scopedName) {
                 return scopedName;
             }
         }
         let parentScope = scopeNode.current?.parent;
         while (parentScope) {
             if (parentScope.hasVariable(name)) {
-                const scopedName = parentScope.getScopedName(name)!;
-                if (this.isDefined(scopedName)) {
+                const scopedName = parentScope.getScopedLikelyName(name, node)!;
+                if (scopedName) {
                     return scopedName;
                 }
             }
