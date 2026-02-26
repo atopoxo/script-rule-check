@@ -2,7 +2,7 @@
     "defaultToolModel": "online/volcengine-deepseek-chat",
     "models": [
         {
-            "url": "https://ai.seasungame.com/ai_in_one/v2/",
+            "url": "https://tech.seasungame.com/ai_in_one/v2/",
             "id": "online/volcengine-deepseek-chat",
             "platform": "online",
             "codeName": "deepseek",
@@ -22,7 +22,7 @@
             }
         },
         {
-            "url": "https://ai.seasungame.com/ai_in_one/v2/",
+            "url": "https://tech.seasungame.com/ai_in_one/v2/",
             "id": "online/volcengine-deepseek-reasoner",
             "platform": "online",
             "codeName": "deepseek",
