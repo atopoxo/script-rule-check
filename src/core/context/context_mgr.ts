@@ -478,4 +478,53 @@ export class ContextMgr extends ContextBase {
             result.push(current);
         }
     }
+
+    public parseFileWithCorrectEncodingAndMapSelection(editor: vscode.TextEditor): { selection: vscode.Selection; fullText: string } | null {
+        const document  = editor.document;
+        let newSelection = editor.selection;
+        let content = getFileContent(document.fileName);
+        content = content.replace(/\r\n/g, '\n');
+
+        if (!newSelection.isEmpty) {
+            const startLine = newSelection.start.line;
+            const startChar = newSelection.start.character;
+            const endLine = newSelection.end.line;
+            const endChar = newSelection.end.character;
+
+            const lines = content.split('\n');
+
+            if (startLine >= lines.length || endLine >= lines.length) {
+                console.warn(`[EncodingMapper] Selection line out of range. File lines: ${lines.length}, Sel: L${startLine}-L${endLine}`);
+                return null;
+            }
+
+            const safeStartChar = Math.min(startChar, lines[startLine].length);
+            const safeEndChar = Math.min(endChar, lines[endLine].length);
+
+            const newStart = new vscode.Position(startLine, safeStartChar);
+            const newEnd = new vscode.Position(endLine, safeEndChar);
+
+            let startPos = 0;
+            for (let i = 0; i < startLine; i++) {
+                startPos += lines[i].length + 1;
+            }
+            startPos += newStart.character;
+            startPos = Math.min(startPos, content.length);
+
+            let endPos = 0;
+            for (let i = 0; i < endLine; i++) {
+                endPos += lines[i].length + 1;
+            }
+            endPos += newEnd.character;
+            endPos = Math.min(endPos, content.length);
+
+            newSelection = new vscode.Selection(newStart, newEnd);
+            content = content.substring(startPos, endPos);
+        }
+
+        return {
+            selection: newSelection,
+            fullText: content
+        };
+    }
 }

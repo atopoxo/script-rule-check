@@ -97,3 +97,5 @@ SOFTWARE.
 ---
 
 **GitHub Repository**: [https://github.com/atopoxo/script-rule-check](https://github.com/atopoxo/script-rule-check)
+
+Compatible with Cursor
