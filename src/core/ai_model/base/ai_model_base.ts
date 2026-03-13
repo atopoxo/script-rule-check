@@ -92,14 +92,13 @@ export abstract class AIModelBase {
                         toolGroup.filter(tool => toolsSelected.includes(tool.id))
                     );
                     const toolResult = await this.handleToolCalls(tools, messages, cache, currentIndex);
-                    const returnToAi = toolResult.ai;
                     const toolCalls = toolResult.toolCalls;
                     if (toolCalls.length > 0) {
                         const toolContext = this.reportToolUseInfos(toolCalls);
                         yield toolContext;
                         streamContent += toolContext;
                     }
-                    if (!returnToAi && cache.returns.ai.ai_conclusion) {
+                    if (!toolResult.ai && cache.returns.ai.ai_conclusion) {
                         streamContent += `${cache.returns.ai.ai_conclusion}`;
                         yield streamContent;
                         break; 
@@ -379,7 +378,7 @@ export abstract class AIModelBase {
             if (toolsMessages.return_to_ai) {
                 toolsMessages.return_to_ai += "\n}\n";
                 // toolsMessages.return_to_ai += "重要：在最终回答中，不要提及任何关于工具调用的信息，不要提到使用了什么工具，也不要提到工具返回的结果，直接给出最终的结论。";
-                toolsMessages.return_to_ai += "重要指令：基于以上工具调用结果生成最终回答时，绝对不要提及工具调用过程或直接引用工具返回的数据。请用自然语言总结最终结论，就像这些信息是你自己知道的一样。";
+                toolsMessages.return_to_ai += "重要指令：工具调用产生的结果只能作为参考，并且你的回答更倾向于原问题而不是调用工具后的结果，此外回复的答案与不调用工具时候相比应该更加详细，在涉及到代码等问题时倾向于给出具体的实现。";
             }
         }
     }
