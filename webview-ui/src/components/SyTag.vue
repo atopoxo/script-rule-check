@@ -89,7 +89,7 @@ export default defineComponent({
     position: relative;
     display: flex;
     align-items: center;
-    color: var(--vscode-badge-foreground);
+    color: var(--vscode-foreground);
     border-radius: 10px;
     border: 1px solid var(--vscode-widget-border);
     padding: 1px 5px;

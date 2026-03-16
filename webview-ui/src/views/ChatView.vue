@@ -1679,7 +1679,7 @@ export default defineComponent({
   bottom: 100%;
   left: calc(100% - 13px);
   transform: translateX(-50%);
-  background-color: var(--vscode-editorWidget-background);
+  background-color: var(--vscode-editorWidget-background) !important;
   color: var(--vscode-editorWidget-foreground);
   padding: 4px 8px;
   border-radius: 10px;
@@ -1688,7 +1688,7 @@ export default defineComponent({
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
-  z-index: 10;
+  z-index: 10 !important;
   border: 1px solid var(--vscode-widget-border);
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   margin-bottom: 10px;
@@ -1701,11 +1701,12 @@ export default defineComponent({
   left: 50%;
   top: 100%;
   transform: translate(-50%, 0);
-  z-index: 3;
+  z-index: 3 !important;
   box-sizing: content-box;
   border-width: 6px;
   border-style: solid;
   border-color: var(--vscode-editorWidget-background) transparent transparent transparent;
+  color: transparent;
 }
 .send-tooltip::after {
   content: '';
@@ -1720,6 +1721,7 @@ export default defineComponent({
   border-width: 6px;
   border-style: solid;
   border-color: var(--vscode-widget-border) transparent transparent transparent;
+  color: transparent;
 }
 .input-functions-right .icon-button.message-send:hover + .send-tooltip {
   opacity: 1;

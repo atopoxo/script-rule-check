@@ -162,6 +162,7 @@ export default defineComponent({
     border-width: 6px;
     border-style: solid;
     border-color: transparent transparent var(--vscode-editorWidget-background) transparent;
+    color: transparent;
 }
 .menu-item-tooltip::after {
     content: '';
@@ -176,6 +177,7 @@ export default defineComponent({
     border-width: 6px;
     border-style: solid;
     border-color: transparent transparent var(--vscode-widget-border) transparent;
+    color: transparent;
 }
 .menu-item button:hover + .menu-item-tooltip {
   opacity: 1;
