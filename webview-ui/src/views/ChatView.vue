@@ -97,8 +97,7 @@
             </div>
           </div>
         </div>
-        <textarea 
-          :value="messageInput" 
+        <textarea
           :placeholder="placeholderText"
           ref="textareaRef"
           @input="handleInput"
@@ -559,7 +558,6 @@ export default defineComponent({
     };
 
     const isComposing = ref(false);
-    const pendingInput = ref('');
 
     const textareaStyles = ref({
       fontSize: 0,
@@ -578,9 +576,7 @@ export default defineComponent({
       const target = event.target as HTMLTextAreaElement;
       const value = target.value;
       
-      if (isComposing.value) {
-        pendingInput.value = value;
-      } else {
+      if (!isComposing.value) {
         messageInput.value = value;
         throttledAdjustHeight();
       }
@@ -593,6 +589,8 @@ export default defineComponent({
     const handleCompositionEnd = (event: CompositionEvent) => {
       isComposing.value = false;
       messageInput.value = (event.target as HTMLTextAreaElement).value;
+      let textarea = textareaRef.value || new HTMLTextAreaElement();
+      textarea.value = messageInput.value;
       throttledAdjustHeight();
     };
 
