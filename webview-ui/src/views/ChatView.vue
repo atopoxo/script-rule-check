@@ -767,6 +767,8 @@ export default defineComponent({
         sendMessage(messageInput.value, undefined, options);
         contextItems.value = [];
         messageInput.value = '';
+        let textarea = textareaRef.value || new HTMLTextAreaElement();
+        textarea.value = messageInput.value;
         if (textareaRef.value) {
           textareaRef.value.style.height = 'auto';
           containerHeight.value = defaultInputContainerHeight;

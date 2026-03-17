@@ -70,17 +70,18 @@ export class AIModelMgr {
         return selectedModel;
     }
 
-    getModelInfos(): ModelInfo[] {
+    public getModelInfos(): ModelInfo[] {
         return Array.from(this.modelConfigs.values());
     }
 
-    getConfigFromFile(): any {
+    public getConfigFromFile(): any {
         try {
             const configPath = path.join(__dirname, '../../../', '../../assets/config/model_config.json');
             const rawConfig = fs.readFileSync(configPath, 'utf-8');
             if (rawConfig) {
                 const obj = this.jsonParser.parse(rawConfig);
-                return obj;
+                const result = this.transformValidApiKey(obj);
+                return result;
             } else {
                 return {};
             }
@@ -105,12 +106,13 @@ export class AIModelMgr {
         await setGlobalConfigValue(this.extensionName, `customChatModels`, modifiableModels);
     }
 
-    saveModelConfig(key: string, value: any) {
+    public saveModelConfig(key: string, value: any) {
         try {
             const configData = this.getConfigFromFile();
             configData[key] = value;
+            const fixedConfigData = this.transformInvalidApiKey(configData);
             const configPath = path.join(__dirname, '../../../', '../../assets/config/model_config.json');
-            const jsonString = this.jsonParser.toJsonStr(configData, 4);
+            const jsonString = this.jsonParser.toJsonStr(fixedConfigData, 4);
             fs.writeFileSync(configPath, jsonString, { encoding: 'utf8' });
             const modelConfig = this.getConfigFromFile();
             this.setModelConfigs(modelConfig["models"]);
@@ -121,17 +123,17 @@ export class AIModelMgr {
         }
     }
 
-    getModelConfig(id: string): any {
+    public getModelConfig(id: string): any {
         return this.modelConfigs.get(id);
     }
 
-    setModelConfigs(configs: any[]): void {
+    public setModelConfigs(configs: any[]): void {
         for (const config of configs) {
             this.setModelConfig(config.id, config); 
         }
     }
 
-    setModelConfig(id: string, config: any): void {
+    public setModelConfig(id: string, config: any): void {
         this.modelConfigs.set(id, config);
     }
 
@@ -163,6 +165,48 @@ export class AIModelMgr {
         const instance = modelModule.getClass(this.config, {storage: this.storage, contextMgr: this.contextMgr});
         if (instance instanceof AIModelBase) {
             this.models.set(id, instance);
+        }
+    }
+
+    private transformValidApiKey(obj: any): any {
+        if (Array.isArray(obj)) {
+            return obj.map(item => this.transformValidApiKey(item));
+        } else if (obj !== null && typeof obj === 'object') {
+            const result: any = {};
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    if (key === 'exampleKey') {
+                        result['apiKey'] = "tc-" + obj[key];
+                    } else {
+                        result[key] = this.transformValidApiKey(obj[key]);
+                    }
+                }
+            }
+            return result;
+        } else {
+            return obj;
+        }
+    }
+
+    private transformInvalidApiKey(obj: any): any {
+        if (Array.isArray(obj)) {
+            return obj.map(item => this.transformInvalidApiKey(item));
+        } else if (obj !== null && typeof obj === 'object') {
+            const result: any = {};
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    if (key === 'apiKey') {
+                        const originalValue = obj[key];
+                        const cleanedValue = originalValue?.replace?.(/^tc-/, '') || originalValue;
+                        result['exampleKey'] = cleanedValue;
+                    } else {
+                        result[key] = this.transformInvalidApiKey(obj[key]);
+                    }
+                }
+            }
+            return result;
+        } else {
+            return obj;
         }
     }
 }
