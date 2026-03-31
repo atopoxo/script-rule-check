@@ -180,7 +180,7 @@ export class BrowserBase {
         let editDistanceScore = 0;
         if (query.length < 50) {
             const maxLen = Math.max(query.length, content.length);
-            const distance = this.levenshteinDistance(query, content.substring(0, maxLen));
+            const distance = this.levenshteinDistance(query, content);
             editDistanceScore = 1 - (distance / maxLen);
         }
 

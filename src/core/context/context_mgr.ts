@@ -44,7 +44,7 @@ export class ContextMgr extends ContextBase {
     }
 
     public getContext(context: ContextOption[]): string {
-        let result = "以下是上下文引用:\n";
+        let result = "";
         let uniqueContextIds = new Set<string>();
         let parts = {
             function: [],
@@ -53,6 +53,9 @@ export class ContextMgr extends ContextBase {
         };
         for (const item of context) {
             this.processContext(parts, uniqueContextIds, item);
+        }
+        if (parts.function.length > 0 || parts.code.length > 0 || parts.file.length > 0) {
+            result += "以下是上下文引用:\n";
         }
         if (parts.function.length > 0) {
             result += "\n函数引用:\n";
@@ -519,7 +522,7 @@ export class ContextMgr extends ContextBase {
             endPos = Math.min(endPos, content.length);
 
             newSelection = new vscode.Selection(newStart, newEnd);
-            content = content.substring(startPos, endPos);
+            // content = content.substring(startPos, endPos);
         }
 
         return {

@@ -51,26 +51,26 @@ export class Storage {
     }
 
     public async setAIInstanceModelId(userId: string, instanceName: string, modelId: string) {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (aiInstance) {
             aiInstance.modelId = modelId;
         }
     }
 
     public async getAIInstanceModelId(userId: string, instanceName: string): Promise<string | undefined> {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         return (aiInstance && aiInstance.modelId) ? aiInstance.modelId : undefined;
     }
 
     public async setAIInstanceToolModelId(userId: string, instanceName: string, modelId: string) {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (aiInstance) {
             aiInstance.toolModelId = modelId;
         }
     }
 
     public async getAIInstanceToolModelId(userId: string, instanceName: string): Promise<string | undefined> {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         return (aiInstance && aiInstance.toolModelId) ? aiInstance.toolModelId : undefined;
     }
 
@@ -125,7 +125,7 @@ export class Storage {
 
     public async addAIInstanceSession(userId: string, instanceName: string): Promise<Session | undefined> {
         let session = undefined;
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (aiInstance) {
             const sessionId = crypto.randomUUID();
             session = await this.createAIInstanceSession(sessionId, Date.now());
@@ -138,7 +138,7 @@ export class Storage {
 
     public async removeAIInstanceSession(userId: string, instanceName: string, sessionId: string): Promise<Session | undefined> {
         let session = undefined;
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (aiInstance) {
             await this.destroyAIInstanceSession(aiInstance, sessionId);
             session = await this.getAIInstanceSession(userId, instanceName);
@@ -152,7 +152,7 @@ export class Storage {
 
     public async getAIInstanceSessionsSnapshot(userId: string, instanceName: string, attributes: string[] = ["id", "selected", "lastModifiedTimestamp", "name", "isAIStreamTransfer"]): Promise<Record<string, any>[]> {
         const result: Record<string, any>[] = [];
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (!aiInstance) {
             return result;
         }
@@ -176,7 +176,7 @@ export class Storage {
     }
 
     public async setAIInstanceSelectedSession(userId: string, instanceName: string, sessionId: string) {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (aiInstance) {
             aiInstance.selectedSessionId = sessionId;
             await this.saveUserInfoWrapper(userId);
@@ -215,7 +215,7 @@ export class Storage {
             session.history = [];
         }
         if (session.history.length <= 0) {
-            this.createAIIInstanceMessage(timestamp);
+            this.createAIInstanceMessage(timestamp);
         }
         session.name = this.getSessionName(session.history);
         session.lastModifiedTimestamp = timestamp;
@@ -319,7 +319,7 @@ export class Storage {
     }
 
     public async getAIInstanceSession(userId: string, instanceName: string, sessionId?: string): Promise<Session | undefined> {
-        const aiInstance = await this.getAIIInstance(userId, instanceName);
+        const aiInstance = await this.getAIInstance(userId, instanceName);
         if (!aiInstance) {
             return undefined;
         }
@@ -592,7 +592,7 @@ export class Storage {
         return release;
     }
 
-    private async getAIIInstance(userId: string, instanceName: string): Promise<AIInstance | null> {
+    private async getAIInstance(userId: string, instanceName: string): Promise<AIInstance | null> {
         const userInfo = await this.getUserInfo(userId);
         if (!userInfo) {
             return null;
@@ -617,7 +617,7 @@ export class Storage {
     }
 
     private createAIInstanceSession(sessionId: string, timestamp: number): Session {
-        const message = this.createAIIInstanceMessage(timestamp);
+        const message = this.createAIInstanceMessage(timestamp);
         const displayName = this.getMessageName(message);
         return {
             sessionId: sessionId,
@@ -632,7 +632,7 @@ export class Storage {
         };
     }
 
-    private createAIIInstanceMessage(timestamp: number): Message {
+    private createAIInstanceMessage(timestamp: number): Message {
         return { 
             role: "system", 
             content: this.getTimeText(timestamp),
