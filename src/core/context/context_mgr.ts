@@ -406,6 +406,7 @@ export class ContextMgr extends ContextBase {
         this.luaContext.buildDependencyGraph(definitionMap, dependencyGraph, scopeNode, ast, content, 0);
         const visitedIdentifiers = new Set<string>();
         const missQueue = new Deque<string>();
+        const missSet = new Set<string>();
         if (!result.has(filePath)) {
             result.set(filePath, []);
         }
@@ -434,7 +435,13 @@ export class ContextMgr extends ContextBase {
                     queue.pushBack(dep);
                 }
             } else {
-                missQueue.pushBack(current!);
+                if (missSet.has(current!)) {
+                    continue;
+                }
+                missSet.add(current!);
+                if (this.luaContext.isValidGlobalString(current!)) {
+                    missQueue.pushBack(current!);
+                }
             }
         }
         while (!missQueue.isEmpty()) {

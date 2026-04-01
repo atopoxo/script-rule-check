@@ -47,7 +47,7 @@ export class LuaContext extends ContextBase {
                     this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
                     break;
                 case 'AssignmentStatement':
-                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier']));
+                    this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'variables']));
                     break;
                 case 'LocalStatement':
                     this.filters.set(type, new Set(['type', 'range', 'loc', 'identifier', 'variables']));
@@ -177,6 +177,11 @@ export class LuaContext extends ContextBase {
         return contextTree;
     }
 
+    public isValidGlobalString(content: string): boolean {
+        const regex = /^global>[^>]+$/;
+        return regex.test(content);
+    }
+
     private processBlockScopeVariables(definitionMap: DefinitionMapType | undefined, dependencyGraph: DependencyGraphType | undefined, contextTree: ContextTreeNode | undefined,
         scopeNode: ScopeNode, current: any, content: string, startPos: number, statement: any) {
         switch (current.type) {
@@ -275,7 +280,8 @@ export class LuaContext extends ContextBase {
             }
         }
         if (definitionMap && dependencyGraph) {
-            const change = (parentType === 'AssignmentStatement' || parentType === 'LocalStatement');
+            // const change = (parentType === 'AssignmentStatement' || parentType === 'LocalStatement');
+            const change = false;
             this.checkDefineNode(definitionMap, scopeNode, current, content, startPos, statement, name, scopedName, change);
             const rightDeps = new Set<string>();
             this.collectDependenciesFromExpression(definitionMap, dependencyGraph, keywordTree, rightDeps, scopeNode, dependencyNode, content, startPos, statement, deep);
@@ -428,7 +434,11 @@ export class LuaContext extends ContextBase {
             for (const variable of current.variables) {
                 if (variable.type === 'Identifier') {
                     name = variable.name;
-                    scopedName = `${this.getScopedName(name, scopeNode)}-${current.range[0]}`;
+                    if (scopeNode.currentDepth === 0) {
+                        scopedName = this.getScopedName(name, scopeNode);
+                    } else {
+                        scopedName = `${this.getScopedName(name, scopeNode)}-${current.range[0]}`;
+                    }
                     leftVars.push(scopedName);
                 } else if (variable.type === 'MemberExpression') {
                     name = this.getFunctionName(variable) as string;
@@ -459,7 +469,11 @@ export class LuaContext extends ContextBase {
             for (const variable of current.variables) {
                 if (variable.type === 'Identifier') {
                     name = variable.name;
-                    scopedName = this.getScopedName(name, scopeNode);
+                    if (scopeNode.currentDepth === 0) {
+                        scopedName = this.getScopedName(name, scopeNode);
+                    } else {
+                        scopedName = `${this.getScopedName(name, scopeNode)}-${current.range[0]}`;
+                    }
                 } else if (variable.type === 'MemberExpression') {
                     name = this.getFunctionName(variable) as string;
                     if (name) {
@@ -493,8 +507,8 @@ export class LuaContext extends ContextBase {
             case 'CallExpression':
                 name = this.getFunctionName(node.base);
                 if (name) {
-                    let scopedName = ''
-                    if (node.base.type == 'MemberExpression') {
+                    let scopedName = '';
+                    if (node.base.type === 'MemberExpression') {
                         scopedName = this.getScopedName(this.getFunctionName(node.base, true) as string, scopeNode);
                     } else {
                         scopedName = `${this.getScopedName(name, scopeNode)}-${node.range[0]}`;
