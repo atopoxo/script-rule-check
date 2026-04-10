@@ -99,7 +99,40 @@ export class GCClient {
             const wProtocol = 0;
             const wServer = 1;
             const wSubProtocol = e2l_remote_lua_call_def;
-            const packet = this.getRemoteLuaCallPacket(wProtocol, wServer, wSubProtocol, functionName, paramString);
+            const packetContext = this.getRemoteLuaCallPacket(wProtocol, wServer, wSubProtocol, functionName, paramString);
+            const packet = this.getSendPacket(packetContext);
+            this.socket.write(packet);
+            return true;
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
+            return false;
+        }
+    }
+
+    public async doConnectGame(): Promise<boolean> {
+        if (!this.socket) {
+            this.isConnected = false;
+            return false;
+        }
+        try {
+            const packetContext = this.getConnectGamePacket('vscode script-rule-check', '127.0.0.1', 10088);
+            const packet = this.getSendPacket(packetContext);
+            this.socket.write(packet);
+            return true;
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
+            return false;
+        }
+    }
+
+    public async doGameCommand(): Promise<boolean> {
+        if (!this.socket) {
+            this.isConnected = false;
+            return false;
+        }
+        try {
+            const packetContext = this.getGameCommandPacket('/gm player.SetPosition(72605, 13058, 1131136)');
+            const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
             return true;
         } catch (error: any) {
@@ -220,6 +253,15 @@ export class GCClient {
         });
     }
 
+    private getSendPacket(buffer: Buffer) {
+        const packetHeaderSize = 2;
+        const packetLength = buffer.length;
+        const finalBuffer = Buffer.alloc(packetHeaderSize + packetLength);
+        finalBuffer.writeUInt32LE(packetHeaderSize + packetLength, 0);
+        buffer.copy(finalBuffer, packetHeaderSize);
+        return finalBuffer;
+    }
+
     private getRemoteLuaCallPacket(wProtocol: number, wServer: number, wSubProtocol: number, functionName: string, paramString: string): Buffer {
         const params = this.parseParameters(paramString);
         const paramBuffers: Buffer[] = [];
@@ -229,16 +271,20 @@ export class GCClient {
         }
         const paramData = Buffer.concat(paramBuffers);
 
-        const headerPackSize = 4;
+        const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
+        const headerPackSize = networkHeaderPackSize + 4;
         const headerSize = headerPackSize + 6;
         const fixedSize = headerSize + 32 + 4;
         const totalSize = fixedSize + paramData.length;
+        const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize, 0);
+        
+        const headerPackOffset = this.fillProtocolHeaderPacket(buffer, 1, 0, dataSize, dataSize, 0);
 
-        buffer.writeUInt16LE(totalSize - headerPackSize, 0);
-        buffer.writeUInt16LE(wProtocol, 4);
-        buffer.writeUInt16LE(wServer, 6);
-        buffer.writeUInt16LE(wSubProtocol, 8);
+        buffer.writeUInt16LE(totalSize - headerPackSize, headerPackOffset);
+        buffer.writeUInt16LE(wProtocol, headerPackOffset + 4);
+        buffer.writeUInt16LE(wServer, headerPackOffset + 6);
+        buffer.writeUInt16LE(wSubProtocol, headerPackOffset + 8);
 
         const funcBuf = Buffer.from(functionName, 'ascii');
         const funcLen = Math.min(funcBuf.length, 31);
@@ -248,6 +294,66 @@ export class GCClient {
         paramData.copy(buffer, fixedSize);
 
         return buffer;
+    }
+
+    private getConnectGamePacket(pluginName: String, ip: String, port: number): Buffer {
+        const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
+        let pluginNameOffset = networkHeaderPackSize;
+        const ipOffset = pluginNameOffset + 64;
+        const portOffset = ipOffset + 24;
+        const confirmOffset = portOffset + 4;
+        const totalSize = confirmOffset + 1;
+        const dataSize = totalSize - networkHeaderPackSize;
+        const buffer = Buffer.alloc(totalSize);
+        pluginNameOffset = this.fillProtocolHeaderPacket(buffer, 2, 0, dataSize, dataSize, 0);
+        let funcBuf = Buffer.from(pluginName, 'ascii');
+        let funcLen = Math.min(funcBuf.length, 63);
+        funcBuf.copy(buffer, pluginNameOffset, 0, funcLen);
+        funcBuf = Buffer.from(ip, 'ascii');
+        funcLen = Math.min(funcBuf.length, 23);
+        funcBuf.copy(buffer, ipOffset, 0, funcLen);
+        buffer.writeUInt16LE(port, portOffset);
+        buffer.writeUInt8(1, confirmOffset);
+        return buffer;
+    }
+
+    private getGameCommandPacket(command: String): Buffer {
+        const commandBuffer = Buffer.from(command, 'ascii');
+        const commandSize = commandBuffer.length + 1;
+        const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
+        let headerOffset = networkHeaderPackSize;
+        
+        const successOffset = headerOffset + 4;
+        const sizeOffset = successOffset + 1;
+        const commandOffset = sizeOffset + 4;
+        
+        const totalSize = commandOffset + commandSize;
+        const dataSize = totalSize - networkHeaderPackSize;
+        const buffer = Buffer.alloc(totalSize);
+        headerOffset = this.fillProtocolHeaderPacket(buffer, 3, 0, dataSize, dataSize, 0);
+
+        buffer.writeUInt32LE(totalSize - successOffset, headerOffset);
+        buffer.writeUInt8(0, successOffset);
+
+        buffer.writeUInt32LE(commandSize, sizeOffset);
+        commandBuffer.copy(buffer, commandOffset, 0, commandSize);
+        
+        return buffer;
+    }
+
+
+    private getNetworkProtocolHeaderSize() {
+        return 4 + 2 + 4 * 4;
+    }
+
+    private fillProtocolHeaderPacket(buffer: Buffer, protocolID: number, startIndex: number, endIndex: number, dataSize: number, connIndex: number): number {
+        buffer.writeUInt16LE(this.getNetworkProtocolHeaderSize(), 0);
+        buffer.writeUInt16LE(protocolID, 4);
+        buffer.writeUInt16LE(startIndex, 6);
+        buffer.writeUInt16LE(endIndex, 10);
+        buffer.writeUInt16LE(dataSize, 14);
+        buffer.writeUInt16LE(connIndex, 18);
+        return 22;
     }
 
     private parseParameters(paramString: string): any[] {
