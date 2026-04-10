@@ -146,6 +146,10 @@
         "title": "只重载当前脚本"
       },
       {
+        "command": "extension.connectGameClient",
+        "title": "只重载当前脚本"
+      },
+      {
         "command": "extension.setProductDir",
         "title": "Set Product Directory"
       },
@@ -413,6 +417,10 @@
         {
           "command": "extension.reloadScriptOnly",
           "group": "navigation_game@2"
+        },
+        {
+          "command": "extension.connectGameClient",
+          "group": "navigation_game@3"
         },
         {
           "command": "extension.chat.addContext",

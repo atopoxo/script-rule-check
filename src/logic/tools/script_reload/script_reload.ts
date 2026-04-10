@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Mutex, singleton, getGlobalConfigValue, getFileContent } from "../../../core/function/base_function";
+import { Dictionary } from "lodash";
 
 @singleton
 export class ScriptReload {
@@ -13,6 +14,9 @@ export class ScriptReload {
     private readonly mutex = new Mutex();
     private extensionName: string;
     private lastUris: vscode.Uri[];
+    private globalData: Dictionary<any> = {
+        gameConnections: []
+    };
 
     constructor(config: any) {
         this.extensionName = config.extensionName;
@@ -125,6 +129,27 @@ export class ScriptReload {
         return result;
     }
 
+    public async doConnectGame(): Promise<boolean> {
+        let result = false;
+        const release = await this.mutex.acquire();
+        try {
+            if (this.closePromise) {
+                await this.closePromise;
+                this.closePromise = null;
+            }
+            this.addRef();
+        } finally {
+            release();
+        }
+
+        try {
+            result = await this.executeConnectGame();
+        } finally {
+            await this.releaseRef();
+        }
+        return result;
+    }
+
     public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<boolean> {
         let result = false;
         let client = this.getGCClient();
@@ -153,6 +178,7 @@ export class ScriptReload {
                     increment: (100 / totalTasks)
                 });
                 let paramString = headerString + relativePath;
+                await client.doGameCommand();
                 await client.doRemoteLuaCall("OnScriptReloadByGM", paramString);
                 vscode.window.showInformationMessage(`已执行ReloadScript，其参数为${relativePath}`);
                 if (moreOperator) {
@@ -171,6 +197,39 @@ export class ScriptReload {
                             vscode.window.showInformationMessage(`已执行${functionManual}，其参数为${param}`);
                         }
                     }
+                }
+                result = true;
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(`执行ReloadScript失败：${error}`);
+            result = false;
+        }
+        return result;
+    }
+
+    public async executeConnectGame(): Promise<boolean> {
+        let result = false;
+        let client = this.getGCClient();
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "Connect Game Client Progress",
+                cancellable: true
+            }, async (progress, token) => {
+                if (!await client.tryConnect()) {
+                    vscode.window.showErrorMessage(`无法连接到游戏客户端`);
+                    result = false;
+                    return;
+                }
+                progress.report({
+                    message: `connect ...`,
+                    increment: 0
+                });
+                await client.doConnectGame();
+                let data = await client.onConnectGame();
+                if (data) {
+                    let connections = this.globalData.gameConnections;
+                    connections.push(data);
                 }
                 result = true;
             });
