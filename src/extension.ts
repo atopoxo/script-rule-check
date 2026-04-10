@@ -501,6 +501,20 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             }
             await scriptReload.doGMCommand(uriContext, selectedUris, false);
         }),
+        vscode.commands.registerCommand('extension.connectGameClient', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
+            if (!fs.existsSync(dir)) {
+                vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
+            }
+            await scriptReload.doConnectGame();
+        }),
+        vscode.commands.registerCommand('extension.executeGameCommand', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
+            if (!fs.existsSync(dir)) {
+                vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
+            }
+            await scriptReload.doGameCommand('/gm player.SetPosition(72605, 13058, 1131136)');
+        }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
                 const buffer = fs.readFileSync(path);

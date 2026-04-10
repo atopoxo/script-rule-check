@@ -29,7 +29,7 @@ export class GCClient {
     private isClosing: boolean = false;
 
     constructor() {
-        this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', 'GCBridgeX64.exe');
+        this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
         this.processName = path.basename(this.subProcessPath);
         this.subProcess = null;
     }
@@ -125,13 +125,13 @@ export class GCClient {
         }
     }
 
-    public async doGameCommand(): Promise<boolean> {
+    public async doGameCommand(command: string): Promise<boolean> {
         if (!this.socket) {
             this.isConnected = false;
             return false;
         }
         try {
-            const packetContext = this.getGameCommandPacket('/gm player.SetPosition(72605, 13058, 1131136)');
+            const packetContext = this.getGameCommandPacket(command);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
             return true;
@@ -139,6 +139,125 @@ export class GCClient {
             vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
             return false;
         }
+    }
+
+    public async onConnectGame(): Promise<any> {
+        if (!this.socket) {
+            return null;
+        }
+        
+        return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                resolve(null);
+            }, 60000);
+            
+            const dataHandler = (data: Buffer) => {
+                try {
+                    clearTimeout(timeout);
+                    this.socket?.removeListener('data', dataHandler);
+                    data = this.getReceivePacket(data);
+                    // B2G_CONNECT_REQUEST 结构解析
+                    // NETWORK_PROTOCOL_HEADER (22字节)
+                    if (data.length < 22) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    const uCheckSum = data.readUInt32LE(0);
+                    const wProtocolID = data.readUInt16LE(4);
+                    const dwDataStartIndex = data.readUInt32LE(6);
+                    const dwDataEndIndex = data.readUInt32LE(10);
+                    const dwDataSize = data.readUInt32LE(14);
+                    const nConnIndex = data.readInt32LE(18);
+                    
+                    // BRIDGE_CONNECT_DATA (93字节)
+                    if (data.length < 115) { // 22 + 93 = 115
+                        resolve(null);
+                        return;
+                    }
+                    let pluginName = '';
+                    for (let i = 22; i < 86; i++) {
+                        const charCode = data.readUInt8(i);
+                        if (charCode === 0) {
+                            break;
+                        }
+                        pluginName += String.fromCharCode(charCode);
+                    }
+                    let ip = '';
+                    for (let i = 86; i < 110; i++) {
+                        const charCode = data.readUInt8(i);
+                        if (charCode === 0) {
+                            break;
+                        }
+                        ip += String.fromCharCode(charCode);
+                    }
+                    const port = data.readInt32LE(110);
+                    const confirm = data.readUInt8(114) !== 0;
+                    
+                    const connectionData = {
+                        timestamp: Date.now(),
+                        host: ip,
+                        port: port,
+                        success: confirm
+                    };
+                    resolve(connectionData);
+                } catch (error) {
+                    resolve(null);
+                }
+            };
+            
+            this.socket?.on('data', dataHandler);
+        });
+    }
+
+    public async onGameCommand(): Promise<any> {
+        if (!this.socket) {
+            return null;
+        }
+        
+        return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                resolve(null);
+            }, 60000);
+            
+            const dataHandler = (data: Buffer) => {
+                try {
+                    clearTimeout(timeout);
+                    this.socket?.removeListener('data', dataHandler);
+                    data = this.getReceivePacket(data);
+                    // B2G_CONNECT_REQUEST 结构解析
+                    // NETWORK_PROTOCOL_HEADER (22字节)
+                    if (data.length < 22) {
+                        resolve(null);
+                        return;
+                    }
+                    
+                    const uCheckSum = data.readUInt32LE(0);
+                    const wProtocolID = data.readUInt16LE(4);
+                    const dwDataStartIndex = data.readUInt32LE(6);
+                    const dwDataEndIndex = data.readUInt32LE(10);
+                    const dwDataSize = data.readUInt32LE(14);
+                    const nConnIndex = data.readInt32LE(18);
+                    
+                    // BRIDGE_CONNECT_DATA (93字节)
+                    if (data.length < 23) { // 22 + 93 = 115
+                        resolve(null);
+                        return;
+                    }
+                    const success = data.readUInt8(23) !== 0;
+                    
+                    const connectionData = {
+                        timestamp: Date.now(),
+                        success: success
+                    };
+                    resolve(connectionData);
+                } catch (error) {
+                    resolve(null);
+                }
+            };
+            
+            this.socket?.on('data', dataHandler);
+        });
     }
 
     private async checkProcessExists(): Promise<boolean> {
@@ -251,6 +370,15 @@ export class GCClient {
                 // }
             });
         });
+    }
+
+    private getReceivePacket(buffer: Buffer) {
+        const packetHeaderSize = 2;
+        const packetLength = buffer.length;
+        const finalSize = packetLength - packetHeaderSize;
+        const finalBuffer = Buffer.alloc(finalSize);
+        buffer.copy(finalBuffer, 0, packetHeaderSize, packetLength);
+        return finalBuffer;
     }
 
     private getSendPacket(buffer: Buffer) {

@@ -147,7 +147,11 @@
       },
       {
         "command": "extension.connectGameClient",
-        "title": "只重载当前脚本"
+        "title": "连接游戏客户端"
+      },
+      {
+        "command": "extension.executeGameCommand",
+        "title": "执行游戏客户端指令"
       },
       {
         "command": "extension.setProductDir",
@@ -421,6 +425,10 @@
         {
           "command": "extension.connectGameClient",
           "group": "navigation_game@3"
+        },
+        {
+          "command": "extension.executeGameCommand",
+          "group": "navigation_game@4"
         },
         {
           "command": "extension.chat.addContext",

@@ -150,6 +150,27 @@ export class ScriptReload {
         return result;
     }
 
+    public async doGameCommand(command: string): Promise<boolean> {
+        let result = false;
+        const release = await this.mutex.acquire();
+        try {
+            if (this.closePromise) {
+                await this.closePromise;
+                this.closePromise = null;
+            }
+            this.addRef();
+        } finally {
+            release();
+        }
+
+        try {
+            result = await this.executeGameCommand(command);
+        } finally {
+            await this.releaseRef();
+        }
+        return result;
+    }
+
     public async executeGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<boolean> {
         let result = false;
         let client = this.getGCClient();
@@ -178,7 +199,6 @@ export class ScriptReload {
                     increment: (100 / totalTasks)
                 });
                 let paramString = headerString + relativePath;
-                await client.doGameCommand();
                 await client.doRemoteLuaCall("OnScriptReloadByGM", paramString);
                 vscode.window.showInformationMessage(`已执行ReloadScript，其参数为${relativePath}`);
                 if (moreOperator) {
@@ -213,7 +233,7 @@ export class ScriptReload {
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: "Connect Game Client Progress",
+                title: "游戏客户端连接",
                 cancellable: true
             }, async (progress, token) => {
                 if (!await client.tryConnect()) {
@@ -222,19 +242,86 @@ export class ScriptReload {
                     return;
                 }
                 progress.report({
-                    message: `connect ...`,
-                    increment: 0
+                    message: `正在连接游戏客户端...`,
+                    increment: 30
                 });
+                
                 await client.doConnectGame();
+                progress.report({
+                    message: `等待游戏客户端确认...`,
+                    increment: 50
+                });
+                
                 let data = await client.onConnectGame();
-                if (data) {
+                if (data && data.success) {
                     let connections = this.globalData.gameConnections;
                     connections.push(data);
+                    vscode.window.showInformationMessage(`成功连接到游戏客户端！`);
+                    progress.report({
+                        message: `连接成功！`,
+                        increment: 100
+                    });
+                } else {
+                    vscode.window.showWarningMessage(`连接超时或未收到游戏确认`);
+                    progress.report({
+                        message: `连接失败`,
+                        increment: 100
+                    });
                 }
                 result = true;
             });
         } catch (error) {
-            vscode.window.showErrorMessage(`执行ReloadScript失败：${error}`);
+            vscode.window.showErrorMessage(`执行游戏连接失败：${error}`);
+            result = false;
+        }
+        return result;
+    }
+
+    public async executeGameCommand(command: string): Promise<boolean> {
+        let result = false;
+        let client = this.getGCClient();
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `执行客户端指令：${command}`,
+                cancellable: true
+            }, async (progress, token) => {
+                if (!await client.tryConnect()) {
+                    vscode.window.showErrorMessage(`无法连接到GCBridge`);
+                    result = false;
+                    return;
+                }
+                progress.report({
+                    message: `正在执行客户端指令...`,
+                    increment: 30
+                });
+                
+                await client.doGameCommand(command);
+                progress.report({
+                    message: `等待客户端指令执行完成...`,
+                    increment: 50
+                });
+                
+                let data = await client.onGameCommand();
+                if (data && data.success) {
+                    let connections = this.globalData.gameConnections;
+                    connections.push(data);
+                    vscode.window.showInformationMessage(`成功执行客户端指令！`);
+                    progress.report({
+                        message: `执行成功！`,
+                        increment: 100
+                    });
+                } else {
+                    vscode.window.showWarningMessage(`执行客户端指令失败`);
+                    progress.report({
+                        message: `执行失败`,
+                        increment: 100
+                    });
+                }
+                result = true;
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(`执行游戏连接失败：${error}`);
             result = false;
         }
         return result;
