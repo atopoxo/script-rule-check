@@ -15,6 +15,14 @@ enum LuaValueDef {
     eLuaPackTable = 4
 }
 
+enum B2P_BRIDGE_PROTOCOL {
+    b2p_bridge_begin = 0,
+    b2p_gc_reload_respond = 0,
+    b2p_connect_respond = b2p_gc_reload_respond + 1,  // 1
+    b2p_command_respond = b2p_connect_respond + 1,    // 2
+    b2p_bridge_end = b2p_command_respond + 1          // 3
+}
+
 const e2l_remote_lua_call_def = 202;
 const SOCKET_PORT = 10088;
 const SOCKET_HOST = 'localhost';
@@ -31,11 +39,14 @@ export class GCClient {
     private readonly mutex = new Mutex();
     private closePromise: Promise<void> | null = null;
     private processStarted: boolean = false;
+    private respondFunc: Map<number, any> = new Map();
 
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
         this.processName = path.basename(this.subProcessPath);
         this.subProcess = null;
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_connect_respond, this.onConnectGame);
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_command_respond, this.onGameCommand);
     }
 
     public async tryConnect(): Promise<boolean> {
@@ -169,7 +180,7 @@ export class GCClient {
         }
     }
 
-    public async onConnectGame(): Promise<any> {
+    public async receiveProtocol(): Promise<any> {
         if (!this.socket) {
             return null;
         }
@@ -198,37 +209,9 @@ export class GCClient {
                     const dwDataSize = data.readUInt32LE(14);
                     const nConnIndex = data.readInt32LE(18);
                     
-                    // BRIDGE_CONNECT_DATA (93字节)
-                    if (data.length < 115) { // 22 + 93 = 115
-                        resolve(null);
-                        return;
-                    }
-                    let pluginName = '';
-                    for (let i = 22; i < 86; i++) {
-                        const charCode = data.readUInt8(i);
-                        if (charCode === 0) {
-                            break;
-                        }
-                        pluginName += String.fromCharCode(charCode);
-                    }
-                    let ip = '';
-                    for (let i = 86; i < 110; i++) {
-                        const charCode = data.readUInt8(i);
-                        if (charCode === 0) {
-                            break;
-                        }
-                        ip += String.fromCharCode(charCode);
-                    }
-                    const port = data.readInt32LE(110);
-                    const confirm = data.readUInt8(114) !== 0;
-                    
-                    const connectionData = {
-                        timestamp: Date.now(),
-                        host: ip,
-                        port: port,
-                        success: confirm
-                    };
-                    resolve(connectionData);
+                    const func = this.respondFunc.get(wProtocolID);
+                    const result = func(data);
+                    resolve(result);
                 } catch (error) {
                     resolve(null);
                 }
@@ -238,54 +221,51 @@ export class GCClient {
         });
     }
 
-    public async onGameCommand(): Promise<any> {
-        if (!this.socket) {
-            return null;
+    private onConnectGame(data: Buffer): any {
+        let result = null;
+        if (data.length < 115) { // 22 + 93 = 115
+            return result;
         }
+        let pluginName = '';
+        for (let i = 22; i < 86; i++) {
+            const charCode = data.readUInt8(i);
+            if (charCode === 0) {
+                break;
+            }
+            pluginName += String.fromCharCode(charCode);
+        }
+        let ip = '';
+        for (let i = 86; i < 110; i++) {
+            const charCode = data.readUInt8(i);
+            if (charCode === 0) {
+                break;
+            }
+            ip += String.fromCharCode(charCode);
+        }
+        const port = data.readInt32LE(110);
+        const confirm = data.readUInt8(114) !== 0;
         
-        return new Promise((resolve) => {
-            const timeout = setTimeout(() => {
-                resolve(null);
-            }, 60000);
-            
-            const dataHandler = (data: Buffer) => {
-                try {
-                    clearTimeout(timeout);
-                    this.socket?.removeListener('data', dataHandler);
-                    data = this.getReceivePacket(data);
-                    // B2G_CONNECT_REQUEST 结构解析
-                    // NETWORK_PROTOCOL_HEADER (22字节)
-                    if (data.length < 22) {
-                        resolve(null);
-                        return;
-                    }
-                    
-                    const uCheckSum = data.readUInt32LE(0);
-                    const wProtocolID = data.readUInt16LE(4);
-                    const dwDataStartIndex = data.readUInt32LE(6);
-                    const dwDataEndIndex = data.readUInt32LE(10);
-                    const dwDataSize = data.readUInt32LE(14);
-                    const nConnIndex = data.readInt32LE(18);
-                    
-                    // BRIDGE_CONNECT_DATA (93字节)
-                    if (data.length < 23) { // 22 + 93 = 115
-                        resolve(null);
-                        return;
-                    }
-                    const success = data.readUInt8(22) !== 0;
-                    
-                    const connectionData = {
-                        timestamp: Date.now(),
-                        success: success
-                    };
-                    resolve(connectionData);
-                } catch (error) {
-                    resolve(null);
-                }
-            };
-            
-            this.socket?.on('data', dataHandler);
-        });
+        result = {
+            timestamp: Date.now(),
+            host: ip,
+            port: port,
+            success: confirm
+        };
+        return result;
+    }
+
+    private onGameCommand(data: Buffer): any {
+        let result = null;
+        if (data.length < 23) { // 22 + 93 = 115
+            return result;
+        }
+        const success = data.readUInt8(22) !== 0;
+        
+        result = {
+            timestamp: Date.now(),
+            success: success
+        };
+        return result;
     }
 
     private async checkProcessExists(): Promise<boolean> {
