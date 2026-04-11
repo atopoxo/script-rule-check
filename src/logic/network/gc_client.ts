@@ -3,6 +3,7 @@ import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as childProcess from 'child_process';
+import { Mutex } from "../../core/function/base_function";
 
 const iconv = require('iconv-lite');
 
@@ -27,6 +28,9 @@ export class GCClient {
     private processName: string;
     private subProcess: childProcess.ChildProcess | null = null;
     private isClosing: boolean = false;
+    private readonly mutex = new Mutex();
+    private closePromise: Promise<void> | null = null;
+    private processStarted: boolean = false;
 
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
@@ -34,13 +38,46 @@ export class GCClient {
         this.subProcess = null;
     }
 
+    public async tryConnect(): Promise<boolean> {
+        const release = await this.mutex.acquire();
+        try {
+            if (this.closePromise) {
+                await this.closePromise;
+                this.closePromise = null;
+            }
+            if (!this.isConnected) {
+                const connected = await this.connect();
+                if (!connected) {
+                    // vscode.window.showErrorMessage(`Service closed`);
+                    return false;
+                }
+            }
+            return true;
+        } finally {
+            release();
+        }
+        return false;
+    }
+
+    public async tryDisconnect() {
+        const release = await this.mutex.acquire();
+        try {
+            this.closePromise = this.close().finally(() => {
+                this.isConnected = false;
+            });
+            await this.closePromise;
+        } finally {
+            release();
+        }
+    }
+
     public async connect(): Promise<boolean> {
         try {
             if (!this.socket) {
                 const isProcessRunning = await this.checkProcessExists();
                 if (!isProcessRunning) {
-                    const processStarted = this.startProcess();
-                    if (!processStarted) {
+                    this.processStarted = await this.startProcess();
+                    if (!this.processStarted) {
                         return false;
                     }
                     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -73,21 +110,12 @@ export class GCClient {
         if (isProcessRunning) {
             console.log(`${GC_BRIDGE_NAME} is running try close`);
             this.isClosing = true;
-            await this.killExistingProcess();
+            if (this.processStarted) {
+                await this.killExistingProcess();   
+            }
             await new Promise(resolve => setTimeout(resolve, 1000));
             this.isClosing = false;
         }
-    }
-
-    public async tryConnect(): Promise<boolean> {
-        if (!this.isConnected) {
-            const connected = await this.connect();
-            if (!connected) {
-                // vscode.window.showErrorMessage(`Service closed`);
-                return false;
-            }
-        }
-        return true;
     }
 
     public async doRemoteLuaCall(functionName: string, paramString: string): Promise<boolean> {
@@ -244,7 +272,7 @@ export class GCClient {
                         resolve(null);
                         return;
                     }
-                    const success = data.readUInt8(23) !== 0;
+                    const success = data.readUInt8(22) !== 0;
                     
                     const connectionData = {
                         timestamp: Date.now(),

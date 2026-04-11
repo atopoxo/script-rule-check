@@ -3,15 +3,12 @@ import { exec } from 'child_process';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Mutex, singleton, getGlobalConfigValue, getFileContent } from "../../../core/function/base_function";
+import { singleton, getGlobalConfigValue, getFileContent } from "../../../core/function/base_function";
 import { Dictionary } from "lodash";
 
 @singleton
 export class ScriptReload {
     private client: GCClient | null = null;
-    private taskCount: number = 0;
-    private closePromise: Promise<void> | null = null;
-    private readonly mutex = new Mutex();
     private extensionName: string;
     private lastUris: vscode.Uri[];
     private globalData: Dictionary<any> = {
@@ -34,7 +31,9 @@ export class ScriptReload {
     }
 
     public async clear() {
-        await this.client?.close();
+        if (this.client) {
+            await this.client.tryDisconnect();
+        }
     }
 
     public getGCClient(): GCClient {
@@ -109,65 +108,17 @@ export class ScriptReload {
     }
 
     public async doGMCommand(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[], additionOperator?: boolean): Promise<boolean> {
-        let result = false;
-        const release = await this.mutex.acquire();
-        try {
-            if (this.closePromise) {
-                await this.closePromise;
-                this.closePromise = null;
-            }
-            this.addRef();
-        } finally {
-            release();
-        }
-
-        try {
-            result = await this.executeGMCommand(uriContext, selectedUris, additionOperator);
-        } finally {
-            await this.releaseRef();
-        }
+        let result = await this.executeGMCommand(uriContext, selectedUris, additionOperator);
         return result;
     }
 
     public async doConnectGame(): Promise<boolean> {
-        let result = false;
-        const release = await this.mutex.acquire();
-        try {
-            if (this.closePromise) {
-                await this.closePromise;
-                this.closePromise = null;
-            }
-            this.addRef();
-        } finally {
-            release();
-        }
-
-        try {
-            result = await this.executeConnectGame();
-        } finally {
-            await this.releaseRef();
-        }
+        let result = await this.executeConnectGame();
         return result;
     }
 
     public async doGameCommand(command: string): Promise<boolean> {
-        let result = false;
-        const release = await this.mutex.acquire();
-        try {
-            if (this.closePromise) {
-                await this.closePromise;
-                this.closePromise = null;
-            }
-            this.addRef();
-        } finally {
-            release();
-        }
-
-        try {
-            result = await this.executeGameCommand(command);
-        } finally {
-            await this.releaseRef();
-        }
+        let result = await this.executeGameCommand(command);
         return result;
     }
 
@@ -403,31 +354,6 @@ export class ScriptReload {
                 });
             });
         });
-    }
-
-    private addRef() {
-        this.taskCount++;
-    }
-
-    private async releaseRef() {
-        const release = await this.mutex.acquire();
-        let shouldClose = false;
-        try {
-            if (this.taskCount > 0) {
-                this.taskCount--;
-            }
-
-            shouldClose = this.taskCount === 0 && this.client !== null;
-        } finally {
-            release();
-        }
-
-        if (shouldClose) {
-            this.closePromise = this.client!.close().finally(() => {
-                // this.client = null;
-            });
-            await this.closePromise;
-        }
     }
 
     private getRelativePath(uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]): [string, string] {
