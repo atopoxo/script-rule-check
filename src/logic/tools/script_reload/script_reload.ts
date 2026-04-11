@@ -117,6 +117,11 @@ export class ScriptReload {
         return result;
     }
 
+    public async doDisconnectGame(): Promise<boolean> {
+        let result = await this.executeDisconnectGame();
+        return result;
+    }
+
     public async doGameCommand(command: string): Promise<boolean> {
         let result = await this.executeGameCommand(command);
         return result;
@@ -216,6 +221,56 @@ export class ScriptReload {
                     vscode.window.showWarningMessage(`游戏客户端取消连接`);
                     progress.report({
                         message: `连接失败`,
+                        increment: 100
+                    });
+                }
+                result = true;
+            });
+        } catch (error) {
+            vscode.window.showErrorMessage(`执行游戏连接失败：${error}`);
+            result = false;
+        }
+        return result;
+    }
+
+    public async executeDisconnectGame(): Promise<boolean> {
+        let result = false;
+        let client = this.getGCClient();
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "游戏客户端断开连接",
+                cancellable: true
+            }, async (progress, token) => {
+                if (!await client.tryConnect()) {
+                    vscode.window.showErrorMessage(`无法和中间件通信`);
+                    result = false;
+                    return;
+                }
+                progress.report({
+                    message: `正在断开连接游戏客户端...`,
+                    increment: 30
+                });
+                
+                await client.doDisconnectGame();
+                progress.report({
+                    message: `等待游戏客户端断开确认...`,
+                    increment: 50
+                });
+                
+                let data = await client.receiveDisconnectGame();
+                if (data) {
+                    let connections = this.globalData.gameConnections;
+                    connections.push(data);
+                    vscode.window.showInformationMessage(`成功断开游戏客户端！`);
+                    progress.report({
+                        message: `断开成功！`,
+                        increment: 100
+                    });
+                } else {
+                    vscode.window.showWarningMessage(`无法断开游戏客户端`);
+                    progress.report({
+                        message: `断开失败`,
                         increment: 100
                     });
                 }

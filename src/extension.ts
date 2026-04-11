@@ -508,6 +508,13 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             }
             await scriptReload.doConnectGame();
         }),
+        vscode.commands.registerCommand('extension.disconnectGameClient', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+            const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
+            if (!fs.existsSync(dir)) {
+                vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
+            }
+            await scriptReload.doDisconnectGame();
+        }),
         vscode.commands.registerCommand('extension.executeGameCommand', async (uriContext?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
             const dir = getGlobalConfigValue<string>(extensionName, 'productDir', '');
             if (!fs.existsSync(dir)) {

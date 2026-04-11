@@ -15,12 +15,23 @@ enum LuaValueDef {
     eLuaPackTable = 4
 }
 
+enum P2B_BRIDGE_PROTOCOL {
+    b2p_bridge_begin = 0,
+    p2b_gc_reload_request = b2p_bridge_begin,
+    p2b_game_client_connect_request = p2b_gc_reload_request + 1,
+    p2b_game_client_disconnect_request = p2b_game_client_connect_request + 1,
+    p2b_game_client_command_request = p2b_game_client_disconnect_request + 1,
+    b2p_bridge_end = p2b_game_client_command_request + 1
+}
+
+
 enum B2P_BRIDGE_PROTOCOL {
     b2p_bridge_begin = 0,
-    b2p_gc_reload_respond = 0,
-    b2p_connect_respond = b2p_gc_reload_respond + 1,  // 1
-    b2p_command_respond = b2p_connect_respond + 1,    // 2
-    b2p_bridge_end = b2p_command_respond + 1          // 3
+    b2p_gc_reload_respond = b2p_bridge_begin,
+    b2p_game_client_connect_respond = b2p_gc_reload_respond + 1,
+    b2p_game_client_disconnect_respond = b2p_game_client_connect_respond + 1,
+    b2p_game_client_command_respond = b2p_game_client_disconnect_respond + 1,
+    b2p_bridge_end = b2p_game_client_command_respond + 1
 }
 
 const e2l_remote_lua_call_def = 202;
@@ -50,8 +61,9 @@ export class GCClient {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
         this.processName = path.basename(this.subProcessPath);
         this.subProcess = null;
-        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_connect_respond, this.onConnectGame);
-        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_command_respond, this.onGameCommand);
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_connect_respond, this.onConnectGame);
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_disconnect_respond, this.onDisconnectGame);
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_command_respond, this.onGameCommand);
     }
 
     public async tryConnect(): Promise<boolean> {
@@ -135,11 +147,15 @@ export class GCClient {
     }
 
     public async receiveConnectGame(): Promise<any> {
-        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_connect_respond);
+        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_game_client_connect_respond);
+    }
+
+    public async receiveDisconnectGame(): Promise<any> {
+        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_game_client_disconnect_respond);
     }
 
     public async receiveGameCommand(): Promise<any> {
-        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_command_respond);
+        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_game_client_command_respond);
     }
 
     public async doRemoteLuaCall(functionName: string, paramString: string): Promise<boolean> {
@@ -168,6 +184,22 @@ export class GCClient {
         }
         try {
             const packetContext = this.getConnectGamePacket('vscode script-rule-check', '127.0.0.1', 10088);
+            const packet = this.getSendPacket(packetContext);
+            this.socket.write(packet);
+            return true;
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
+            return false;
+        }
+    }
+
+    public async doDisconnectGame(): Promise<boolean> {
+        if (!this.socket) {
+            this.isConnected = false;
+            return false;
+        }
+        try {
+            const packetContext = this.getDisconnectGamePacket('vscode script-rule-check', '127.0.0.1', 10088);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
             return true;
@@ -222,6 +254,14 @@ export class GCClient {
             host: ip,
             port: port,
             success: confirm
+        };
+        return result;
+    }
+
+    private onDisconnectGame(data: Buffer): any {
+        let result = null;
+        result = {
+            timestamp: Date.now()
         };
         return result;
     }
@@ -432,7 +472,7 @@ export class GCClient {
         const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize, 0);
 
-        const headerPackOffset = this.fillProtocolHeaderPacket(buffer, 1, 0, dataSize, dataSize, 0);
+        const headerPackOffset = this.fillProtocolHeaderPacket(buffer, P2B_BRIDGE_PROTOCOL.p2b_gc_reload_request, 0, dataSize, dataSize, 0);
 
         buffer.writeUInt16LE(totalSize - headerPackSize, headerPackOffset);
         buffer.writeUInt16LE(wProtocol, headerPackOffset + 4);
@@ -458,7 +498,7 @@ export class GCClient {
         const totalSize = confirmOffset + 1;
         const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize);
-        pluginNameOffset = this.fillProtocolHeaderPacket(buffer, 2, 0, dataSize, dataSize, 0);
+        pluginNameOffset = this.fillProtocolHeaderPacket(buffer, P2B_BRIDGE_PROTOCOL.p2b_game_client_connect_request, 0, dataSize, dataSize, 0);
         let funcBuf = Buffer.from(pluginName, 'ascii');
         let funcLen = Math.min(funcBuf.length, 63);
         funcBuf.copy(buffer, pluginNameOffset, 0, funcLen);
@@ -467,6 +507,25 @@ export class GCClient {
         funcBuf.copy(buffer, ipOffset, 0, funcLen);
         buffer.writeUInt16LE(port, portOffset);
         buffer.writeUInt8(1, confirmOffset);
+        return buffer;
+    }
+
+    private getDisconnectGamePacket(pluginName: String, ip: String, port: number): Buffer {
+        const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
+        let pluginNameOffset = networkHeaderPackSize;
+        const ipOffset = pluginNameOffset + 64;
+        const portOffset = ipOffset + 24;
+        const totalSize = portOffset + 4;
+        const dataSize = totalSize - networkHeaderPackSize;
+        const buffer = Buffer.alloc(totalSize);
+        pluginNameOffset = this.fillProtocolHeaderPacket(buffer, P2B_BRIDGE_PROTOCOL.p2b_game_client_disconnect_request, 0, dataSize, dataSize, 0);
+        let funcBuf = Buffer.from(pluginName, 'ascii');
+        let funcLen = Math.min(funcBuf.length, 63);
+        funcBuf.copy(buffer, pluginNameOffset, 0, funcLen);
+        funcBuf = Buffer.from(ip, 'ascii');
+        funcLen = Math.min(funcBuf.length, 23);
+        funcBuf.copy(buffer, ipOffset, 0, funcLen);
+        buffer.writeUInt16LE(port, portOffset);
         return buffer;
     }
 
@@ -483,7 +542,7 @@ export class GCClient {
         const totalSize = commandOffset + commandSize;
         const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize);
-        headerOffset = this.fillProtocolHeaderPacket(buffer, 3, 0, dataSize, dataSize, 0);
+        headerOffset = this.fillProtocolHeaderPacket(buffer, P2B_BRIDGE_PROTOCOL.p2b_game_client_command_request, 0, dataSize, dataSize, 0);
 
         buffer.writeUInt32LE(totalSize - successOffset, headerOffset);
         buffer.writeUInt8(0, successOffset);

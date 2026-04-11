@@ -150,6 +150,10 @@
         "title": "连接游戏客户端"
       },
       {
+        "command": "extension.disconnectGameClient",
+        "title": "断开游戏客户端"
+      },
+      {
         "command": "extension.executeGameCommand",
         "title": "执行游戏客户端指令"
       },
@@ -425,6 +429,10 @@
         {
           "command": "extension.connectGameClient",
           "group": "navigation_game@3"
+        },
+        {
+          "command": "extension.disconnectGameClient",
+          "group": "navigation_game@4"
         },
         {
           "command": "extension.executeGameCommand",
