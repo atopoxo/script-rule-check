@@ -203,7 +203,7 @@ export class ScriptReload {
                     increment: 50
                 });
                 
-                let data = await client.onConnectGame();
+                let data = await client.receiveConnectGame();
                 if (data && data.success) {
                     let connections = this.globalData.gameConnections;
                     connections.push(data);
@@ -213,7 +213,7 @@ export class ScriptReload {
                         increment: 100
                     });
                 } else {
-                    vscode.window.showWarningMessage(`连接超时或未收到游戏确认`);
+                    vscode.window.showWarningMessage(`游戏客户端取消连接`);
                     progress.report({
                         message: `连接失败`,
                         increment: 100
@@ -253,7 +253,7 @@ export class ScriptReload {
                     increment: 50
                 });
                 
-                let data = await client.onGameCommand();
+                let data = await client.receiveGameCommand();
                 if (data && data.success) {
                     let connections = this.globalData.gameConnections;
                     connections.push(data);

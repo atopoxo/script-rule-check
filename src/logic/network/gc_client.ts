@@ -40,6 +40,11 @@ export class GCClient {
     private closePromise: Promise<void> | null = null;
     private processStarted: boolean = false;
     private respondFunc: Map<number, any> = new Map();
+    private responsePromises: Map<number, Array<{
+        resolve: (value: any) => void,
+        reject: (reason?: any) => void,
+        timeout: NodeJS.Timeout
+    }>> = new Map();
 
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
@@ -122,11 +127,19 @@ export class GCClient {
             console.log(`${GC_BRIDGE_NAME} is running try close`);
             this.isClosing = true;
             if (this.processStarted) {
-                await this.killExistingProcess();   
+                await this.killExistingProcess();
             }
             await new Promise(resolve => setTimeout(resolve, 1000));
             this.isClosing = false;
         }
+    }
+
+    public async receiveConnectGame(): Promise<any> {
+        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_connect_respond);
+    }
+
+    public async receiveGameCommand(): Promise<any> {
+        return this.waitForResponse(B2P_BRIDGE_PROTOCOL.b2p_command_respond);
     }
 
     public async doRemoteLuaCall(functionName: string, paramString: string): Promise<boolean> {
@@ -203,7 +216,7 @@ export class GCClient {
         }
         const port = data.readInt32LE(110);
         const confirm = data.readUInt8(114) !== 0;
-        
+
         result = {
             timestamp: Date.now(),
             host: ip,
@@ -219,7 +232,7 @@ export class GCClient {
             return result;
         }
         const success = data.readUInt8(22) !== 0;
-        
+
         result = {
             timestamp: Date.now(),
             success: success
@@ -318,8 +331,6 @@ export class GCClient {
                 resolve(true);
             });
 
-            this.socket.on('data', (data) => {
-            });
             this.socket.on('error', (error) => {
                 console.error(`Socket error:${error}`);
                 this.isConnected = false;
@@ -343,23 +354,46 @@ export class GCClient {
                     data = this.getReceivePacket(data);
                     // NETWORK_PROTOCOL_HEADER (22字节)
                     if (data.length < 22) {
-                        return;
+                        return resolve(false);
                     }
-                    
+
                     const uCheckSum = data.readUInt32LE(0);
                     const wProtocolID = data.readUInt16LE(4);
                     const dwDataStartIndex = data.readUInt32LE(6);
                     const dwDataEndIndex = data.readUInt32LE(10);
                     const dwDataSize = data.readUInt32LE(14);
                     const nConnIndex = data.readInt32LE(18);
-                    
+
                     const func = this.respondFunc.get(wProtocolID);
                     const result = func(data);
-                    return result;
+                    const queue = this.responsePromises.get(wProtocolID) || [];
+                    for (const item of queue) {
+                        const { resolve, reject, timeout } = item;
+                        clearTimeout(timeout);
+                        resolve(result);
+                    }
+                    this.responsePromises.set(wProtocolID, []);
                 } catch (error) {
-                    return null;
+                    return resolve(false);
                 }
             });
+        });
+    }
+
+    private waitForResponse(protocolId: number): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                const queue = this.responsePromises.get(protocolId) || [];
+                const index = queue.findIndex(item => item.resolve === resolve);
+                if (index !== -1) {
+                    queue.splice(index, 1);
+                }
+                reject(new Error(`协议"${protocolId}"连接超时`));
+            }, 5000);
+
+            const queue = this.responsePromises.get(protocolId) || [];
+            queue.push({ resolve, reject, timeout });
+            this.responsePromises.set(protocolId, queue);
         });
     }
 
@@ -397,7 +431,7 @@ export class GCClient {
         const totalSize = fixedSize + paramData.length;
         const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize, 0);
-        
+
         const headerPackOffset = this.fillProtocolHeaderPacket(buffer, 1, 0, dataSize, dataSize, 0);
 
         buffer.writeUInt16LE(totalSize - headerPackSize, headerPackOffset);
@@ -441,11 +475,11 @@ export class GCClient {
         const commandSize = commandBuffer.length + 1;
         const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
         let headerOffset = networkHeaderPackSize;
-        
+
         const successOffset = headerOffset + 4;
         const sizeOffset = successOffset + 1;
         const commandOffset = sizeOffset + 4;
-        
+
         const totalSize = commandOffset + commandSize;
         const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize);
@@ -456,7 +490,7 @@ export class GCClient {
 
         buffer.writeUInt32LE(commandSize, sizeOffset);
         commandBuffer.copy(buffer, commandOffset, 0, commandSize);
-        
+
         return buffer;
     }
 
