@@ -180,47 +180,6 @@ export class GCClient {
         }
     }
 
-    public async receiveProtocol(): Promise<any> {
-        if (!this.socket) {
-            return null;
-        }
-        
-        return new Promise((resolve) => {
-            const timeout = setTimeout(() => {
-                resolve(null);
-            }, 60000);
-            
-            const dataHandler = (data: Buffer) => {
-                try {
-                    clearTimeout(timeout);
-                    this.socket?.removeListener('data', dataHandler);
-                    data = this.getReceivePacket(data);
-                    // B2G_CONNECT_REQUEST 结构解析
-                    // NETWORK_PROTOCOL_HEADER (22字节)
-                    if (data.length < 22) {
-                        resolve(null);
-                        return;
-                    }
-                    
-                    const uCheckSum = data.readUInt32LE(0);
-                    const wProtocolID = data.readUInt16LE(4);
-                    const dwDataStartIndex = data.readUInt32LE(6);
-                    const dwDataEndIndex = data.readUInt32LE(10);
-                    const dwDataSize = data.readUInt32LE(14);
-                    const nConnIndex = data.readInt32LE(18);
-                    
-                    const func = this.respondFunc.get(wProtocolID);
-                    const result = func(data);
-                    resolve(result);
-                } catch (error) {
-                    resolve(null);
-                }
-            };
-            
-            this.socket?.on('data', dataHandler);
-        });
-    }
-
     private onConnectGame(data: Buffer): any {
         let result = null;
         if (data.length < 115) { // 22 + 93 = 115
@@ -358,6 +317,7 @@ export class GCClient {
                 // }
                 resolve(true);
             });
+
             this.socket.on('data', (data) => {
             });
             this.socket.on('error', (error) => {
@@ -376,6 +336,29 @@ export class GCClient {
                 //         this.connectViaSocket();
                 //     }, 3000);
                 // }
+            });
+
+            this.socket.on('data', (data: Buffer) => {
+                try {
+                    data = this.getReceivePacket(data);
+                    // NETWORK_PROTOCOL_HEADER (22字节)
+                    if (data.length < 22) {
+                        return;
+                    }
+                    
+                    const uCheckSum = data.readUInt32LE(0);
+                    const wProtocolID = data.readUInt16LE(4);
+                    const dwDataStartIndex = data.readUInt32LE(6);
+                    const dwDataEndIndex = data.readUInt32LE(10);
+                    const dwDataSize = data.readUInt32LE(14);
+                    const nConnIndex = data.readInt32LE(18);
+                    
+                    const func = this.respondFunc.get(wProtocolID);
+                    const result = func(data);
+                    return result;
+                } catch (error) {
+                    return null;
+                }
             });
         });
     }
