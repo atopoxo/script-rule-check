@@ -520,7 +520,20 @@ function registerNormalCommands(context: vscode.ExtensionContext, configurationP
             if (!fs.existsSync(dir)) {
                 vscode.window.showErrorMessage(`产品库路径'${productDir}'不存在,或路径错误`);
             }
-            await scriptReload.doGameCommand('/gm player.SetPosition(72605, 13058, 1131136)');
+            const command = await vscode.window.showInputBox({
+                title: '输入游戏指令',
+                placeHolder: '例如: /gm player.SetPosition(72605, 13058, 1131136)',
+                prompt: '请输入要执行的游戏GM指令',
+                validateInput: (value) => {
+                    if (!value || value.trim() === '') {
+                        return '指令不能为空';
+                    }
+                    return null; // 验证通过
+                }
+            });
+            if (command) {
+                await scriptReload.doGameCommand(command);
+            }
         }),
         vscode.commands.registerCommand('extension.openFileWithEncoding', async (path: string, selection: vscode.Range | undefined) => {
             try {
