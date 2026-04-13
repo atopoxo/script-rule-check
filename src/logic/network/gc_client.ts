@@ -372,13 +372,13 @@ export class GCClient {
             });
 
             this.socket.on('error', (error) => {
-                console.error(`Socket error:${error}`);
+                vscode.window.showErrorMessage(`和中间件链接断开，错误信息：${error.message}`);
                 this.isConnected = false;
                 resolve(false);
             });
 
             this.socket.on('close', () => {
-                console.log('Socket connection closed');
+                vscode.window.showErrorMessage(`和中间件链接断开}`);
                 this.isConnected = false;
                 this.socket = null;
                 // if (!this.reconnectTimer) {
