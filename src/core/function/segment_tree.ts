@@ -30,15 +30,17 @@ export class SegmentTree {
     }
 
     private updateNode(node: SegmentTreeNode, left: number, right: number, value: number): void {
-        if (left == node.left && node.right == right) {
+        if (left === node.left && node.right === right) {
             node.value = value;
+            node.leftChild = null;
+            node.rightChild = null;
             return;
         }
         const mid = Math.floor((node.left + node.right) / 2);
         this.pushDown(node, mid);
         if (right <= mid) {
             this.updateNode(node.leftChild!, left, right, value);
-        } else if (left >= mid) {5
+        } else if (left >= mid) {
             this.updateNode(node.rightChild!, left, right, value);
         } else {
             this.updateNode(node.leftChild!, left, mid, value);
@@ -78,11 +80,37 @@ export class SegmentTree {
         let leftRes: [number, number][] = [];
         let rightRes: [number, number][] = [];
         const mid = Math.floor((node.left + node.right) / 2);
-        if (node.leftChild && left < mid) {
-            leftRes = this.queryNode(node.leftChild, left, mid, value);
-        }
-        if (node.rightChild && right > mid) {
-            rightRes = this.queryNode(node.rightChild, mid, right, value);
+        if (right <= mid) {
+            if (node.leftChild) {
+                leftRes = this.queryNode(node.leftChild, left, right, value);
+            } else {
+                if (node.value === value) {
+                    leftRes = [[left, right]];
+                }
+            }
+        } else if (left >= mid) {
+            if (node.rightChild) {
+                rightRes = this.queryNode(node.rightChild, left, right, value);
+            } else {
+                if (node.value === value) {
+                    rightRes = [[left, right]];
+                }
+            }
+        } else {
+            if (node.leftChild) {
+                leftRes = this.queryNode(node.leftChild, left, mid, value);
+            } else {
+                if (node.value === value) {
+                    leftRes = [[left, mid]];
+                }
+            }
+            if (node.rightChild) {
+                rightRes = this.queryNode(node.rightChild, mid, right, value);
+            } else {
+                if (node.value === value) {
+                    rightRes = [[mid, right]];
+                }
+            }
         }
         return this.mergeRanges(leftRes, rightRes);
     }
