@@ -3,7 +3,7 @@
   "publisher": "shaoyi",
   "displayName": "script-rule-check",
   "description": "scripts check by rules",
-  "version": "0.0.42",
+  "version": "0.0.43",
   "main": "./out/src/extension.js",
   "repository": {
     "type": "git",
@@ -340,6 +340,10 @@
       {
         "id": "checkSpecificRules.submenu",
         "label": "检查指定用例规则"
+      },
+      {
+        "id": "testFunctions.submenu",
+        "label": "测试功能"
       }
     ],
     "menus": {
@@ -427,16 +431,8 @@
           "group": "navigation_game@2"
         },
         {
-          "command": "extension.connectGameClient",
+          "submenu": "testFunctions.submenu",
           "group": "navigation_game@3"
-        },
-        {
-          "command": "extension.disconnectGameClient",
-          "group": "navigation_game@4"
-        },
-        {
-          "command": "extension.executeGameCommand",
-          "group": "navigation_game@4"
         },
         {
           "command": "extension.chat.addContext",
@@ -504,6 +500,20 @@
         {
           "command": "extension.checkSpecificRule.rule14",
           "group": "navigation@14"
+        }
+      ],
+      "testFunctions.submenu": [
+        {
+          "command": "extension.connectGameClient",
+          "group": "navigation_test_functions@1"
+        },
+        {
+          "command": "extension.disconnectGameClient",
+          "group": "navigation_test_functions@2"
+        },
+        {
+          "command": "extension.executeGameCommand",
+          "group": "navigation_test_functions@3"
         }
       ]
     },

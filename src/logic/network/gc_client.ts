@@ -17,7 +17,8 @@ enum LuaValueDef {
 
 enum P2B_BRIDGE_PROTOCOL {
     b2p_bridge_begin = 0,
-    p2b_gc_reload_request = b2p_bridge_begin,
+    p2b_ping_request = b2p_bridge_begin,
+    p2b_gc_reload_request = p2b_ping_request + 1,
     p2b_game_client_connect_request = p2b_gc_reload_request + 1,
     p2b_game_client_disconnect_request = p2b_game_client_connect_request + 1,
     p2b_game_client_command_request = p2b_game_client_disconnect_request + 1,
@@ -27,7 +28,8 @@ enum P2B_BRIDGE_PROTOCOL {
 
 enum B2P_BRIDGE_PROTOCOL {
     b2p_bridge_begin = 0,
-    b2p_gc_reload_respond = b2p_bridge_begin,
+    b2p_ping_respond = b2p_bridge_begin,
+    b2p_gc_reload_respond = b2p_ping_respond + 1,
     b2p_game_client_connect_respond = b2p_gc_reload_respond + 1,
     b2p_game_client_disconnect_respond = b2p_game_client_connect_respond + 1,
     b2p_game_client_command_respond = b2p_game_client_disconnect_respond + 1,
@@ -56,6 +58,8 @@ export class GCClient {
         reject: (reason?: any) => void,
         timeout: NodeJS.Timeout
     }>> = new Map();
+    private heartbeatTimer: NodeJS.Timeout | null = null;
+    private heartbeatInterval: number = 30000; // 30秒
 
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
@@ -84,7 +88,6 @@ export class GCClient {
         } finally {
             release();
         }
-        return false;
     }
 
     public async tryDisconnect() {
@@ -364,6 +367,7 @@ export class GCClient {
             this.socket = net.createConnection({ port: SOCKET_PORT, host: SOCKET_HOST }, () => {
                 this.isConnected = true;
                 console.log(`Connected to ${GC_BRIDGE_NAME} socket`);
+                this.startHeartbeat();
                 // if (this.reconnectTimer) {
                 //     clearTimeout(this.reconnectTimer);
                 //     this.reconnectTimer = null;
@@ -372,13 +376,15 @@ export class GCClient {
             });
 
             this.socket.on('error', (error) => {
-                vscode.window.showErrorMessage(`和中间件链接断开，错误信息：${error.message}`);
+                console.log(`和中间件链接断开，错误信息：${error.message}`);
+                this.stopHeartbeat();
                 this.isConnected = false;
                 resolve(false);
             });
 
             this.socket.on('close', () => {
-                vscode.window.showErrorMessage(`和中间件链接断开}`);
+                vscode.window.showErrorMessage(`和中间件链接断开`);
+                this.stopHeartbeat();
                 this.isConnected = false;
                 this.socket = null;
                 // if (!this.reconnectTimer) {
@@ -420,6 +426,36 @@ export class GCClient {
         });
     }
 
+    private startHeartbeat(): void {
+        this.stopHeartbeat();
+        this.heartbeatTimer = setInterval(() => {
+            this.sendHeartbeat();
+        }, this.heartbeatInterval);
+    }
+
+    private stopHeartbeat(): void {
+        if (this.heartbeatTimer) {
+            clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
+    }
+
+    private sendHeartbeat(): boolean {
+        if (!this.socket) {
+            this.isConnected = false;
+            return false;
+        }
+        try {
+            const packetContext = this.getPingPacket();
+            const packet = this.getSendPacket(packetContext);
+            this.socket.write(packet);
+            return true;
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
+            return false;
+        }
+    }
+
     private waitForResponse(protocolId: number): Promise<any> {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
@@ -429,7 +465,7 @@ export class GCClient {
                     queue.splice(index, 1);
                 }
                 reject(new Error(`协议"${protocolId}"连接超时`));
-            }, 5000);
+            }, 30000);
 
             const queue = this.responsePromises.get(protocolId) || [];
             queue.push({ resolve, reject, timeout });
@@ -453,6 +489,16 @@ export class GCClient {
         finalBuffer.writeUInt32LE(packetHeaderSize + packetLength, 0);
         buffer.copy(finalBuffer, packetHeaderSize);
         return finalBuffer;
+    }
+
+    private getPingPacket(): Buffer {
+        const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
+        const totalSize = networkHeaderPackSize;
+        const dataSize = totalSize - networkHeaderPackSize;
+        const buffer = Buffer.alloc(totalSize);
+        
+        const headerPackOffset = this.fillProtocolHeaderPacket(buffer, P2B_BRIDGE_PROTOCOL.p2b_ping_request, 0, dataSize, dataSize, 0);
+        return buffer;
     }
 
     private getRemoteLuaCallPacket(wProtocol: number, wServer: number, wSubProtocol: number, functionName: string, paramString: string): Buffer {
