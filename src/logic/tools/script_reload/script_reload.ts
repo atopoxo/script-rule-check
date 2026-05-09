@@ -302,7 +302,7 @@ export class ScriptReload {
                     increment: 30
                 });
                 
-                await client.doGameCommand(command);
+                await client.doGameCommand(command, -1);
                 progress.report({
                     message: `等待客户端指令执行完成...`,
                     increment: 50

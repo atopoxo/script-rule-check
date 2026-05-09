@@ -212,13 +212,13 @@ export class GCClient {
         }
     }
 
-    public async doGameCommand(command: string): Promise<boolean> {
+    public async doGameCommand(command: string, port: number): Promise<boolean> {
         if (!this.socket) {
             this.isConnected = false;
             return false;
         }
         try {
-            const packetContext = this.getGameCommandPacket(command);
+            const packetContext = this.getGameCommandPacket(command, port);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
             return true;
@@ -575,14 +575,15 @@ export class GCClient {
         return buffer;
     }
 
-    private getGameCommandPacket(command: String): Buffer {
+    private getGameCommandPacket(command: String, port: number): Buffer {
         const commandBuffer = Buffer.from(command, 'ascii');
         const commandSize = commandBuffer.length + 1;
         const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
         let headerOffset = networkHeaderPackSize;
 
         const successOffset = headerOffset + 4;
-        const sizeOffset = successOffset + 1;
+        const portOffset = successOffset + 1;
+        const sizeOffset = portOffset + 4;
         const commandOffset = sizeOffset + 4;
 
         const totalSize = commandOffset + commandSize;
@@ -592,7 +593,7 @@ export class GCClient {
 
         buffer.writeUInt32LE(totalSize - successOffset, headerOffset);
         buffer.writeUInt8(0, successOffset);
-
+        buffer.writeInt32LE(port, portOffset);
         buffer.writeUInt32LE(commandSize, sizeOffset);
         commandBuffer.copy(buffer, commandOffset, 0, commandSize);
 
