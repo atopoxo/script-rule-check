@@ -33,7 +33,8 @@ enum B2P_BRIDGE_PROTOCOL {
     b2p_game_client_connect_respond = b2p_gc_reload_respond + 1,
     b2p_game_client_disconnect_respond = b2p_game_client_connect_respond + 1,
     b2p_game_client_command_respond = b2p_game_client_disconnect_respond + 1,
-    b2p_bridge_end = b2p_game_client_command_respond + 1
+    b2p_game_client_command_return_respond = b2p_game_client_command_respond + 1,
+    b2p_bridge_end = b2p_game_client_command_return_respond + 1
 }
 
 const e2l_remote_lua_call_def = 202;
@@ -60,14 +61,16 @@ export class GCClient {
     }>> = new Map();
     private heartbeatTimer: NodeJS.Timeout | null = null;
     private heartbeatInterval: number = 30000; // 30秒
+    private pendingCommands: Map<string, number> = new Map(); // 命令文本 -> 待匹配计数(用于和 b2p_game_client_command_return_respond 匹配)
 
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
         this.processName = path.basename(this.subProcessPath);
         this.subProcess = null;
-        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_connect_respond, this.onConnectGame);
-        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_disconnect_respond, this.onDisconnectGame);
-        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_command_respond, this.onGameCommand);
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_connect_respond, (data: Buffer) => this.onConnectGame(data));
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_disconnect_respond, (data: Buffer) => this.onDisconnectGame(data));
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_command_respond, (data: Buffer) => this.onGameCommand(data));
+        this.respondFunc.set(B2P_BRIDGE_PROTOCOL.b2p_game_client_command_return_respond, (data: Buffer) => this.onGameCommandReturn(data));
     }
 
     public async tryConnect(): Promise<boolean> {
@@ -221,6 +224,9 @@ export class GCClient {
             const packetContext = this.getGameCommandPacket(command, port);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
+            // 记录待匹配命令,用于和 b2p_game_client_command_return_respond 匹配
+            const count = this.pendingCommands.get(command) || 0;
+            this.pendingCommands.set(command, count + 1);
             return true;
         } catch (error: any) {
             vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
@@ -280,6 +286,53 @@ export class GCClient {
             timestamp: Date.now(),
             success: success
         };
+        return result;
+    }
+
+    private onGameCommandReturn(data: Buffer): any {
+        let result = null;
+        // NETWORK_PROTOCOL_HEADER(22) + B2P_UNDEFINED_SIZE_DOWNWARDS_HEADER 的 dwSize(4) + BRIDGE_COMMAND_RETURN_DATA: nConnIndex(4) + uCommandSize(4) + uSize(4) + byData[uCommandSize + uSize]
+        const dwSizeOffset = 22;
+        const dataOffset = dwSizeOffset + 4;
+        const minSize = dataOffset + 4 + 4 + 4;
+        if (data.length < minSize) {
+            return result;
+        }
+        const dwSize = data.readUInt32LE(dwSizeOffset);
+        const nConnIndex = data.readInt32LE(dataOffset);
+        const uCommandSize = data.readUInt32LE(dataOffset + 4);
+        const uSize = data.readUInt32LE(dataOffset + 8);
+        const byDataOffset = dataOffset + 12;
+        if (data.length < byDataOffset + uCommandSize + uSize) {
+            return result;
+        }
+
+        const commandBuf = data.subarray(byDataOffset, byDataOffset + uCommandSize);
+        const resultBuf = data.subarray(byDataOffset + uCommandSize, byDataOffset + uCommandSize + uSize);
+        // 去掉结尾的 '\0'(打包时已含 '\0')
+        const commandText = iconv.decode(commandBuf, 'gbk').replace(/\0+$/, '');
+        const resultText = iconv.decode(resultBuf, 'gbk').replace(/\0+$/, '');
+
+        result = {
+            timestamp: Date.now(),
+            dwSize: dwSize,
+            nConnIndex: nConnIndex,
+            command: commandText,
+            result: resultText
+        };
+
+        // 和通过 p2b_game_client_command_request 发送的命令匹配
+        const pendingCount = this.pendingCommands.get(commandText) || 0;
+        if (pendingCount > 0) {
+            if (pendingCount === 1) {
+                this.pendingCommands.delete(commandText);
+            } else {
+                this.pendingCommands.set(commandText, pendingCount - 1);
+            }
+            // 匹配成功,弹窗输出对应命令的执行结果
+            const message = `命令执行结果\n命令: ${commandText}\n结果: ${resultText}`;
+            vscode.window.showInformationMessage(message);
+        }
         return result;
     }
 
@@ -465,7 +518,7 @@ export class GCClient {
                     queue.splice(index, 1);
                 }
                 reject(new Error(`协议"${protocolId}"连接超时`));
-            }, 30000);
+            }, 3600000);
 
             const queue = this.responsePromises.get(protocolId) || [];
             queue.push({ resolve, reject, timeout });
