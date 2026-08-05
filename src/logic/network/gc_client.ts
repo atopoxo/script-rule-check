@@ -42,6 +42,20 @@ const SOCKET_PORT = 10088;
 const SOCKET_HOST = 'localhost';
 const GC_BRIDGE_NAME = 'GCBridgeX64.exe';
 
+// 连接授权验证信息(对应 C++ BRIDGE_CONNECT_DATA 的新增字段,vscode 侧采集后透传)
+export interface VerifyInfo {
+    bSilence: boolean;
+    bAbnormal: boolean;
+    token: string;
+    computerName: string;
+    clientVer: string;
+    ideVersion: string;
+    ideType: string;
+    tz: string;
+    osVer: string;
+    machine: string;
+}
+
 export class GCClient {
     private isConnected: boolean = false;
     private socket: net.Socket | null = null;
@@ -183,13 +197,13 @@ export class GCClient {
         }
     }
 
-    public async doConnectGame(): Promise<boolean> {
+    public async doConnectGame(verifyInfo: VerifyInfo): Promise<boolean> {
         if (!this.socket) {
             this.isConnected = false;
             return false;
         }
         try {
-            const packetContext = this.getConnectGamePacket('vscode script-rule-check', '127.0.0.1', 10088);
+            const packetContext = this.getConnectGamePacket('vscode script-rule-check', '127.0.0.1', 10088, verifyInfo);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
             return true;
@@ -588,13 +602,24 @@ export class GCClient {
         return buffer;
     }
 
-    private getConnectGamePacket(pluginName: String, ip: String, port: number): Buffer {
+    private getConnectGamePacket(pluginName: String, ip: String, port: number, verifyInfo: VerifyInfo): Buffer {
         const networkHeaderPackSize = this.getNetworkProtocolHeaderSize();
         let pluginNameOffset = networkHeaderPackSize;
         const ipOffset = pluginNameOffset + 64;
         const portOffset = ipOffset + 24;
         const confirmOffset = portOffset + 4;
-        const totalSize = confirmOffset + 1;
+        // 新增验证字段(BRIDGE_CONNECT_DATA 扩展,紧跟 bConfirm 之后,#pragma pack(1) 紧凑布局)
+        const silenceOffset = confirmOffset + 1;
+        const abnormalOffset = silenceOffset + 1;
+        const tokenOffset = abnormalOffset + 1;
+        const computerNameOffset = tokenOffset + 64;
+        const clientVerOffset = computerNameOffset + 64;
+        const ideVersionOffset = clientVerOffset + 32;
+        const ideTypeOffset = ideVersionOffset + 32;
+        const tzOffset = ideTypeOffset + 16;
+        const osVerOffset = tzOffset + 48;
+        const machineOffset = osVerOffset + 64;
+        const totalSize = machineOffset + 64;
         const dataSize = totalSize - networkHeaderPackSize;
         const buffer = Buffer.alloc(totalSize);
         pluginNameOffset = this.fillProtocolHeaderPacket(buffer, P2B_BRIDGE_PROTOCOL.p2b_game_client_connect_request, 0, dataSize, dataSize, 0);
@@ -606,7 +631,24 @@ export class GCClient {
         funcBuf.copy(buffer, ipOffset, 0, funcLen);
         buffer.writeUInt16LE(port, portOffset);
         buffer.writeUInt8(1, confirmOffset);
+
+        buffer.writeUInt8(verifyInfo.bSilence ? 1 : 0, silenceOffset);
+        buffer.writeUInt8(verifyInfo.bAbnormal ? 1 : 0, abnormalOffset);
+        this.writeAsciiField(buffer, verifyInfo.token, tokenOffset, 64);
+        this.writeAsciiField(buffer, verifyInfo.computerName, computerNameOffset, 64);
+        this.writeAsciiField(buffer, verifyInfo.clientVer, clientVerOffset, 32);
+        this.writeAsciiField(buffer, verifyInfo.ideVersion, ideVersionOffset, 32);
+        this.writeAsciiField(buffer, verifyInfo.ideType, ideTypeOffset, 16);
+        this.writeAsciiField(buffer, verifyInfo.tz, tzOffset, 48);
+        this.writeAsciiField(buffer, verifyInfo.osVer, osVerOffset, 64);
+        this.writeAsciiField(buffer, verifyInfo.machine, machineOffset, 64);
         return buffer;
+    }
+
+    private writeAsciiField(buffer: Buffer, value: string, offset: number, maxLen: number): void {
+        const buf = Buffer.from(value, 'utf8');
+        const len = Math.min(buf.length, maxLen - 1);
+        buf.copy(buffer, offset, 0, len);
     }
 
     private getDisconnectGamePacket(pluginName: String, ip: String, port: number): Buffer {

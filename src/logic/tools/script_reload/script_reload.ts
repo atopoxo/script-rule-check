@@ -1,8 +1,9 @@
-import { GCClient } from "../../network/gc_client";
+import { GCClient, VerifyInfo } from "../../network/gc_client";
 import { exec } from 'child_process';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { singleton, getGlobalConfigValue, getFileContent } from "../../../core/function/base_function";
 import { Dictionary } from "lodash";
 
@@ -112,8 +113,8 @@ export class ScriptReload {
         return result;
     }
 
-    public async doConnectGame(): Promise<boolean> {
-        let result = await this.executeConnectGame();
+    public async doConnectGame(verifyInfo?: VerifyInfo): Promise<boolean> {
+        let result = await this.executeConnectGame(verifyInfo);
         return result;
     }
 
@@ -183,9 +184,10 @@ export class ScriptReload {
         return result;
     }
 
-    public async executeConnectGame(): Promise<boolean> {
+    public async executeConnectGame(verifyInfo?: VerifyInfo): Promise<boolean> {
         let result = false;
         let client = this.getGCClient();
+        const vInfo = verifyInfo ?? this.collectVerifyInfo(false, false);
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
@@ -201,8 +203,8 @@ export class ScriptReload {
                     message: `正在连接游戏客户端...`,
                     increment: 30
                 });
-                
-                await client.doConnectGame();
+
+                await client.doConnectGame(vInfo);
                 progress.report({
                     message: `等待游戏客户端确认...`,
                     increment: 50
@@ -231,6 +233,28 @@ export class ScriptReload {
             result = false;
         }
         return result;
+    }
+
+    // 采集授权验证信息。bSilence/bAbnormal 由调用时机决定(见调用时机映射);token/clientVer 从配置读,其余本机采集。
+    private collectVerifyInfo(bSilence: boolean, bAbnormal: boolean): VerifyInfo {
+        const tzName = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const utcOffsetMin = -new Date().getTimezoneOffset();
+        const utcOffsetSign = utcOffsetMin >= 0 ? '+' : '-';
+        const utcOffsetHour = String(Math.floor(Math.abs(utcOffsetMin) / 60)).padStart(2, '0');
+        const tz = `${tzName} (UTC${utcOffsetSign}${utcOffsetHour})`;
+        const osVer = `${os.type()} ${os.release()}`;
+        return {
+            bSilence: bSilence,
+            bAbnormal: bAbnormal,
+            token: '50571a0b96744af0ae7420d0d9ad0542',
+            computerName: os.hostname() ?? '',
+            clientVer: '0.3.3',
+            ideVersion: vscode.version ?? '',
+            ideType: 'vscode',
+            tz: tz,
+            osVer: osVer,
+            machine: os.hostname() ?? '',
+        };
     }
 
     public async executeDisconnectGame(): Promise<boolean> {
