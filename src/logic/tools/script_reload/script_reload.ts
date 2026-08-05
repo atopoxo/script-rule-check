@@ -246,7 +246,7 @@ export class ScriptReload {
         return {
             bSilence: bSilence,
             bAbnormal: bAbnormal,
-            token: '50571a0b96744af0ae7420d0d9ad0542',
+            token: '53c0d3d3e62e4a03960dd02f4e4ade3e',
             computerName: os.hostname() ?? '',
             clientVer: '0.3.3',
             ideVersion: vscode.version ?? '',
