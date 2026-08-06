@@ -75,7 +75,8 @@ export class GCClient {
     }>> = new Map();
     private heartbeatTimer: NodeJS.Timeout | null = null;
     private heartbeatInterval: number = 30000; // 30秒
-    private pendingCommands: Map<string, number> = new Map(); // 命令文本 -> 待匹配计数(用于和 b2p_game_client_command_return_respond 匹配)
+    private pendingCommands: Set<string> = new Set(); // 已发送命令文本集合(用于和 b2p_game_client_command_return_respond 匹配,回调可多次触发都显示)
+    private returnChannel: vscode.OutputChannel = vscode.window.createOutputChannel('GCBridge Command Return');
 
     constructor() {
         this.subProcessPath = path.join(__dirname, '../../../../', 'assets/bin', GC_BRIDGE_NAME);
@@ -238,9 +239,8 @@ export class GCClient {
             const packetContext = this.getGameCommandPacket(command, port);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
-            // 记录待匹配命令,用于和 b2p_game_client_command_return_respond 匹配
-            const count = this.pendingCommands.get(command) || 0;
-            this.pendingCommands.set(command, count + 1);
+            // 记录已发送命令,用于和 b2p_game_client_command_return_respond 匹配(回调可多次触发都显示)
+            this.pendingCommands.add(command);
             return true;
         } catch (error: any) {
             vscode.window.showErrorMessage(`Error creating packet:${error.message}`);
@@ -335,17 +335,11 @@ export class GCClient {
             result: resultText
         };
 
-        // 和通过 p2b_game_client_command_request 发送的命令匹配
-        const pendingCount = this.pendingCommands.get(commandText) || 0;
-        if (pendingCount > 0) {
-            if (pendingCount === 1) {
-                this.pendingCommands.delete(commandText);
-            } else {
-                this.pendingCommands.set(commandText, pendingCount - 1);
-            }
-            // 匹配成功,弹窗输出对应命令的执行结果
-            const message = `命令执行结果\n命令: ${commandText}\n结果: ${resultText}`;
-            vscode.window.showInformationMessage(message);
+        // 和通过 p2b_game_client_command_request 发送的命令匹配:发过任意命令则接收回传(回传的是事件名,与发送的命令文本不同,故按"非空即显示")
+        if (this.pendingCommands.size > 0) {
+            const message = `[${new Date().toLocaleTimeString()}] 事件: ${commandText} | 结果: ${resultText}`;
+            this.returnChannel.appendLine(message);
+            this.returnChannel.show(true);
         }
         return result;
     }
