@@ -220,7 +220,7 @@ export class GCClient {
             return false;
         }
         try {
-            const packetContext = this.getDisconnectGamePacket('vscode script-rule-check', '127.0.0.1', 10088);
+            const packetContext = this.getDisconnectGamePacket('vscode script-rule-check', '127.0.0.1', 0);
             const packet = this.getSendPacket(packetContext);
             this.socket.write(packet);
             return true;

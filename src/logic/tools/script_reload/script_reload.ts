@@ -187,7 +187,7 @@ export class ScriptReload {
     public async executeConnectGame(verifyInfo?: VerifyInfo): Promise<boolean> {
         let result = false;
         let client = this.getGCClient();
-        const vInfo = verifyInfo ?? this.collectVerifyInfo(false, false);
+        const vInfo = verifyInfo ?? this.collectVerifyInfo(true, false);
         try {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
