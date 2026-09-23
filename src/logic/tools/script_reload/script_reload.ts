@@ -283,16 +283,17 @@ export class ScriptReload {
                 });
                 
                 let data = await client.receiveDisconnectGame();
-                if (data) {
+                if (data && data.port >= 0) {
                     let connections = this.globalData.gameConnections;
                     connections.push(data);
-                    vscode.window.showInformationMessage(`成功断开游戏客户端！`);
+                    vscode.window.showInformationMessage(`成功断开游戏客户端(端口 ${data.port})！`);
                     progress.report({
                         message: `断开成功！`,
                         increment: 100
                     });
                 } else {
-                    vscode.window.showWarningMessage(`无法断开游戏客户端`);
+                    // nPort 为 -1 表示当前一个可用客户端都没有
+                    vscode.window.showWarningMessage(data ? `当前没有可断开的游戏客户端` : `无法断开游戏客户端`);
                     progress.report({
                         message: `断开失败`,
                         increment: 100

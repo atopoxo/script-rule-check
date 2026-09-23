@@ -283,9 +283,23 @@ export class GCClient {
 
     private onDisconnectGame(data: Buffer): any {
         let result = null;
+        // NETWORK_PROTOCOL_HEADER(22) + B2P_GAME_CLIENT_DISCONNECT_RESPOND 的 nPort(4)
+        // 断开的客户端监听端口,用于分辨是哪个客户端没了;-1 表示当前一个可用客户端都没有
+        if (data.length < 26) { // 22 + 4 = 26
+            return result;
+        }
+        const port = data.readInt32LE(22);
+
         result = {
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            port: port
         };
+
+        // 无等待者说明不是本次断开请求的响应(游戏进程退出/被杀时中间件会主动推送)
+        const waiters = this.responsePromises.get(B2P_BRIDGE_PROTOCOL.b2p_game_client_disconnect_respond) || [];
+        if (waiters.length === 0 && port >= 0) {
+            vscode.window.showWarningMessage(`游戏客户端已断开(端口 ${port})`);
+        }
         return result;
     }
 
